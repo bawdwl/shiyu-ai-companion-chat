@@ -5,8 +5,10 @@ import android.net.Uri
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -35,7 +39,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DeleteOutline
@@ -43,7 +49,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
@@ -87,15 +92,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.shiyu.chat.data.CharacterEntity
 import com.shiyu.chat.data.ChatRepository
+import com.shiyu.chat.data.DreamGenerationSettings
 import com.shiyu.chat.data.MemoryEntity
 import com.shiyu.chat.data.MessageEntity
+import com.shiyu.chat.data.MODEL_SOURCE_API
+import com.shiyu.chat.data.MODEL_SOURCE_LOCAL_MNN
 import com.shiyu.chat.data.StructuredMemoryEntity
+import com.shiyu.chat.data.TurnTraceEntity
 import com.shiyu.chat.data.LocalVoice
 import com.shiyu.chat.data.naturalMessageText
 import com.shiyu.chat.data.speechOnlyText
@@ -113,6 +123,11 @@ private val Forest = Color(0xFF176346)
 private val Cream = Color(0xFFF7F4EC)
 private val Sage = Color(0xFFE3ECE2)
 private val WarmGold = Color(0xFFE8DFC7)
+private val CanvasMist = Color(0xFFF6F7F5)
+private val InkMuted = Color(0xFF69716B)
+private val Hairline = Color(0xFFE5E9E5)
+private val Apricot = Color(0xFFF0E1D8)
+private val LilacMist = Color(0xFFF0EDF7)
 
 @Composable
 fun ShiyuApp(repository: ChatRepository) {
@@ -121,6 +136,7 @@ fun ShiyuApp(repository: ChatRepository) {
     var showSettings by remember { mutableStateOf(false) }
     var showCreate by remember { mutableStateOf(false) }
     var showMemory by remember { mutableStateOf(false) }
+    var showTrace by remember { mutableStateOf(false) }
     var showEdit by remember { mutableStateOf(false) }
     var pendingCharacter by remember { mutableStateOf<CharacterEntity?>(null) }
     val snackbar = remember { SnackbarHostState() }
@@ -141,8 +157,8 @@ fun ShiyuApp(repository: ChatRepository) {
             Modifier
                 .fillMaxSize()
                 .background(
-                    Brush.linearGradient(
-                        listOf(Color(0xFFE5ECE3), Color(0xFFF6F1E6), Color(0xFFE4ECE4)),
+                    Brush.verticalGradient(
+                        listOf(LilacMist, CanvasMist, Color(0xFFF8F7F3)),
                     ),
                 )
                 .padding(padding),
@@ -170,6 +186,7 @@ fun ShiyuApp(repository: ChatRepository) {
                     onSend = vm::send,
                     onStop = vm::stop,
                     onMemory = { showMemory = true },
+                    onTrace = { showTrace = true },
                     onEdit = {
                         pendingCharacter = null
                         showEdit = true
@@ -193,7 +210,10 @@ fun ShiyuApp(repository: ChatRepository) {
             onSaveLimits = vm::saveLimits,
             onSaveImageKey = vm::saveImageApiKey,
             onRemoveImageKey = vm::removeImageApiKey,
+            onSaveDreamSettings = vm::saveDreamGenerationSettings,
             onImportAvatarModel = vm::importAvatarModel,
+            onDeleteAvatarModel = vm::deleteAvatarModel,
+            onImportLocalModel = vm::importLocalModel,
         )
     }
     if (showCreate) {
@@ -246,6 +266,12 @@ fun ShiyuApp(repository: ChatRepository) {
             onDeleteStructured = vm::deleteStructuredMemory,
         )
     }
+    if (showTrace && state.selected != null) {
+        TraceSheet(
+            traces = state.turnTraces,
+            onDismiss = { showTrace = false },
+        )
+    }
     val editingCharacter = pendingCharacter ?: state.selected
     if (showEdit && editingCharacter != null) {
         EditCharacterDialog(
@@ -253,6 +279,7 @@ fun ShiyuApp(repository: ChatRepository) {
             avatarBusy = state.avatarBusy,
             avatarModelReady = state.avatarModelReady,
             imageApiConfigured = state.imageApiConfigured,
+            localModelReady = state.localModelReady,
             onDismiss = {
                 showEdit = false
                 pendingCharacter = null
@@ -265,6 +292,11 @@ fun ShiyuApp(repository: ChatRepository) {
             onGenerateCloudAvatar = { edited ->
                 vm.generateCloudAvatar(edited) { updated ->
                     pendingCharacter = updated
+                }
+            },
+            onModelSourceChange = { source ->
+                vm.setCharacterModelSource(editingCharacter.id, source) { updated ->
+                    if (pendingCharacter?.id == updated.id) pendingCharacter = updated
                 }
             },
             onSave = { updated ->
@@ -289,94 +321,21 @@ private fun CharacterHome(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding(),
-        contentPadding = PaddingValues(20.dp, 18.dp, 20.dp, 28.dp),
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .size(42.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(DeepForest),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("拾", color = Cream, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(Modifier.width(11.dp))
-                    Column {
-                        Text("拾语", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                        Text("SHIYU", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 8.sp)
-                    }
-                }
-                IconButton(onClick = onSettings) {
-                    Icon(Icons.Default.Settings, contentDescription = "设置")
-                }
-            }
+            HomeHeader(onSettings = onSettings)
         }
         item {
-            Surface(
-                color = Color.Transparent,
-                shape = RoundedCornerShape(28.dp),
-                tonalElevation = 0.dp,
-            ) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .background(
-                            Brush.linearGradient(
-                                listOf(DeepForest, Forest, Color(0xFF527A62)),
-                            ),
-                            RoundedCornerShape(28.dp),
-                        )
-                        .padding(28.dp),
-                ) {
-                    Text(
-                        "A STORY THAT REMEMBERS",
-                        color = Color(0xFFB9CABD),
-                        letterSpacing = 2.sp,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(15.dp))
-                    Text(
-                        "不只回复一句话，\n而是记住这段故事。",
-                        color = Cream,
-                        fontSize = 31.sp,
-                        lineHeight = 40.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Spacer(Modifier.height(13.dp))
-                    Text(
-                        "每位角色只有一个持续对话。聊过的内容会成为她之后理解你的依据。",
-                        color = Color(0xFFC7D6CC),
-                        lineHeight = 22.sp,
-                    )
-                    Spacer(Modifier.height(18.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(
-                            onClick = onCreate,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = WarmGold,
-                                contentColor = DeepForest,
-                            ),
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null)
-                            Spacer(Modifier.width(5.dp))
-                            Text("创建角色")
-                        }
-                        FilledTonalButton(onClick = onSettings) {
-                            val providerName = if (state.cloudProvider == "opencode") "OpenCode" else "DeepSeek"
-                            Text(if (state.apiConfigured) "$providerName 已连接" else "配置 $providerName")
-                        }
-                    }
-                }
-            }
+            DiscoveryHero(
+                state = state,
+                onCreate = onCreate,
+                onContinue = state.characters.firstOrNull()?.let { character ->
+                    { onSelect(character) }
+                },
+                onSettings = onSettings,
+            )
         }
         item {
             Row(
@@ -385,19 +344,68 @@ private fun CharacterHome(
                 verticalAlignment = Alignment.Bottom,
             ) {
                 Column {
-                    Text("CHARACTERS", color = Forest, fontSize = 9.sp, letterSpacing = 2.sp)
-                    Text("此刻，想和谁聊聊？", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "你的故事",
+                        color = Forest,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "角色",
+                        fontSize = 24.sp,
+                        lineHeight = 30.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
-                Text("${state.characters.size} 位角色", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                Surface(
+                    onClick = onCreate,
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color.White.copy(alpha = 0.84f),
+                    border = BorderStroke(1.dp, Hairline),
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = Forest)
+                        Text("新角色", color = DeepForest, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
             }
         }
-        items(state.characters, key = { it.id }) { character ->
-            CharacterCard(character = character, onClick = { onSelect(character) })
+        if (state.characters.isEmpty()) {
+            item {
+                EmptyCharacters(onCreate = onCreate)
+            }
+        } else {
+            items(state.characters.chunked(2), key = { row -> row.joinToString("|") { it.id } }) { row ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    row.forEach { character ->
+                        CharacterCard(
+                            character = character,
+                            onClick = { onSelect(character) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    repeat(2 - row.size) {
+                        Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
         }
         item {
+            HorizontalDivider(
+                modifier = Modifier.padding(top = 8.dp),
+                color = Hairline,
+            )
             Text(
                 "AI 的回答可能不准确 · 聊天、记忆和图片保存在本机\n聊天内容和图片会发送给 ${if (state.cloudProvider == "opencode") "OpenCode Go" else "DeepSeek"}",
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 9.sp,
@@ -408,73 +416,339 @@ private fun CharacterHome(
 }
 
 @Composable
-private fun CharacterCard(character: CharacterEntity, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(24.dp),
-        color = Color.White.copy(alpha = 0.72f),
-        shadowElevation = 5.dp,
+private fun HomeHeader(onSettings: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier
-                    .fillMaxWidth()
-                    .height(230.dp)
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(14.dp))
                     .background(
                         Brush.linearGradient(
-                            when (character.id) {
-                                "companion" -> listOf(Color(0xFF9A806D), Color(0xFF365C49))
-                                "interview" -> listOf(Color(0xFF526C91), Color(0xFF1E3249))
-                                else -> listOf(Color(0xFF87967B), Color(0xFF294A38))
-                            },
+                            listOf(DeepForest, Color(0xFF3D7D60)),
                         ),
                     ),
+                contentAlignment = Alignment.Center,
             ) {
-                LocalAvatar(
-                    path = character.avatarPath,
-                    modifier = Modifier.matchParentSize(),
+                Text("拾", color = Cream, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.width(11.dp))
+            Column {
+                Text("拾语", fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "把片刻，留在故事里",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 10.sp,
                 )
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(14.dp),
-                    shape = RoundedCornerShape(100.dp),
-                    color = DeepForest.copy(alpha = 0.55f),
+            }
+        }
+        Surface(
+            onClick = onSettings,
+            shape = CircleShape,
+            color = Color.White.copy(alpha = 0.82f),
+            border = BorderStroke(1.dp, Hairline),
+        ) {
+            Box(Modifier.size(42.dp), contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Default.Settings,
+                    contentDescription = "设置",
+                    tint = DeepForest,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiscoveryHero(
+    state: ShiyuUiState,
+    onCreate: () -> Unit,
+    onContinue: (() -> Unit)?,
+    onSettings: () -> Unit,
+) {
+    val providerName = if (state.cloudProvider == "opencode") "OpenCode Go" else "DeepSeek"
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                Brush.linearGradient(
+                    listOf(Color(0xFF143D2C), Color(0xFF2D684F), Color(0xFF527B67)),
+                ),
+            ),
+    ) {
+        Text(
+            "拾",
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = 4.dp)
+                .alpha(0.055f),
+            color = Color.White,
+            fontSize = 142.sp,
+            lineHeight = 142.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        Column(Modifier.padding(22.dp)) {
+            Text(
+                "A STORY THAT REMEMBERS",
+                color = Color(0xFFC4D5CB),
+                letterSpacing = 1.5.sp,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(9.dp))
+            Text(
+                if (onContinue == null) "让故事，从一句话开始。" else "今晚，想聊些什么？",
+                color = Cream,
+                fontSize = 25.sp,
+                lineHeight = 32.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(7.dp))
+            Text(
+                if (onContinue == null) {
+                    "每位角色都与你有独立而持续的对话。"
+                } else {
+                    "回到那个人还在等你的故事里，从上一句话继续。"
+                },
+                color = Color(0xFFD4E0D8),
+                fontSize = 12.sp,
+                lineHeight = 19.sp,
+            )
+            Spacer(Modifier.height(17.dp))
+            val primaryAction = onContinue ?: onCreate
+            Button(
+                onClick = primaryAction,
+                modifier = Modifier.fillMaxWidth().height(46.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = WarmGold,
+                    contentColor = DeepForest,
+                ),
+            ) {
+                Icon(
+                    if (onContinue == null) Icons.Default.Add else Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    modifier = Modifier.size(19.dp),
+                )
+                Spacer(Modifier.width(7.dp))
+                Text(
+                    if (onContinue == null) {
+                        "创建新角色"
+                    } else {
+                        "继续和${state.characters.firstOrNull()?.name ?: "角色"}聊天"
+                    },
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (onContinue != null) {
+                TextButton(onClick = onCreate, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    Text("创建一个新角色", color = Color(0xFFE5EEE8), fontSize = 11.sp)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Surface(
+                onClick = onSettings,
+                color = Color.White.copy(alpha = 0.09f),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
                 ) {
+                    Box(
+                        Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(if (state.apiConfigured) Color(0xFFA7D7B8) else Color(0xFFF0C497)),
+                    )
                     Text(
-                        character.tag,
-                        Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                        color = Color.White,
+                        if (state.apiConfigured) "$providerName 已连接" else "配置 $providerName",
+                        color = Color(0xFFE3EDE6),
                         fontSize = 10.sp,
                     )
                 }
-                Column(
-                    Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(20.dp),
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyCharacters(onCreate: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = Color.White.copy(alpha = 0.8f),
+        border = BorderStroke(1.dp, Hairline),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 30.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(9.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(LilacMist),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF725F91))
+            }
+            Text("你的第一位角色", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "从一个名字、身份或一段想象开始。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+            )
+            TextButton(onClick = onCreate) { Text("开始创建") }
+        }
+    }
+}
+
+@Composable
+private fun CharacterCard(
+    character: CharacterEntity,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val hasAvatar = character.avatarPath?.let { File(it).isFile } == true
+    val artworkColors = when (character.id.hashCode().mod(4)) {
+        0 -> listOf(Color(0xFFBCA895), Color(0xFF5E725E))
+        1 -> listOf(Color(0xFF9AAABD), Color(0xFF4A5E72))
+        2 -> listOf(Color(0xFFD6B5A9), Color(0xFF865F63))
+        else -> listOf(Color(0xFFA7B7A2), Color(0xFF3E6652))
+    }
+    Surface(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth().aspectRatio(0.79f),
+        shape = RoundedCornerShape(18.dp),
+        color = artworkColors.first(),
+        shadowElevation = 4.dp,
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.58f)),
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Brush.linearGradient(artworkColors)),
+            )
+            if (hasAvatar) {
+                LocalAvatar(
+                    path = character.avatarPath,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Text(
+                    character.name.take(1),
+                    modifier = Modifier.align(Alignment.Center),
+                    color = Color.White.copy(alpha = 0.34f),
+                    fontSize = 64.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Black.copy(alpha = 0.05f),
+                                Color.Transparent,
+                                Color(0xFF102019).copy(alpha = 0.88f),
+                            ),
+                        ),
+                    ),
+            ) {
+            }
+            Surface(
+                modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = Color.White.copy(alpha = 0.9f),
+            ) {
+                Text(
+                    character.tag.ifBlank { "原创角色" },
+                    Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                    color = Color(0xFF435047),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Surface(
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFF102019).copy(alpha = 0.58f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+            ) {
+                Text(
+                    if (character.modelSource == MODEL_SOURCE_LOCAL_MNN) "本地 MNN" else "云端对话",
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+            Column(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(14.dp),
+            ) {
+                Text(
+                    character.name,
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    lineHeight = 28.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    character.description.ifBlank { "进入这段尚未写完的故事" },
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 10.sp,
+                    lineHeight = 16.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        character.name,
-                        color = Color.White,
-                        fontSize = 29.sp,
-                        fontWeight = FontWeight.Medium,
+                        "开始聊天",
+                        color = Color.White.copy(alpha = 0.74f),
+                        fontSize = 9.sp,
                     )
-                    Text(
-                        character.description,
-                        color = Color.White.copy(alpha = 0.82f),
-                        fontSize = 11.sp,
-                        lineHeight = 17.sp,
-                    )
+                    Box(
+                        Modifier
+                            .size(27.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.18f))
+                            .border(1.dp, Color.White.copy(alpha = 0.28f), CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(15.dp),
+                        )
+                    }
                 }
-            }
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text("原创 · AI 角色", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
-                Text("进入故事 →", color = Forest, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -487,6 +761,7 @@ private fun ChatScreen(
     onSend: (String, Uri?) -> Unit,
     onStop: () -> Unit,
     onMemory: () -> Unit,
+    onTrace: () -> Unit,
     onEdit: () -> Unit,
     onReset: () -> Unit,
     onDelete: () -> Unit,
@@ -531,26 +806,67 @@ private fun ChatScreen(
         }
     }
 
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Surface(color = Cream.copy(alpha = 0.94f)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFFF2F0F7), CanvasMist, Color(0xFFFAF9F6)),
+                ),
+            ),
+    ) {
+        Surface(
+            color = Color.White.copy(alpha = 0.9f),
+            shadowElevation = 1.dp,
+        ) {
             Row(
-                Modifier.fillMaxWidth().height(68.dp).padding(horizontal = 10.dp),
+                Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "返回",
+                        tint = DeepForest,
+                    )
                 }
-                CharacterBadge(character, 38.dp)
+                CharacterBadge(character, 42.dp)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(character.name, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-                    Text("${character.tag} · 唯一对话", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                    Text(
+                        character.name,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 17.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        Box(
+                            Modifier
+                                .size(5.dp)
+                                .clip(CircleShape)
+                                .background(Forest),
+                        )
+                        Text(
+                            "${character.tag.ifBlank { "AI 角色" }} · ${
+                                if (character.modelSource == MODEL_SOURCE_LOCAL_MNN) "本地 MNN" else "云端 API"
+                            } · 唯一对话",
+                            color = InkMuted,
+                            fontSize = 9.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
                 IconButton(onClick = onMemory) {
-                    Icon(Icons.Default.Memory, contentDescription = "记忆")
+                    Icon(Icons.Default.Memory, contentDescription = "记忆", tint = Forest)
                 }
                 IconButton(onClick = onEdit) {
-                    Icon(Icons.Default.Edit, contentDescription = "编辑角色")
+                    Icon(Icons.Default.Edit, contentDescription = "编辑角色", tint = Forest)
                 }
                 var menu by remember { mutableStateOf(false) }
                 Box {
@@ -558,6 +874,14 @@ private fun ChatScreen(
                         Icon(Icons.Default.MoreVert, contentDescription = "更多")
                     }
                     androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("调试 Trace") },
+                            leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                            onClick = {
+                                menu = false
+                                onTrace()
+                            },
+                        )
                         androidx.compose.material3.DropdownMenuItem(
                             text = { Text("重置角色对话") },
                             leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
@@ -584,11 +908,20 @@ private fun ChatScreen(
                 }
             }
         }
-        HorizontalDivider(color = Color.Black.copy(alpha = 0.07f))
+        HorizontalDivider(color = Hairline)
         Box(Modifier.weight(1f)) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = 0.2f), CanvasMist.copy(alpha = 0.55f)),
+                        ),
+                    ),
+            )
             LocalAvatar(
                 path = character.avatarPath,
-                modifier = Modifier.fillMaxSize().alpha(0.09f),
+                modifier = Modifier.fillMaxSize().alpha(0.085f),
             )
             if (state.messages.isEmpty() && state.streamingText.isEmpty()) {
                 Column(
@@ -596,18 +929,29 @@ private fun ChatScreen(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    CharacterBadge(character, 86.dp)
+                    CharacterBadge(character, 82.dp)
                     Spacer(Modifier.height(20.dp))
-                    Text("和${character.name}的故事，从此刻开始", fontSize = 24.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                    Text(
+                        "和${character.name}的故事，从此刻开始",
+                        fontSize = 22.sp,
+                        lineHeight = 29.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                    )
                     Spacer(Modifier.height(10.dp))
-                    Text(character.description, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                    Text(
+                        character.description,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 21.sp,
+                        textAlign = TextAlign.Center,
+                    )
                 }
             } else {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp, 20.dp, 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(16.dp, 20.dp, 16.dp, 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp),
                 ) {
                     items(state.messages, key = { it.id }) { message ->
                         MessageBubble(character, message, onPlay = {
@@ -643,13 +987,16 @@ private fun ChatScreen(
                 }
             }
         }
-        Surface(color = Cream.copy(alpha = 0.96f)) {
+        Surface(
+            color = Color.White.copy(alpha = 0.92f),
+            shadowElevation = 8.dp,
+        ) {
             Column(
                 Modifier
                     .fillMaxWidth()
                     .imePadding()
                     .navigationBarsPadding()
-                    .padding(12.dp),
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
             ) {
                 imageUri?.let { uri ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -658,18 +1005,19 @@ private fun ChatScreen(
                     }
                 }
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = Color.White.copy(alpha = 0.92f),
-                    shadowElevation = 8.dp,
+                    shape = RoundedCornerShape(18.dp),
+                    color = Color.White,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 ) {
                     Column(Modifier.padding(12.dp)) {
                         OutlinedTextField(
                             value = draft,
                             onValueChange = { draft = it.take(4096) },
                             modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("和${character.name}说点什么…") },
-                            minLines = 2,
-                            maxLines = 5,
+                            placeholder = { Text("和${character.name}说点什么…", color = InkMuted) },
+                            shape = RoundedCornerShape(12.dp),
+                            minLines = 1,
+                            maxLines = 4,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                             keyboardActions = KeyboardActions(onSend = {
                                 if (draft.isNotBlank() || imageUri != null) {
@@ -681,18 +1029,27 @@ private fun ChatScreen(
                         )
                         Row(
                             Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            IconButton(onClick = { picker.launch("image/*") }) {
-                                Icon(Icons.Default.Image, contentDescription = "上传图片")
+                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                IconButton(
+                                    onClick = { picker.launch("image/*") },
+                                    enabled = character.modelSource != MODEL_SOURCE_LOCAL_MNN,
+                                ) {
+                                    Icon(Icons.Default.Image, contentDescription = "上传图片", tint = InkMuted)
+                                }
+                                IconButton(onClick = {
+                                    if (recording) { voice.recording = false; recording = false; voiceStatus = "正在识别…" }
+                                    else if (!voiceBusy) microphone.launch(Manifest.permission.RECORD_AUDIO)
+                                }, enabled = recording || !voiceBusy) {
+                                    Icon(
+                                        if (recording) Icons.Default.Stop else Icons.Default.Mic,
+                                        contentDescription = if (recording) "结束录音" else "语音输入",
+                                        tint = if (recording) MaterialTheme.colorScheme.error else InkMuted,
+                                    )
+                                }
                             }
-                            IconButton(onClick = {
-                                if (recording) { voice.recording = false; recording = false; voiceStatus = "正在识别…" }
-                                else if (!voiceBusy) microphone.launch(Manifest.permission.RECORD_AUDIO)
-                            }, enabled = recording || !voiceBusy) {
-                                Icon(if (recording) Icons.Default.Stop else Icons.Default.Mic, contentDescription = if (recording) "结束录音" else "语音输入")
-                            }
+                            Spacer(Modifier.weight(1f))
                             if (state.busy) {
                                 Button(
                                     onClick = onStop,
@@ -709,16 +1066,29 @@ private fun ChatScreen(
                                         imageUri = null
                                     },
                                     enabled = draft.isNotBlank() || imageUri != null,
+                                    shape = RoundedCornerShape(12.dp),
                                 ) {
                                     Text("发送")
-                                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
+                                    Spacer(Modifier.width(4.dp))
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.Send,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(17.dp),
+                                    )
                                 }
                             }
                         }
                     }
                 }
                 Text(
-                    voiceStatus ?: if (recording) "录音中，点击停止后识别" else if (voiceBusy) "语音处理中…" else "文字和图片会发送给 ${if (state.cloudProvider == "opencode") "OpenCode Go" else "DeepSeek"} · 语音在手机处理",
+                    voiceStatus ?: when {
+                        recording -> "录音中，点击停止后识别"
+                        voiceBusy -> "语音处理中…"
+                        character.modelSource == MODEL_SOURCE_LOCAL_MNN ->
+                            "文字在本机 MNN 模型运行 · 图片仅支持云端模式"
+                        else ->
+                            "文字和图片会发送给 ${if (state.cloudProvider == "opencode") "OpenCode Go" else "DeepSeek"} · 语音在手机处理"
+                    },
                     modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                     textAlign = TextAlign.Center,
                     fontSize = 9.sp,
@@ -730,6 +1100,8 @@ private fun ChatScreen(
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
+            shape = RoundedCornerShape(22.dp),
+            containerColor = Color(0xFFFBFAF7),
             title = { Text("删除${character.name}？") },
             text = { Text("角色档案、聊天记录、记忆及应用生成的头像会被删除，无法恢复。你从手机相册选择的原始图片不会删除。") },
             confirmButton = {
@@ -754,21 +1126,25 @@ private fun MessageBubble(character: CharacterEntity, message: MessageEntity, on
             Spacer(Modifier.width(8.dp))
         }
         Column(
+            modifier = Modifier.weight(1f),
             horizontalAlignment = if (user) Alignment.End else Alignment.Start,
         ) {
             Surface(
+                modifier = Modifier.widthIn(max = 322.dp),
                 shape = if (user) {
-                    RoundedCornerShape(18.dp, 5.dp, 18.dp, 18.dp)
+                    RoundedCornerShape(18.dp, 6.dp, 18.dp, 18.dp)
                 } else {
-                    RoundedCornerShape(5.dp, 18.dp, 18.dp, 18.dp)
+                    RoundedCornerShape(6.dp, 18.dp, 18.dp, 18.dp)
                 },
-                color = if (user) Forest else Color.White.copy(alpha = 0.88f),
-                shadowElevation = 2.dp,
+                color = if (user) Forest else Color.White.copy(alpha = 0.96f),
+                border = if (user) null else BorderStroke(1.dp, Hairline),
+                shadowElevation = if (user) 0.dp else 2.dp,
             ) {
-                Column(Modifier.padding(13.dp)) {
+                Column(Modifier.padding(horizontal = 15.dp, vertical = 13.dp)) {
                     Text(
                         shownContent,
                         color = if (user) Color.White else MaterialTheme.colorScheme.onSurface,
+                        fontSize = 14.sp,
                         lineHeight = 22.sp,
                     )
                     message.imageUri?.let { raw ->
@@ -781,15 +1157,28 @@ private fun MessageBubble(character: CharacterEntity, message: MessageEntity, on
                 }
             }
             if (message.id > 0) {
-                if (!user && message.content.isNotBlank() && onPlay != null) {
-                    TextButton(onClick = onPlay) { Icon(if (playing()) Icons.Default.Stop else Icons.Default.VolumeUp, contentDescription = null); Text(if (playing()) " 停止" else " 播放") }
+                Row(
+                    modifier = Modifier.padding(top = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (!user && message.content.isNotBlank() && onPlay != null) {
+                        TextButton(onClick = onPlay) {
+                            Icon(
+                                if (playing()) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp),
+                            )
+                            Spacer(Modifier.width(3.dp))
+                            Text(if (playing()) "停止" else "朗读", fontSize = 10.sp)
+                        }
+                    }
+                    Text(
+                        SimpleDateFormat("M月d日 HH:mm", Locale.CHINA).format(Date(message.createdAt)),
+                        fontSize = 8.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
-                Text(
-                    SimpleDateFormat("M月d日 HH:mm", Locale.CHINA).format(Date(message.createdAt)),
-                    fontSize = 8.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
             }
         }
     }
@@ -801,6 +1190,7 @@ private fun CharacterBadge(character: CharacterEntity, size: androidx.compose.ui
         Modifier
             .size(size)
             .clip(CircleShape)
+            .border(1.dp, Color.White.copy(alpha = 0.84f), CircleShape)
             .background(
                 Brush.linearGradient(
                     listOf(Forest, Color(0xFF8A9C7F)),
@@ -856,6 +1246,33 @@ private fun UriImage(uri: Uri, modifier: Modifier = Modifier) {
 }
 
 @Composable
+private fun DreamSchedulerChoice(
+    label: String,
+    value: String,
+    selected: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (selected == value) {
+        FilledTonalButton(
+            onClick = { onSelect(value) },
+            modifier = modifier.height(46.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp),
+        ) {
+            Text(label, fontSize = 9.sp, maxLines = 1)
+        }
+    } else {
+        OutlinedButton(
+            onClick = { onSelect(value) },
+            modifier = modifier.height(46.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp),
+        ) {
+            Text(label, fontSize = 9.sp, maxLines = 1)
+        }
+    }
+}
+
+@Composable
 private fun SettingsDialog(
     state: ShiyuUiState,
     onDismiss: () -> Unit,
@@ -867,11 +1284,32 @@ private fun SettingsDialog(
     onSaveLimits: (Int, Int) -> Unit,
     onSaveImageKey: (String) -> Unit,
     onRemoveImageKey: () -> Unit,
+    onSaveDreamSettings: (DreamGenerationSettings) -> Unit,
     onImportAvatarModel: (Uri) -> Unit,
+    onDeleteAvatarModel: () -> Unit,
+    onImportLocalModel: (Uri) -> Unit,
 ) {
     var openCodeKey by remember { mutableStateOf("") }
     var deepSeekKey by remember { mutableStateOf("") }
     var imageKey by remember { mutableStateOf("") }
+    var dreamPositive by remember(state.dreamGenerationSettings) {
+        mutableStateOf(state.dreamGenerationSettings.positiveTemplate)
+    }
+    var dreamNegative by remember(state.dreamGenerationSettings) {
+        mutableStateOf(state.dreamGenerationSettings.negativePrompt)
+    }
+    var dreamSteps by remember(state.dreamGenerationSettings) {
+        mutableStateOf(state.dreamGenerationSettings.steps.toString())
+    }
+    var dreamCfg by remember(state.dreamGenerationSettings) {
+        mutableStateOf(state.dreamGenerationSettings.cfg.toString())
+    }
+    var dreamSeed by remember(state.dreamGenerationSettings) {
+        mutableStateOf(state.dreamGenerationSettings.seed.toString())
+    }
+    var dreamScheduler by remember(state.dreamGenerationSettings) {
+        mutableStateOf(state.dreamGenerationSettings.scheduler)
+    }
     var requestLimit by remember(state.limits) { mutableStateOf(state.limits.requestTokens.toString()) }
     var dailyLimit by remember(state.limits) { mutableStateOf(state.limits.dailyTokens.toString()) }
     val localAvatarPicker = rememberLauncherForActivityResult(
@@ -879,8 +1317,16 @@ private fun SettingsDialog(
     ) { uri ->
         uri?.let(onImportAvatarModel)
     }
+    val localChatModelPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri ->
+        uri?.let(onImportLocalModel)
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(22.dp),
+        containerColor = Color(0xFFFBFAF7),
+        tonalElevation = 0.dp,
         title = { Text("应用设置") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -938,6 +1384,39 @@ private fun SettingsDialog(
                     }
                 }
                 HorizontalDivider()
+                Text("手机本地 Qwen3-1.7B（宋知意 LoRA）", fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (state.localModelReady) {
+                        "模型已安装，约 ${
+                            String.format(
+                                Locale.CHINA,
+                                "%.2f",
+                                state.localModelBytes / 1024.0 / 1024.0 / 1024.0,
+                            )
+                        } GiB。可在每个角色档案中选择云端 API 或本地模型。"
+                    } else {
+                        "导入 MNN Chat 兼容的模型 ZIP（需包含 config.json、llm.mnn、llm.mnn.weight 和 tokenizer.mtok）。"
+                    },
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(
+                    onClick = { localChatModelPicker.launch("*/*") },
+                    enabled = !state.localModelBusy,
+                ) {
+                    if (state.localModelBusy) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(
+                        when {
+                            state.localModelBusy -> "正在导入…"
+                            state.localModelReady -> "重新导入 MNN 模型"
+                            else -> "导入本地 MNN 模型"
+                        },
+                    )
+                }
+                HorizontalDivider()
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = requestLimit,
@@ -956,12 +1435,18 @@ private fun SettingsDialog(
                 }
                 Text("今日已使用 ${state.todayUsage} tokens", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                 HorizontalDivider()
-                Text("本地 MediaPipe SD1.5 角色头像", fontWeight = FontWeight.SemiBold)
+                Text("Dream 本地生图 · ${state.avatarModelName}", fontWeight = FontWeight.SemiBold)
                 Text(
                     if (state.avatarModelReady) {
-                        "本地模型已导入，可在角色编辑页离线生成头像。"
+                        "${state.avatarModelName} 已导入，约 ${
+                            String.format(
+                                Locale.CHINA,
+                                "%.2f",
+                                state.avatarModelBytes / 1024.0 / 1024.0 / 1024.0,
+                            )
+                        } GiB。生成时使用手机高通 NPU。"
                     } else {
-                        "导入 sd15-mediapipe.zip 后，可在手机本地生成头像。首次使用前初始化较慢。"
+                        "导入 SD1.5 QNN 模型 ZIP 后，可直接在拾语内生成头像，不需要另装 Local Dream。"
                     },
                     fontSize = 10.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -970,8 +1455,103 @@ private fun SettingsDialog(
                     onClick = { localAvatarPicker.launch("*/*") },
                     enabled = !state.avatarBusy,
                 ) {
-                    Text(if (state.avatarModelReady) "重新导入本地模型" else "导入本地 SD1.5 模型")
+                    if (state.avatarBusy) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(
+                        when {
+                            state.avatarBusy -> "正在导入模型…"
+                            state.avatarModelReady -> "重新导入 Dream 模型"
+                            else -> "导入 SD1.5 QNN 模型"
+                        },
+                    )
                 }
+                if (state.avatarModelReady) {
+                    TextButton(
+                        onClick = onDeleteAvatarModel,
+                        enabled = !state.avatarBusy,
+                    ) {
+                        Text("删除本地生图模型", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = dreamSteps,
+                        onValueChange = { dreamSteps = it.filter(Char::isDigit).take(2) },
+                        label = { Text("步数") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = dreamCfg,
+                        onValueChange = { dreamCfg = it.filter { ch -> ch.isDigit() || ch == '.' }.take(4) },
+                        label = { Text("CFG") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                OutlinedTextField(
+                    value = dreamSeed,
+                    onValueChange = { dreamSeed = it.filter(Char::isDigit).take(12) },
+                    label = { Text("固定种子") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text("采样器", fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    DreamSchedulerChoice(
+                        label = "SDE Karras",
+                        value = "dpm_sde_karras",
+                        selected = dreamScheduler,
+                        onSelect = { dreamScheduler = it },
+                        modifier = Modifier.weight(1f),
+                    )
+                    DreamSchedulerChoice(
+                        label = "2M Karras",
+                        value = "dpm_karras",
+                        selected = dreamScheduler,
+                        onSelect = { dreamScheduler = it },
+                        modifier = Modifier.weight(1f),
+                    )
+                    DreamSchedulerChoice(
+                        label = "Euler A",
+                        value = "euler_a_karras",
+                        selected = dreamScheduler,
+                        onSelect = { dreamScheduler = it },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                OutlinedTextField(
+                    value = dreamPositive,
+                    onValueChange = { dreamPositive = it.take(1_800) },
+                    label = { Text("正面提示词模板") },
+                    supportingText = {
+                        Text(
+                            "最多 77 Token；{appearance} 替换为角色外貌。" +
+                                "超限时自动保留前段核心描述。",
+                            fontSize = 9.sp,
+                        )
+                    },
+                    minLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = dreamNegative,
+                    onValueChange = { dreamNegative = it.take(1_800) },
+                    label = { Text("负面提示词") },
+                    supportingText = {
+                        Text("最多 77 Token；超限时自动移除末尾次要项。", fontSize = 9.sp)
+                    },
+                    minLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "内置 Dream 引擎来自 Local Dream，采用 CC BY-NC 4.0，仅用于非商业演示。" +
+                        "首次加载约需数秒，生成期间请保持应用在前台。",
+                    fontSize = 9.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 HorizontalDivider()
                 Text("千问 AI 平台云端角色头像", fontWeight = FontWeight.SemiBold)
                 Text(if (state.imageApiConfigured) "千问 AI 平台图片 API Key 已配置" else "填写千问 AI 平台通用 API Key；与 DeepSeek Key 不通用。", fontSize = 10.sp)
@@ -989,6 +1569,16 @@ private fun SettingsDialog(
                 if (openCodeKey.isNotBlank()) onSaveOpenCodeKey(openCodeKey)
                 if (deepSeekKey.isNotBlank()) onSaveKey(deepSeekKey)
                 if (imageKey.isNotBlank()) onSaveImageKey(imageKey)
+                onSaveDreamSettings(
+                    DreamGenerationSettings(
+                        positiveTemplate = dreamPositive,
+                        negativePrompt = dreamNegative,
+                        steps = dreamSteps.toIntOrNull() ?: 25,
+                        cfg = dreamCfg.toFloatOrNull() ?: 7.0f,
+                        scheduler = dreamScheduler,
+                        seed = dreamSeed.toLongOrNull() ?: 20261102L,
+                    ),
+                )
                 onSaveLimits(requestLimit.toIntOrNull() ?: 12_000, dailyLimit.toIntOrNull() ?: 200_000)
                 onDismiss()
             }) { Text("保存") }
@@ -1007,7 +1597,10 @@ private fun CreateCharacterDialog(
     var idea by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("创建角色") },
+        shape = RoundedCornerShape(22.dp),
+        containerColor = Color(0xFFFBFAF7),
+        tonalElevation = 0.dp,
+        title = { Text("创建角色", fontSize = 24.sp) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
@@ -1019,6 +1612,7 @@ private fun CreateCharacterDialog(
                     value = idea,
                     onValueChange = { idea = it.take(1800) },
                     modifier = Modifier.fillMaxWidth().height(150.dp),
+                    shape = RoundedCornerShape(14.dp),
                     placeholder = {
                         Text("例如：李白身处唐代，以诗酒游历为生活重心；说话豪放敏锐；不能知道 Python、电脑和后世历史。")
                     },
@@ -1046,9 +1640,11 @@ private fun EditCharacterDialog(
     avatarBusy: Boolean,
     avatarModelReady: Boolean,
     imageApiConfigured: Boolean,
+    localModelReady: Boolean,
     onDismiss: () -> Unit,
     onGenerateLocalAvatar: (CharacterEntity) -> Unit,
     onGenerateCloudAvatar: (CharacterEntity) -> Unit,
+    onModelSourceChange: (String) -> Unit,
     onSave: (CharacterEntity) -> Unit,
 ) {
     var name by remember(character.id) { mutableStateOf(character.name) }
@@ -1058,6 +1654,9 @@ private fun EditCharacterDialog(
     var speechStyle by remember(character.id) { mutableStateOf(character.speechStyle) }
     var relationship by remember(character.id) { mutableStateOf(character.relationship) }
     var appearance by remember(character.id) { mutableStateOf(character.appearance) }
+    var appearancePrompt by remember(character.id) {
+        mutableStateOf(character.appearancePrompt)
+    }
     var greeting by remember(character.id) { mutableStateOf(character.greeting) }
     var characterKind by remember(character.id) { mutableStateOf(character.characterKind) }
     var era by remember(character.id) { mutableStateOf(character.era) }
@@ -1065,6 +1664,7 @@ private fun EditCharacterDialog(
     var forbidden by remember(character.id) { mutableStateOf(character.forbiddenKnowledge) }
     var forbiddenTerms by remember(character.id) { mutableStateOf(character.forbiddenTerms) }
     var worldbookJson by remember(character.id) { mutableStateOf(character.worldbookJson) }
+    var modelSource by remember(character.id) { mutableStateOf(character.modelSource) }
     fun editedCharacter() = character.copy(
         name = name.trim().ifBlank { character.name },
         tag = tag.trim(),
@@ -1073,11 +1673,7 @@ private fun EditCharacterDialog(
         speechStyle = speechStyle.trim(),
         relationship = relationship.trim(),
         appearance = appearance.trim(),
-        appearancePrompt = if (appearance.trim() == character.appearance.trim()) {
-            character.appearancePrompt
-        } else {
-            ""
-        },
+        appearancePrompt = appearancePrompt.trim(),
         greeting = greeting.trim(),
         characterKind = characterKind.trim(),
         era = era.trim(),
@@ -1088,9 +1684,14 @@ private fun EditCharacterDialog(
             .filter(String::isNotEmpty)
             .joinToString(","),
         worldbookJson = worldbookJson.trim().ifBlank { "[]" },
+        modelSource = modelSource,
     )
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFFFBFAF7),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+    ) {
         LazyColumn(
             Modifier
                 .fillMaxWidth()
@@ -1109,6 +1710,68 @@ private fun EditCharacterDialog(
             }
             item {
                 Surface(
+                    color = LilacMist.copy(alpha = 0.7f),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("聊天模型", fontWeight = FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (modelSource == MODEL_SOURCE_API) {
+                                FilledTonalButton(onClick = {
+                                    modelSource = MODEL_SOURCE_API
+                                    onModelSourceChange(MODEL_SOURCE_API)
+                                }) {
+                                    Text("云端 API")
+                                }
+                            } else {
+                                OutlinedButton(onClick = {
+                                    modelSource = MODEL_SOURCE_API
+                                    onModelSourceChange(MODEL_SOURCE_API)
+                                }) {
+                                    Text("云端 API")
+                                }
+                            }
+                            if (modelSource == MODEL_SOURCE_LOCAL_MNN) {
+                                FilledTonalButton(onClick = {
+                                    modelSource = MODEL_SOURCE_LOCAL_MNN
+                                    onModelSourceChange(MODEL_SOURCE_LOCAL_MNN)
+                                }) {
+                                    Text("本地 MNN")
+                                }
+                            } else {
+                                OutlinedButton(onClick = {
+                                    modelSource = MODEL_SOURCE_LOCAL_MNN
+                                    onModelSourceChange(MODEL_SOURCE_LOCAL_MNN)
+                                }) {
+                                    Text("本地 MNN")
+                                }
+                            }
+                        }
+                        Text(
+                            when {
+                                modelSource == MODEL_SOURCE_API ->
+                                    "使用设置中选定的 OpenCode Go 或 DeepSeek，支持图片和云端记忆整理。"
+                                localModelReady ->
+                                    "文字由这台手机上的宋知意 LoRA MNN 模型生成；不发送到电脑或云端。当前本地模型暂不支持图片。"
+                                else ->
+                                    "尚未安装本地 MNN 模型。请先在应用设置中导入模型；未安装时本地聊天会给出提示。"
+                            },
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            "切换后立即保存；底部“保存档案”用于保存其他角色资料。",
+                            fontSize = 9.sp,
+                            color = Forest,
+                        )
+                    }
+                }
+            }
+            item {
+                Surface(
                     color = Sage.copy(alpha = 0.55f),
                     shape = RoundedCornerShape(18.dp),
                 ) {
@@ -1117,15 +1780,29 @@ private fun EditCharacterDialog(
                         verticalArrangement = Arrangement.spacedBy(9.dp),
                     ) {
                         Text("角色头像", fontWeight = FontWeight.SemiBold)
-                        LocalAvatar(
-                            path = character.avatarPath,
-                            modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(14.dp)),
-                        )
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(180.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(Color(0xFFDDE9E1), Color(0xFF7A8E80)),
+                                    ),
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CharacterBadge(character, 92.dp)
+                            LocalAvatar(
+                                path = character.avatarPath,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                         Text(
                             if (avatarModelReady) {
-                                "手机本地 MediaPipe SD1.5 已导入，可离线生成；也可以使用千问 AI 平台云端生成。"
+                                "本地 Dream 生图模型已就绪，可在手机 NPU 上离线生成；也可以切换千问图片 API。"
                             } else {
-                                "可在应用设置中导入本地 MediaPipe SD1.5；云端生成需要千问 AI 平台图片 Key。"
+                                "先在应用设置中导入 SD1.5 QNN 模型；云端生成需要千问 AI 平台图片 Key。"
                             },
                             fontSize = 10.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1135,7 +1812,7 @@ private fun EditCharacterDialog(
                                 onClick = { onGenerateLocalAvatar(editedCharacter()) },
                                 enabled = avatarModelReady && !avatarBusy && name.isNotBlank(),
                             ) {
-                                Text(if (avatarBusy) "生成中…" else "本地生成头像")
+                                Text(if (avatarBusy) "生成中…" else "NPU 生成头像")
                             }
                             Button(
                                 onClick = { onGenerateCloudAvatar(editedCharacter()) },
@@ -1165,8 +1842,27 @@ private fun EditCharacterDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text(
-                    "本地 SD1.5 不直接理解中文；首次生成时会自动转换成英文视觉提示并保存在本机，之后可离线复用。",
+                    "这段描述会参与本地生图。建议写清年龄、脸型、眼睛、发型、服装、神态和场景。",
                     fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            item {
+                OutlinedTextField(
+                    value = appearancePrompt,
+                    onValueChange = { appearancePrompt = it.take(1_200) },
+                    label = { Text("生图专用外貌提示词（创建角色时自动生成）") },
+                    placeholder = {
+                        Text("例如：1boy, male, solo, 26 year old, short black hair, dark suit")
+                    },
+                    minLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "留空时使用上面的中文外貌描述；填写后会优先用于 Dream/SD1.5。" +
+                        "建议英文不超过 35 个单词，合并模板后需在 77 Token 内。",
+                    fontSize = 9.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
                 )
@@ -1214,6 +1910,85 @@ private fun EditCharacterDialog(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+private fun TraceSheet(
+    traces: List<TurnTraceEntity>,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFFFBFAF7),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.86f)
+                .padding(horizontal = 18.dp),
+        ) {
+            Text("调试 Trace", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "仅保存模型、Prompt 哈希、记忆 ID、状态、Token 与耗时，不保存 API Key 或完整 Prompt。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.sp,
+            )
+            Spacer(Modifier.height(12.dp))
+            if (traces.isEmpty()) {
+                Text("完成一轮聊天后，这里会出现本机 Trace。")
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(traces, key = { it.runId }) { trace ->
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color.White.copy(alpha = 0.76f),
+                        ) {
+                            Column(Modifier.padding(13.dp)) {
+                                Text(
+                                    SimpleDateFormat("M月d日 HH:mm", Locale.CHINA)
+                                        .format(Date(trace.createdAt)),
+                                    fontSize = 10.sp,
+                                    color = Forest,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    "${trace.provider} · ${trace.model}",
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    "Prompt ${trace.promptVersion}",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    "输入 ${trace.inputTokens} / 输出 ${trace.outputTokens} tokens" +
+                                        (trace.latencyMs?.let { " · ${it} ms" } ?: ""),
+                                    fontSize = 10.sp,
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    trace.traceJson,
+                                    fontSize = 9.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    "后台记忆：" + trace.memoryResultJson,
+                                    fontSize = 9.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun MemorySheet(
     character: CharacterEntity,
     memories: List<MemoryEntity>,
@@ -1227,7 +2002,11 @@ private fun MemorySheet(
     var editing by remember { mutableStateOf<MemoryEntity?>(null) }
     var deleting by remember { mutableStateOf<MemoryEntity?>(null) }
     var editedText by remember { mutableStateOf("") }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFFFBFAF7),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+    ) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -1280,12 +2059,19 @@ private fun MemorySheet(
                     ) {
                         Column(Modifier.padding(13.dp)) {
                             Text(
-                                when (memory.state) {
-                                    "active" -> "当前事实"
-                                    "candidate" -> "历史草稿"
-                                    "contested" -> "有疑义"
-                                    "superseded" -> "已被替代"
-                                    else -> "已删除"
+                                when {
+                                    memory.state == "candidate" -> "历史草稿"
+                                    memory.state == "contested" -> "有疑义"
+                                    memory.state == "superseded" -> "已被替代"
+                                    memory.state == "deleted" -> "已删除"
+                                    memory.kind == "role_claim" ||
+                                        memory.factType == "role_claim" ||
+                                        memory.sourceAuthority == "character_self_report" ->
+                                        "角色自述 · 非正式设定"
+                                    memory.factType == "plan" -> "当前计划"
+                                    memory.factType == "hypothesis" -> "假设 · 非既成事实"
+                                    memory.factType == "opinion" -> "主观观点"
+                                    else -> "当前事实"
                                 },
                                 color = Forest,
                                 fontSize = 9.sp,
@@ -1295,6 +2081,11 @@ private fun MemorySheet(
                             memory.value?.let {
                                 Text("准确值：$it", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                             }
+                            Text(
+                                "类型：${memory.factType} · 权限：${memory.sourceAuthority}",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 9.sp,
+                            )
                             if (memory.state != "deleted") {
                                 Row(
                                     Modifier.fillMaxWidth(),

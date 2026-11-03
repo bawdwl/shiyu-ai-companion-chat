@@ -6,25 +6,34 @@ def prepare_context_details(tokenizer,messages,budget=2048,trim_history=False):
     selected=[dict(role=m['role'],content=m['content']) for m in messages]
     start=1 if selected and selected[0]['role']=='system' else 0
     body=selected[start:]
-    if not body or len(body)%2!=1 or any(m['role']!=('user' if i%2==0 else 'assistant') for i,m in enumerate(body)):
+    # A product conversation may begin with one persisted character greeting.
+    # It is contextual history, not a malformed answer without its question.
+    opening=1 if body and body[0]['role']=='assistant' else 0
+    turns=body[opening:]
+    if not turns or len(turns)%2!=1 or any(
+        m['role']!=('user' if i%2==0 else 'assistant')
+        for i,m in enumerate(turns)
+    ):
         raise ValueError('上下文必须是完整历史问答和最新用户问题')
+    history_start=start+opening
     def encode(items):
         return tokenizer.apply_chat_template(items,tokenize=True,add_generation_prompt=True,
             enable_thinking=False,return_dict=True,return_tensors='pt')
     inputs=encode(selected);original_tokens=inputs['input_ids'].shape[-1];omitted_pairs=[]
     if original_tokens>budget and not trim_history:
         raise ValueError(f'对话内容超过{budget} token，请缩短输入。')
-    while inputs['input_ids'].shape[-1]>budget and len(selected)-start>1:
+    while inputs['input_ids'].shape[-1]>budget and len(selected)-history_start>1:
         omitted_pairs.append(dict(turn_index=len(omitted_pairs)+1,
-                                  user=selected[start]['content'],
-                                  assistant=selected[start+1]['content']))
-        del selected[start:start+2]
+                                  user=selected[history_start]['content'],
+                                  assistant=selected[history_start+1]['content']))
+        del selected[history_start:history_start+2]
         inputs=encode(selected)
     if inputs['input_ids'].shape[-1]>budget:
         raise ValueError(f'最新问题与必要提示超过{budget} token，请缩短本次输入；历史记录保留。')
     metrics=dict(context_policy='recent_complete_turns' if trim_history else 'reject_over_budget',
         context_input_budget=budget,original_input_tokens=original_tokens,
-        context_omitted_turns=len(omitted_pairs),context_kept_turns=(len(selected)-start-1)//2)
+        context_omitted_turns=len(omitted_pairs),
+        context_kept_turns=(len(selected)-history_start-1)//2)
     return inputs,metrics,selected,omitted_pairs
 
 

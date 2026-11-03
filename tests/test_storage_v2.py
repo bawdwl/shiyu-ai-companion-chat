@@ -103,6 +103,38 @@ class ChatStoreV2Tests(unittest.TestCase):
             self.assertEqual(session["provider"], "local")
             self.assertEqual(session["messages"][0]["content"], "原有消息")
 
+    def test_named_adapter_modes_migrate_without_losing_role_conversation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "chat.sqlite3"
+            db = sqlite3.connect(path)
+            db.executescript(
+                "CREATE TABLE sessions("
+                "id TEXT PRIMARY KEY,model_mode TEXT NOT NULL "
+                "CHECK(model_mode IN ('base','lora')),"
+                "created_at TEXT NOT NULL,updated_at TEXT NOT NULL);"
+                "CREATE TABLE messages("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,"
+                "role TEXT NOT NULL CHECK(role IN ('user','assistant')),"
+                "content TEXT NOT NULL,display_json TEXT,created_at TEXT NOT NULL);"
+                "INSERT INTO sessions VALUES('role-session','base','t','t');"
+                "INSERT INTO messages(session_id,role,content,created_at) "
+                "VALUES('role-session','user','保留消息','t');"
+            )
+            db.commit()
+            db.close()
+
+            store = ChatStore(path)
+            current = store.get_or_create_role_conversation(
+                "custom-lora-wukong-v1",
+                mode="wukong",
+                model_id="Qwen/Qwen3-1.7B",
+                provider="local-wukong",
+            )
+            self.assertEqual(current["model_mode"], "wukong")
+            self.assertEqual(current["provider"], "local-wukong")
+            self.assertEqual(store.get("role-session")["messages"][0]["content"], "保留消息")
+
 
 if __name__ == "__main__":
     unittest.main()

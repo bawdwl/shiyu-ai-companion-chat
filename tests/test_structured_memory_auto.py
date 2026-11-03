@@ -99,6 +99,76 @@ class AutomaticStructuredMemoryTests(unittest.TestCase):
         self.assertEqual(self.store.get('xiaoman', first['id'])['state'],
                          'active')
 
+    def test_historical_half_of_one_correction_is_not_contested(self):
+        current = self.store.auto_ingest(
+            'xiaoman',
+            candidate(
+                12,
+                '更正一下，我上个月已经搬到杭州了，苏州是以前的住处。',
+                '杭州',
+                'user.residence.place',
+            ),
+        )['item']
+        historical = self.store.auto_ingest(
+            'xiaoman',
+            candidate(
+                12,
+                '苏州是以前的住处。',
+                '苏州',
+                'user.residence.place',
+            ),
+        )
+        self.assertEqual(historical['action'], 'superseded')
+        self.assertEqual(historical['item']['state'], 'superseded')
+        self.assertEqual(
+            self.store.get('xiaoman', current['id'])['state'],
+            'active',
+        )
+        ranked = self.store.search_hybrid(
+            'xiaoman',
+            '我以前住在哪里，现在住在哪里？',
+            limit=4,
+            include_superseded=True,
+        )
+        self.assertEqual(
+            {(item['value'], item['state']) for item in ranked},
+            {('杭州', 'active'), ('苏州', 'superseded')},
+        )
+        repeated = self.store.auto_ingest(
+            'xiaoman',
+            candidate(
+                12,
+                '苏州是以前的住处。',
+                '苏州',
+                'user.residence.place',
+            ),
+        )
+        self.assertEqual(repeated['action'], 'superseded')
+        self.assertEqual(repeated['item']['id'], historical['item']['id'])
+        self.assertEqual(
+            len([
+                item for item in self.store.list_items(
+                    'xiaoman',
+                    include_inactive=True,
+                )
+                if item['fact_key'] == 'user.current.place'
+                and item['state'] == 'superseded'
+            ]),
+            1,
+        )
+
+    def test_residence_place_is_canonicalized_to_current_place(self):
+        item = self.store.auto_ingest(
+            'xiaoman',
+            candidate(
+                1,
+                '我现在住在杭州',
+                '杭州',
+                'user.residence.place',
+            ),
+        )['item']
+        self.assertEqual(item['fact_key'], 'user.current.place')
+
     def test_deleted_evidence_is_tombstoned_but_later_statement_is_allowed(self):
         first = self.store.auto_ingest(
             'xiaoman',

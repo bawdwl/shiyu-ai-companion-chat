@@ -89,7 +89,7 @@ class SpeechTests(unittest.TestCase):
     def test_xiaoman_voice_profile_can_be_saved_and_wav_uploaded(self):
         profile_url='/characters/companion/voice-profile'
         initial=self.client.get(profile_url).json()
-        self.assertEqual(initial['display_name'],'小满 · 日常音色')
+        self.assertEqual(initial['display_name'],'小满 · 音色')
         self.assertFalse(initial['has_reference_audio'])
         saved=self.client.put(profile_url,json={
             'display_name':'小满 · 温柔日常','voice_style':'温柔自然，语速适中',
@@ -109,6 +109,13 @@ class SpeechTests(unittest.TestCase):
 
     def test_xiaoman_gpt_sovits_refuses_unconfigured_profile_instead_of_using_wrong_voice(self):
         self.client.app.state.speech.supports_voice_profiles=True
+        profile_url='/characters/companion/voice-profile'
+        self.client.put(profile_url,json={
+            'display_name':'小满 · 温柔日常',
+            'voice_style':'温柔自然，语速适中',
+            'reference_text':'',
+            'language':'zh',
+        })
         response=self.request()
         self.assertEqual(response.status_code,409)
         self.assertEqual(self.provider.calls,[])

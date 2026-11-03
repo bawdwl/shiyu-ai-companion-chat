@@ -1,7 +1,27 @@
+param(
+    [string]$Python = "python",
+    [string]$Target = ""
+)
+
 $ErrorActionPreference = "Stop"
-$root = Split-Path -Parent $PSScriptRoot
-$python = "D:\Others\Study\Anaconda3\envs\qwen3-im-chat\python.exe"
-if (-not (Test-Path $python)) {
-    throw "找不到 qwen3-im-chat Python：$python"
+$root = (Resolve-Path (Split-Path -Parent $PSScriptRoot)).Path
+if ([string]::IsNullOrWhiteSpace($Target)) {
+    $Target = Join-Path $root "outputs\secret-runtime"
 }
-& $python -m pip install --target (Join-Path $root "outputs/secret-runtime") cryptography
+$Target = [System.IO.Path]::GetFullPath($Target)
+
+& $Python --version
+if ($LASTEXITCODE -ne 0) {
+    throw "Python is not available: $Python"
+}
+
+New-Item -ItemType Directory -Path $Target -Force | Out-Null
+& $Python -m pip install --upgrade --target $Target cryptography
+if ($LASTEXITCODE -ne 0) {
+    throw "cryptography installation failed with code $LASTEXITCODE"
+}
+
+& $Python -c "import sys; sys.path.insert(0, r'$Target'); from cryptography.fernet import Fernet; print('secret-runtime-ok')"
+if ($LASTEXITCODE -ne 0) {
+    throw "secret runtime import check failed with code $LASTEXITCODE"
+}

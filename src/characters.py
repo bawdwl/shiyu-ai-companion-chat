@@ -1,6 +1,8 @@
 """原创预设角色；系统设定由服务端绑定会话，不是额外训练的模型。"""
 import re
 
+from behavior_rules import render_behavior_rules, select_behavior_rules
+
 
 NATURAL_ROLEPLAY_INSTRUCTION = """
 【回复表现方式】
@@ -87,9 +89,11 @@ CHARACTERS={
         prompt='你是原创AI面试教练言川，用中文帮助用户准备技术面试。一次只问一个问题，用户回答后给出具体、诚恳的反馈。不要替用户编造经验、成绩或项目结果。解释技术时保持准确，默认简洁。你是AI，不声称自己是企业真实面试官。')
 }
 
-# 仅这两个角色作为新用户可选的默认角色。旧角色仍保留在运行时注册表中，
-# 以便查看和继续历史会话；它们不再出现在新建角色目录。
-DEFAULT_CHARACTER_IDS=('interview','companion')
+# The old showcase characters are retained only as internal compatibility
+# definitions for historical tests. They are not offered to users and their
+# conversations are removed from product data by the migration tool.
+DEFAULT_CHARACTER_IDS=()
+BUILTIN_CHARACTER_IDS=('assistant','companion','study','interview')
 
 # 页面展示与系统提示使用同一份角色档案，避免界面与实际设定脱节。
 PROFILES={
@@ -161,15 +165,30 @@ def character_profile_reply(character_id, message, characters=None):
 def ai_identity_reply(character_id, characters=None):
     """给明确身份询问提供确定、诚实的应用回答。"""
     registry=CHARACTERS if characters is None else characters
-    role=registry.get(character_id,registry['assistant'])
+    role=registry.get(character_id) or registry.get('assistant')
+    if role is None:
+        return '我是一个AI聊天角色，不是真人。'
     if role['id']=='assistant':
         return '我是千问，一个AI助手，不是真人。'
     return f"我是{role['name']}，一个AI聊天角色，不是真人。"
 
-def conversation_messages(current,question=None,characters=None):
+def conversation_messages(
+    current,
+    question=None,
+    characters=None,
+    *,
+    behavior_rules_enabled=False,
+):
     registry=CHARACTERS if characters is None else characters
-    role=registry.get(current.get('character_id','assistant'),registry['assistant'])
+    role=(
+        registry.get(current.get('character_id','assistant'))
+        or registry.get('assistant')
+    )
+    if role is None:
+        raise KeyError('conversation character is not registered')
     result=[]
+    latest_user = question if question is not None else next(
+        (message['content'] for message in reversed(current['messages']) if message['role'] == 'user'), '')
     if role['prompt']:
         profile=role.get('profile')
         prompt=role['prompt']
@@ -196,12 +215,20 @@ def conversation_messages(current,question=None,characters=None):
         if examples:
             prompt+='\n\n【示例对话：仅示范语气与同一聊天内沿用细节，不是本次聊天已发生的事】'
             prompt+='\n'+'\n'.join(f"{speaker}：{text}" for speaker,text in examples)
-        latest_user = question if question is not None else next(
-            (message['content'] for message in reversed(current['messages']) if message['role'] == 'user'), '')
         # Old frozen registries omit this policy and retain their historical behavior.
         include_profile = role.get('profile_policy', 'always') != 'on_request' or bool(PERSONA_QUERY.search(latest_user))
         if profile and include_profile:
             prompt+='\n以下是角色的虚构设定，不代表真实经历，不要声称正在现实中做这些事。场景：'+profile['scene']+'。角色介绍：'+profile['about']
+        if behavior_rules_enabled:
+            scan='\n'.join(
+                str(message.get('content') or '')
+                for message in current['messages'][-6:]
+            )+'\n'+str(latest_user or '')
+            behavior_section=render_behavior_rules(
+                select_behavior_rules(role, scan)
+            )
+            if behavior_section:
+                prompt+='\n\n'+behavior_section
         prompt+='\n\n'+NATURAL_ROLEPLAY_INSTRUCTION
         result.append(dict(role='system',content=prompt))
     result.extend(dict(role=m['role'],content=m['content']) for m in current['messages'])

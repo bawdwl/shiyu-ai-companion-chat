@@ -32,7 +32,10 @@ class CandidateTests(unittest.TestCase):
         rows = [{'id': 3, 'role': 'assistant', 'content': '读书会安排在2026-11-06。'}]
         value = {'kind': 'character_detail', 'content': '角色说读书会在2026-11-06',
                  'event_date': '2026-11-06', 'evidence': [{'message_id': 3, 'quote': rows[0]['content']}]}
-        self.assertEqual(validate_candidate(value, rows)['status'], 'candidate')
+        result = validate_candidate(value, rows)
+        self.assertEqual(result['status'], 'candidate')
+        self.assertEqual(result['kind'], 'role_claim')
+        self.assertEqual(result['source_authority'], 'character_self_report')
 
     def test_update_remains_reviewable_and_keeps_old_record(self):
         rows = [{'id': 1, 'role': 'user', 'content': '面试周三。'},
@@ -54,6 +57,23 @@ class CandidateTests(unittest.TestCase):
         result = validate_candidate(candidate, rows)
         self.assertEqual(result['status'], 'candidate')
         self.assertFalse(result['semantic_verified'])
+        self.assertEqual(result['kind'], 'role_claim')
+
+    def test_uncertain_claim_cannot_supersede_current_fact(self):
+        rows = [{'id': 1, 'role': 'user', 'content': '我可能考虑搬到杭州，但还没决定。'}]
+        result = validate_candidate({
+            'kind': 'user_report',
+            'subject': 'user',
+            'fact_key': 'user.current.place',
+            'value': '杭州',
+            'content': '用户可能考虑搬到杭州',
+            'operation': 'supersede',
+            'target_item_id': 9,
+            'evidence': [{'message_id': 1, 'quote': rows[0]['content']}],
+        }, rows)
+        self.assertEqual(result['fact_type'], 'hypothesis')
+        self.assertEqual(result['epistemic_status'], 'uncertain')
+        self.assertEqual(result['operation'], 'contested')
 
     def test_subject_and_fact_key_are_normalised(self):
         value = self.candidate()

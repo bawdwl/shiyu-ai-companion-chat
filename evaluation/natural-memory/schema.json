@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.shiyu.chat/natural-memory-schema-v1.json",
+  "title": "Shiyu natural-memory evaluation dataset",
+  "type": "object",
+  "required": ["schema_version", "suite_version", "cases"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "suite_version": {"type": "string", "minLength": 1},
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/case"}
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "turn": {
+      "type": "object",
+      "required": ["turn_id", "ordinal", "speaker", "content", "timestamp"],
+      "properties": {
+        "turn_id": {"type": "string", "minLength": 1},
+        "ordinal": {"type": "integer", "minimum": 1},
+        "speaker": {"enum": ["user", "assistant"]},
+        "content": {"type": "string", "minLength": 1},
+        "timestamp": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "event": {
+      "type": "object",
+      "required": [
+        "event_id",
+        "after_turn_ordinal",
+        "operation",
+        "kind",
+        "subject",
+        "fact_key",
+        "value",
+        "content",
+        "fact_type",
+        "epistemic_status",
+        "source_authority",
+        "knowledge_source",
+        "evidence_turn_ids"
+      ],
+      "properties": {
+        "event_id": {"type": "string", "minLength": 1},
+        "after_turn_ordinal": {"type": "integer", "minimum": 1},
+        "operation": {
+          "enum": ["add", "merge", "supersede", "contested", "ignore", "delete"]
+        },
+        "target_fact_key": {"type": ["string", "null"]},
+        "kind": {
+          "enum": [
+            "user_report",
+            "character_detail",
+            "role_claim",
+            "shared_event",
+            "belief",
+            "plan"
+          ]
+        },
+        "subject": {"enum": ["user", "character", "shared"]},
+        "fact_key": {"type": "string", "minLength": 1},
+        "value": {"type": ["string", "null"]},
+        "content": {"type": "string", "minLength": 1},
+        "fact_type": {
+          "enum": [
+            "fact",
+            "preference",
+            "plan",
+            "hypothesis",
+            "opinion",
+            "event",
+            "role_claim"
+          ]
+        },
+        "epistemic_status": {
+          "enum": ["explicit", "uncertain", "inferred", "disputed"]
+        },
+        "source_authority": {
+          "enum": [
+            "canon",
+            "user_explicit",
+            "shared_event",
+            "character_self_report",
+            "model_inference"
+          ]
+        },
+        "knowledge_source": {
+          "enum": ["author", "user_told", "character_told", "observed", "inferred"]
+        },
+        "evidence_turn_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string"}
+        },
+        "importance": {"type": "number", "minimum": 0, "maximum": 1},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "additionalProperties": false
+    },
+    "probe": {
+      "type": "object",
+      "required": [
+        "probe_id",
+        "after_turn_ordinal",
+        "category",
+        "question",
+        "required_facts",
+        "forbidden_values",
+        "forbidden_fact_keys"
+      ],
+      "properties": {
+        "probe_id": {"type": "string", "minLength": 1},
+        "after_turn_ordinal": {"type": "integer", "minimum": 1},
+        "category": {
+          "enum": [
+            "information_extraction",
+            "knowledge_update",
+            "temporal_reasoning",
+            "multi_session",
+            "role_isolation",
+            "shared_experience",
+            "abstention",
+            "privacy_deletion",
+            "anaphora"
+          ]
+        },
+        "question": {"type": "string", "minLength": 1},
+        "required_facts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["fact_key", "value", "state"],
+            "properties": {
+              "fact_key": {"type": "string"},
+              "value": {"type": ["string", "null"]},
+              "state": {"enum": ["active", "superseded", "contested", "deleted"]}
+            },
+            "additionalProperties": false
+          }
+        },
+        "forbidden_values": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "forbidden_fact_keys": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "case": {
+      "type": "object",
+      "required": [
+        "case_id",
+        "title",
+        "source_kind",
+        "privacy_level",
+        "role",
+        "turns",
+        "memory_events",
+        "probes",
+        "summary"
+      ],
+      "properties": {
+        "case_id": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "source_kind": {
+          "enum": ["redacted_user_chat", "curated_synthetic"]
+        },
+        "privacy_level": {"enum": ["private_local", "public_fixture"]},
+        "role": {
+          "type": "object",
+          "required": ["id", "display_name"],
+          "properties": {
+            "id": {"type": "string", "minLength": 1},
+            "display_name": {"type": "string", "minLength": 1}
+          },
+          "additionalProperties": false
+        },
+        "turns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/turn"}
+        },
+        "memory_events": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/event"}
+        },
+        "probes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/probe"}
+        },
+        "summary": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

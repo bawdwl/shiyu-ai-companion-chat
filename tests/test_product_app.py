@@ -33,10 +33,8 @@ class ProductAppTests(unittest.TestCase):
             if asset.startswith('/ui/assets/'):
                 self.assertEqual(self.client.get(asset).status_code,200)
         self.assertEqual(self.client.get('/ui/icon.svg').status_code,200)
-        self.assertEqual(self.client.get('/ui/media/portraits/xiaoman.png').status_code,200)
         self.assertEqual(self.client.get('/ui/assets/../backend.py').status_code,404)
-        self.assertEqual([role['id'] for role in self.client.get('/characters').json()['characters']],
-                         ['interview','companion'])
+        self.assertEqual(self.client.get('/characters').json()['characters'], [])
 
     def test_hidden_legacy_roles_remain_available_to_existing_sessions(self):
         role_ids=[role['id'] for role in self.client.get('/characters').json()['characters']]
@@ -73,7 +71,8 @@ class ProductAppTests(unittest.TestCase):
         self.assertEqual(self.engine.calls,[])
 
     def test_xiaoman_gender_is_fixed_and_answered_naturally(self):
-        roles=self.client.get('/characters').json()['characters']
+        from characters import catalogue
+        roles=catalogue(('companion',))
         xiaoman=next(role for role in roles if role['id']=='companion')
         self.assertEqual(xiaoman['gender'],'女性')
         self.assertIn('女性',xiaoman['profile']['tags'])
@@ -143,13 +142,13 @@ class ProductAppTests(unittest.TestCase):
         response=self.client.post('/chat',json={'session_id':other,'message':'你今年多大？'})
         self.assertEqual(response.json()['answer'],'模拟回答，仅用于接口测试')
         self.assertEqual(len(self.engine.calls),1)
-    def test_stream_uses_same_character_and_new_session_defaults_to_yanchuan(self):
+    def test_stream_uses_same_character_and_legacy_session_default_is_internal(self):
         sid=self.client.post('/sessions',json={'character_id':'study'}).json()['id']
         response=self.client.post('/chat/stream',json=dict(session_id=sid,message='列表是什么'))
         self.assertIn('event: done',response.text);self.assertIn('知夏',self.engine.calls[-1][0]['content'])
         other=self.client.post('/sessions',json={}).json()['id']
         self.client.post('/chat',json=dict(session_id=other,message='普通问题'))
-        self.assertIn('言川',self.engine.calls[-1][0]['content'])
+        self.assertEqual(self.client.get('/sessions/'+other).json()['character_id'],'assistant')
     def test_unknown_role_and_client_system_prompt_rejected(self):
         self.assertEqual(self.client.post('/sessions',json={'character_id':'unknown'}).status_code,404)
         self.assertEqual(self.client.post('/sessions',json={'system_prompt':'伪造设定'}).status_code,422)
@@ -165,6 +164,7 @@ class ProductAppTests(unittest.TestCase):
                 'background':'她在海边城市主持一档深夜节目。','personality':'安静、细心。',
                 'speech_style':'语气自然，不急着追问。','relationship':'从听众与主持人的友好关系开始。',
                 'greeting':'今晚的海风挺舒服，你想点一首什么歌？','boundaries':'不声称认识现实中的用户。',
+                'model_settings':{'source':'local','local_mode':'base'},
                 'fixed_facts':[{'key':'节目','value':'海边电台午夜档','status':'confirmed'}],
                 'worldbook':[{'title':'午夜节目','keywords':['电台','节目'],'content':'节目每晚午夜播出。','enabled':True}],
                 'example_dialogue':[{'user':'今天睡不着。','character':'那我陪你听一会儿，今晚的歌慢一些。'}],
@@ -175,7 +175,9 @@ class ProductAppTests(unittest.TestCase):
         card=generated.json()['card']
         self.assertEqual(card['source_notes'],'夜班电台主持人，喜欢听众点歌。')
         self.assertEqual(card['fixed_facts'][0]['status'],'proposal')
-        self.assertIn('不要擅自补玩家姓名',generation_calls[-1][0]['content'])
+        # The endpoint has a two-step generation flow; this assertion targets
+        # the initial character-card prompt, not the later enrichment prompt.
+        self.assertIn('不要擅自补玩家姓名',generation_calls[0][0]['content'])
         saved=self.client.post('/characters',json={'card':card})
         self.assertEqual(saved.status_code,201,saved.text)
         character_id=card['id']

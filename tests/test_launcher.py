@@ -19,6 +19,13 @@ class LauncherTests(unittest.TestCase):
     def test_matching_service_is_reused_without_starting_another_model(self):
         health=dict(status='ready',model_id='Qwen/Qwen3-1.7B',
                     same_chat_memory_enabled=False,
+                    providers={
+                        name: {'available': True}
+                        for name in (
+                            'local-base','local-half','local-full',
+                            'local-wukong','local-xucheng','local-haruhi',
+                        )
+                    },
                     structured_memory_enabled=True,
                     structured_memory_mode='automatic',
                     memory_daily_token_limit=30000,
@@ -45,6 +52,23 @@ class LauncherTests(unittest.TestCase):
     def test_unavailable_existing_service_is_not_restarted(self):
         with self.assertRaisesRegex(RuntimeError,'未就绪'):
             launch_app.check_reusable(dict(status='model_unavailable',default_provider='local'),'local')
+
+    def test_existing_service_must_load_all_three_retained_role_adapters(self):
+        health=dict(
+            status='ready',
+            model_id='Qwen/Qwen3-1.7B',
+            same_chat_memory_enabled=False,
+            default_provider='local',
+            providers={
+                name: {'available': True}
+                for name in ('local-base','local-half','local-full')
+            },
+        )
+        with self.assertRaisesRegex(RuntimeError,'local-wukong'):
+            launch_app.check_reusable(
+                health,'local','qwen3-1.7b',
+                require_local_models=True,
+            )
 
     def test_memory_mode_must_match_requested_experiment_condition(self):
         health=dict(status='ready',model_id='Qwen/Qwen3-1.7B',same_chat_memory_enabled=True)

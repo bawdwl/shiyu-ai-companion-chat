@@ -9,7 +9,10 @@ import com.shiyu.chat.data.ChatRepository
 import com.shiyu.chat.data.Limits
 import com.shiyu.chat.data.MemoryEntity
 import com.shiyu.chat.data.MessageEntity
+import com.shiyu.chat.data.MODEL_SOURCE_LOCAL_MNN
+import com.shiyu.chat.data.DreamGenerationSettings
 import com.shiyu.chat.data.StructuredMemoryEntity
+import com.shiyu.chat.data.TurnTraceEntity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +26,7 @@ data class ShiyuUiState(
     val messages: List<MessageEntity> = emptyList(),
     val memories: List<MemoryEntity> = emptyList(),
     val structuredMemories: List<StructuredMemoryEntity> = emptyList(),
+    val turnTraces: List<TurnTraceEntity> = emptyList(),
     val cloudProvider: String = "opencode",
     val apiConfigured: Boolean = false,
     val openCodeConfigured: Boolean = false,
@@ -35,6 +39,12 @@ data class ShiyuUiState(
     val avatarBusy: Boolean = false,
     val memoryBusy: Boolean = false,
     val avatarModelReady: Boolean = false,
+    val avatarModelBytes: Long = 0L,
+    val avatarModelName: String = "Dream SD1.5",
+    val dreamGenerationSettings: DreamGenerationSettings = DreamGenerationSettings(),
+    val localModelReady: Boolean = false,
+    val localModelBytes: Long = 0L,
+    val localModelBusy: Boolean = false,
     val status: String? = null,
 )
 
@@ -47,6 +57,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
     init {
         viewModelScope.launch {
             repository.ensureDefaults()
+            repository.ensureSongZhiyiCharacter()
             val provider = repository.cloudProvider()
             _state.value = _state.value.copy(
                 cloudProvider = provider,
@@ -57,6 +68,11 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 limits = repository.limits(),
                 todayUsage = repository.todayUsage(),
                 avatarModelReady = repository.avatarModelReady(),
+                avatarModelBytes = repository.avatarModelBytes(),
+                avatarModelName = repository.avatarModelName(),
+                dreamGenerationSettings = repository.dreamGenerationSettings(),
+                localModelReady = repository.localModelReady(),
+                localModelBytes = repository.localModelBytes(),
             )
             repository.characters.collect { characters ->
                 val selected = _state.value.selected?.let { current ->
@@ -142,7 +158,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
         observeJob?.cancel()
         _state.value = _state.value.copy(
             selected = character, messages = emptyList(), memories = emptyList(),
-            structuredMemories = emptyList(),
+            structuredMemories = emptyList(), turnTraces = emptyList(),
         )
         observeJob = viewModelScope.launch {
             repository.ensureOpening(character)
@@ -161,6 +177,11 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                     _state.value = _state.value.copy(structuredMemories = memories)
                 }
             }
+            launch {
+                repository.observeTurnTraces(character.id).collect { traces ->
+                    _state.value = _state.value.copy(turnTraces = traces)
+                }
+            }
         }
     }
 
@@ -168,7 +189,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
         observeJob?.cancel()
         _state.value = _state.value.copy(
             selected = null, messages = emptyList(), memories = emptyList(),
-            structuredMemories = emptyList(),
+            structuredMemories = emptyList(), turnTraces = emptyList(),
         )
     }
 
@@ -215,6 +236,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
             repository.reset(character.id)
             _state.value = _state.value.copy(
                 memories = emptyList(), structuredMemories = emptyList(),
+                turnTraces = emptyList(),
                 status = "角色对话、记忆和状态已重置",
             )
         }
@@ -267,7 +289,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 observeJob?.cancel()
                 _state.value = _state.value.copy(
                     selected = null, messages = emptyList(), memories = emptyList(),
-                    structuredMemories = emptyList(),
+                    structuredMemories = emptyList(), turnTraces = emptyList(),
                     busy = false, status = "角色已删除",
                 )
             } catch (error: Exception) {
@@ -298,6 +320,34 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
         }
     }
 
+    fun setCharacterModelSource(
+        characterId: String,
+        modelSource: String,
+        onSaved: (CharacterEntity) -> Unit = {},
+    ) {
+        viewModelScope.launch {
+            runCatching { repository.setCharacterModelSource(characterId, modelSource) }
+                .onSuccess { updated ->
+                    _state.value = _state.value.copy(
+                        selected = if (_state.value.selected?.id == updated.id) {
+                            updated
+                        } else {
+                            _state.value.selected
+                        },
+                        status = if (modelSource == MODEL_SOURCE_LOCAL_MNN) {
+                            "角色已切换为手机本地 MNN"
+                        } else {
+                            "角色已切换为云端 API"
+                        },
+                    )
+                    onSaved(updated)
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(status = it.message ?: "模型设置保存失败")
+                }
+        }
+    }
+
     fun importAvatarModel(uri: Uri) {
         _state.value = _state.value.copy(avatarBusy = true, status = "正在导入本地生图模型…")
         viewModelScope.launch {
@@ -306,7 +356,9 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                     _state.value = _state.value.copy(
                         avatarBusy = false,
                         avatarModelReady = true,
-                        status = "本地生图模型已导入",
+                        avatarModelBytes = repository.avatarModelBytes(),
+                        avatarModelName = repository.avatarModelName(),
+                        status = "${repository.avatarModelName()} 生图模型已导入",
                     )
                 }
                 .onFailure { error ->
@@ -319,13 +371,81 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
         }
     }
 
+    fun saveDreamGenerationSettings(settings: DreamGenerationSettings) {
+        runCatching { repository.saveDreamGenerationSettings(settings) }
+            .onSuccess {
+                _state.value = _state.value.copy(
+                    dreamGenerationSettings = repository.dreamGenerationSettings(),
+                    status = "本地生图参数已保存",
+                )
+            }
+            .onFailure {
+                _state.value = _state.value.copy(status = it.message ?: "生图参数保存失败")
+            }
+    }
+
+    fun deleteAvatarModel() {
+        _state.value = _state.value.copy(avatarBusy = true, status = "正在删除本地生图模型…")
+        viewModelScope.launch {
+            runCatching { repository.deleteAvatarModel() }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        avatarBusy = false,
+                        avatarModelReady = false,
+                        avatarModelBytes = 0L,
+                        avatarModelName = "Dream SD1.5",
+                        status = "本地生图模型已删除",
+                    )
+                }
+                .onFailure { error ->
+                    _state.value = _state.value.copy(
+                        avatarBusy = false,
+                        avatarModelReady = repository.avatarModelReady(),
+                        avatarModelBytes = repository.avatarModelBytes(),
+                        avatarModelName = repository.avatarModelName(),
+                        status = error.message ?: "本地生图模型删除失败",
+                    )
+                }
+        }
+    }
+
+    fun importLocalModel(uri: Uri) {
+        if (_state.value.localModelBusy) return
+        _state.value = _state.value.copy(
+            localModelBusy = true,
+            status = "正在导入手机本地 MNN 模型，约需数分钟…",
+        )
+        viewModelScope.launch {
+            runCatching { repository.importLocalModel(uri) }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        localModelBusy = false,
+                        localModelReady = repository.localModelReady(),
+                        localModelBytes = repository.localModelBytes(),
+                        status = "手机本地宋知意 LoRA 模型已导入",
+                    )
+                }
+                .onFailure { error ->
+                    _state.value = _state.value.copy(
+                        localModelBusy = false,
+                        localModelReady = repository.localModelReady(),
+                        localModelBytes = repository.localModelBytes(),
+                        status = error.message ?: "本地 MNN 模型导入失败",
+                    )
+                }
+        }
+    }
+
     fun generateCloudAvatar(character: CharacterEntity, onComplete: (CharacterEntity) -> Unit) {
         _state.value = _state.value.copy(avatarBusy = true, status = "正在通过千问 AI 平台生成角色头像…")
         generateAvatar(character, cloud = true, onComplete)
     }
 
     fun generateLocalAvatar(character: CharacterEntity, onComplete: (CharacterEntity) -> Unit) {
-        _state.value = _state.value.copy(avatarBusy = true, status = "正在用手机本地 SD1.5 生成角色头像…")
+        _state.value = _state.value.copy(
+            avatarBusy = true,
+            status = "正在用手机 NPU 运行 MeinaMix V12 生成角色头像…",
+        )
         generateAvatar(character, cloud = false, onComplete)
     }
 

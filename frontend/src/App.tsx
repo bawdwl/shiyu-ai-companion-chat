@@ -4,6 +4,8 @@ import {
   deleteCharacter,
   deleteDeepSeekKey,
   deleteOpenCodeKey,
+  deleteStructuredMemorySuppression,
+  forgetStructuredMemoryTopic,
   getCharacterCard,
   getCharacters,
   getHealth,
@@ -12,6 +14,7 @@ import {
   getRoleConversation,
   getStructuredMemories,
   getStructuredMemoryStatus,
+  getTurnTraces,
   resetRoleConversation,
   reviewStructuredMemory,
   saveDeepSeekKey,
@@ -23,39 +26,124 @@ import {
   synthesize,
   transcribe,
   uploadImage,
+  updateStructuredMemory,
 } from "./api";
 import type {
   Character,
   CharacterCard,
+  CharacterModelSettings,
   Health,
+  MemorySuppression,
   Message,
+  MemoryTopicSuppressionRequest,
   ProviderSettings,
   ProviderName,
   Session,
   SessionMemory,
   StructuredMemoryRecord,
+  StructuredMemoryMutation,
   StructuredMemoryStatus,
+  TurnTrace,
 } from "./types";
 
-const PORTRAITS: Record<string, string> = {
-  companion: "/ui/media/portraits/xiaoman.png",
-  interview: "/ui/media/portraits/yanchuan.png",
-  study: "/ui/media/portraits/zhixia.png",
-};
+const PORTRAITS: Record<string, string> = {};
 
-type CloudProviderName = "opencode" | "deepseek";
+const VISIBLE_PROVIDERS: ProviderName[] = [
+  "opencode",
+  "deepseek",
+];
+type CloudProviderName = Extract<ProviderName, "opencode" | "deepseek">;
+const LOCAL_MODEL_MODE_OPTIONS: Array<{
+  value: CharacterModelSettings["local_mode"];
+  label: string;
+  provider: ProviderName;
+}> = [
+  { value: "base", label: "基础模型（不加 LoRA）", provider: "local-base" },
+  { value: "half", label: "通用半轮 LoRA（75 步）", provider: "local-half" },
+  { value: "full", label: "通用完整 LoRA（150 步）", provider: "local-full" },
+  { value: "wukong", label: "孙悟空第一版专属 LoRA", provider: "local-wukong" },
+  { value: "xucheng", label: "许澄 half1 专属 LoRA", provider: "local-xucheng" },
+  { value: "haruhi", label: "凉宫春日最终专属 LoRA", provider: "local-haruhi" },
+];
 
-function initialCloudProvider(): CloudProviderName {
+function initialProvider(): ProviderName {
   try {
-    const stored = localStorage.getItem("shiyu-cloud-provider");
-    return stored === "deepseek" ? "deepseek" : "opencode";
+    const stored = localStorage.getItem("shiyu-chat-provider");
+    return stored === "deepseek" || stored === "opencode" ? stored : "opencode";
   } catch {
     return "opencode";
   }
 }
 
-function providerLabel(provider: CloudProviderName) {
-  return provider === "opencode" ? "OpenCode Go" : "DeepSeek";
+function providerLabel(provider: ProviderName) {
+  const labels: Record<ProviderName, string> = {
+    opencode: "OpenCode Go",
+    deepseek: "DeepSeek API",
+    local: "本地 Qwen3-1.7B",
+    "local-base": "本地 Qwen3 Base",
+    "local-half": "本地 Qwen3 半轮 LoRA",
+    "local-full": "本地 Qwen3 完整 LoRA",
+    "local-wukong": "本地 Qwen3 · 孙悟空 LoRA",
+    "local-xucheng": "本地 Qwen3 · 许澄 LoRA",
+    "local-haruhi": "本地 Qwen3 · 凉宫春日 LoRA",
+    "local-raw": "Qwen3 · 无提示",
+    "local-brief": "Qwen3 · 少量提示",
+    "local-full-prompt": "Qwen3 · 完整提示",
+  };
+  return labels[provider];
+}
+
+function providerDescription(provider: ProviderName) {
+  const labels: Record<ProviderName, string> = {
+    opencode: "云端 API",
+    deepseek: "云端 API",
+    local: "本机推理",
+    "local-base": "未微调基础模型",
+    "local-half": "训练 75 步",
+    "local-full": "训练 150 步",
+    "local-wukong": "第一版孙悟空专属 Adapter",
+    "local-xucheng": "许澄第一轮半程 Adapter",
+    "local-haruhi": "凉宫春日最终 Adapter",
+    "local-raw": "仅用户消息与聊天历史",
+    "local-brief": "一句角色约束",
+    "local-full-prompt": "角色卡、世界书与完整规则",
+  };
+  return labels[provider];
+}
+
+function isCloudProvider(provider: ProviderName) {
+  return provider === "opencode" || provider === "deepseek";
+}
+
+function cloudProviderForCharacter(
+  preferredProvider: ProviderName,
+  settings: ProviderSettings | null,
+): CloudProviderName {
+  const candidates: CloudProviderName[] = isCloudProvider(preferredProvider)
+    ? [preferredProvider, "opencode", "deepseek"]
+    : ["opencode", "deepseek"];
+  const configured = candidates.find((provider) => {
+    const entry = settings?.[provider];
+    return Boolean(entry?.available && entry.configured);
+  });
+  return configured ?? candidates[0];
+}
+
+function providerForCharacter(
+  character: Character | null,
+  preferredProvider: ProviderName,
+  settings: ProviderSettings | null,
+): ProviderName {
+  const modelSettings = character?.model_settings;
+  if (modelSettings?.source === "local") {
+    return `local-${modelSettings.local_mode}` as ProviderName;
+  }
+  return cloudProviderForCharacter(preferredProvider, settings);
+}
+
+function providerIsReady(provider: ProviderName, settings: ProviderSettings | null) {
+  const entry = settings?.[provider];
+  return Boolean(entry?.available && entry.configured);
 }
 
 function Icon({ name, size = 20 }: { name: string; size?: number }) {
@@ -110,6 +198,10 @@ function blankCharacterCard(): CharacterCard {
     greeting: "你好。",
     scenario: "",
     motivation: "",
+    model_settings: {
+      source: "api",
+      local_mode: "base",
+    },
     boundaries: "",
     source_notes: "",
     knowledge_boundary: {
@@ -128,6 +220,16 @@ function blankCharacterCard(): CharacterCard {
     example_dialogue: [],
     generation_preset: {},
     draft_notice: "手动创建角色。请填写并检查全部字段后保存。",
+  };
+}
+
+function withDefaultModelSettings(card: CharacterCard): CharacterCard {
+  return {
+    ...card,
+    model_settings: card.model_settings ?? {
+      source: "api",
+      local_mode: "base",
+    },
   };
 }
 
@@ -202,6 +304,286 @@ function Modal({
   );
 }
 
+const MEMORY_STATE_LABELS: Record<StructuredMemoryRecord["state"], string> = {
+  active: "当前事实",
+  candidate: "待核验草稿",
+  contested: "存在疑义",
+  superseded: "历史旧值",
+  deleted: "已删除",
+};
+
+const MEMORY_TYPE_LABELS: Record<StructuredMemoryRecord["fact_type"], string> = {
+  fact: "事实",
+  preference: "偏好",
+  plan: "计划",
+  hypothesis: "假设",
+  opinion: "主观观点",
+  event: "共同经历",
+  role_claim: "角色自述",
+};
+
+const MEMORY_SUBJECT_LABELS: Record<StructuredMemoryRecord["subject"], string> = {
+  user: "用户",
+  character: "角色",
+  shared: "共同",
+};
+
+const MEMORY_EPISTEMIC_LABELS: Record<StructuredMemoryRecord["epistemic_status"], string> = {
+  explicit: "明确陈述",
+  uncertain: "不确定",
+  inferred: "模型推断",
+  disputed: "存在争议",
+};
+
+const MEMORY_AUTHORITY_LABELS: Record<StructuredMemoryRecord["source_authority"], string> = {
+  canon: "作者设定",
+  user_explicit: "用户明确陈述",
+  shared_event: "共同经历",
+  character_self_report: "角色自述",
+  model_inference: "模型推断",
+};
+
+function StructuredMemoryRecordCard({
+  record,
+  characterName,
+  busy,
+  onEdit,
+  onReject,
+  onRestore,
+  onDelete,
+  onForgetTopic,
+}: {
+  record: StructuredMemoryRecord;
+  characterName: string;
+  busy: boolean;
+  onEdit: (
+    record: StructuredMemoryRecord,
+    body: StructuredMemoryMutation,
+  ) => Promise<boolean>;
+  onReject: (
+    record: StructuredMemoryRecord,
+    body: StructuredMemoryMutation,
+  ) => Promise<boolean>;
+  onRestore: (
+    record: StructuredMemoryRecord,
+    body: StructuredMemoryMutation,
+  ) => Promise<boolean>;
+  onDelete: (record: StructuredMemoryRecord) => Promise<void>;
+  onForgetTopic: (
+    record: StructuredMemoryRecord,
+    body: MemoryTopicSuppressionRequest,
+  ) => Promise<boolean>;
+}) {
+  const [mode, setMode] = useState<"edit" | "reject" | "forget" | null>(null);
+  const [content, setContent] = useState(record.content);
+  const [value, setValue] = useState(record.value ?? "");
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const disabled = busy || submitting;
+
+  useEffect(() => {
+    setContent(record.content);
+    setValue(record.value ?? "");
+    setReason("");
+    setMode(null);
+  }, [record.id, record.updated_at, record.content, record.value]);
+
+  function openMode(nextMode: "edit" | "reject" | "forget") {
+    setMode(nextMode);
+    setReason(
+      nextMode === "reject"
+        ? "这条记忆与事实不符"
+        : nextMode === "forget"
+          ? "以后不要记录这个主题"
+          : "",
+    );
+  }
+
+  async function submitEdit() {
+    if (!content.trim() || !reason.trim() || disabled) return;
+    setSubmitting(true);
+    try {
+      const saved = await onEdit(record, {
+        action: "edit",
+        content: content.trim(),
+        value: value.trim() || null,
+        reason: reason.trim(),
+      });
+      if (saved) setMode(null);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitReject() {
+    if (!reason.trim() || disabled) return;
+    setSubmitting(true);
+    try {
+      const saved = await onReject(record, {
+        action: "reject",
+        reason: reason.trim(),
+      });
+      if (saved) setMode(null);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function restore() {
+    if (disabled) return;
+    setSubmitting(true);
+    try {
+      await onRestore(record, {
+        action: "restore",
+        reason: "用户在记忆设置中恢复此历史值",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function forgetTopic() {
+    if (!reason.trim() || disabled) return;
+    setSubmitting(true);
+    try {
+      const saved = await onForgetTopic(record, {
+        subject: record.subject,
+        fact_key_prefix: record.fact_key,
+        category: record.fact_type,
+        reason: reason.trim(),
+      });
+      if (saved) setMode(null);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <article className={`structured-memory-record ${record.state}`}>
+      <div>
+        <span>{MEMORY_STATE_LABELS[record.state]}</span>
+        <strong>{record.content}</strong>
+      </div>
+      <div className="memory-record-meta">
+        <span>{MEMORY_SUBJECT_LABELS[record.subject]}</span>
+        <span>{MEMORY_TYPE_LABELS[record.fact_type]}</span>
+        {record.fact_key && <code>{record.fact_key}</code>}
+        <span>{MEMORY_EPISTEMIC_LABELS[record.epistemic_status]}</span>
+        <span>{MEMORY_AUTHORITY_LABELS[record.source_authority]}</span>
+        {record.supersedes && <span>替代记录 #{record.supersedes}</span>}
+        {record.contested_with && <span>与 #{record.contested_with} 冲突</span>}
+      </div>
+      <p>
+        {record.value ? `结构化值：${record.value} · ` : ""}
+        更新于 {formatTime(record.updated_at)}
+      </p>
+      {record.semantic_reason && (
+        <p className="memory-reason">审核说明：{record.semantic_reason}</p>
+      )}
+      <details className="memory-evidence">
+        <summary>查看来源与证据（{record.evidence.length} 条）</summary>
+        {record.evidence.map((item, index) => (
+          <blockquote key={`${item.message_id}-${index}`}>
+            <span>
+              消息 {item.message_id} · {item.role === "user" ? "用户" : characterName}
+            </span>
+            {item.quote}
+          </blockquote>
+        ))}
+      </details>
+
+      {mode === "edit" && (
+        <div className="memory-edit-panel">
+          <label className="field">
+            <span>修正后的记忆</span>
+            <textarea rows={3} value={content} onChange={(event) => setContent(event.target.value)} />
+          </label>
+          <label className="field">
+            <span>结构化值（可留空）</span>
+            <input value={value} onChange={(event) => setValue(event.target.value)} />
+          </label>
+          <label className="field">
+            <span>修正原因</span>
+            <input value={reason} onChange={(event) => setReason(event.target.value)} />
+          </label>
+          <p className="memory-edit-note">修正会新建一个版本，旧记录保留在历史中。</p>
+          <div className="memory-edit-actions">
+            <button onClick={() => setMode(null)} disabled={disabled}>取消</button>
+            <button className="primary" onClick={submitEdit} disabled={disabled || !content.trim() || !reason.trim()}>
+              {submitting ? "正在保存…" : "保存修正"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === "reject" && (
+        <div className="memory-edit-panel">
+          <label className="field">
+            <span>这条记忆哪里不对？</span>
+            <input value={reason} onChange={(event) => setReason(event.target.value)} />
+          </label>
+          <p className="memory-edit-note">标记错误后会停用此记录，并阻止同一段证据再次生成它。</p>
+          <div className="memory-edit-actions">
+            <button onClick={() => setMode(null)} disabled={disabled}>取消</button>
+            <button className="danger" onClick={submitReject} disabled={disabled || !reason.trim()}>
+              {submitting ? "正在处理…" : "确认标记错误"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === "forget" && (
+        <div className="memory-edit-panel">
+          <p className="memory-edit-note">
+            将忽略“{MEMORY_SUBJECT_LABELS[record.subject]} · {MEMORY_TYPE_LABELS[record.fact_type]}”
+            这一类后续记忆{record.fact_key ? `（${record.fact_key}）` : ""}。
+          </p>
+          <label className="field">
+            <span>原因</span>
+            <input value={reason} onChange={(event) => setReason(event.target.value)} />
+          </label>
+          <div className="memory-edit-actions">
+            <button onClick={() => setMode(null)} disabled={disabled}>取消</button>
+            <button className="danger" onClick={forgetTopic} disabled={disabled || !reason.trim()}>
+              {submitting ? "正在保存…" : "以后不再记录"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="structured-memory-actions">
+        {record.state !== "deleted" && (
+          <button disabled={disabled} onClick={() => openMode("edit")}>修正内容</button>
+        )}
+        {(record.state === "active" || record.state === "candidate" || record.state === "contested") && (
+          <button disabled={disabled} onClick={() => openMode("reject")}>标记错误</button>
+        )}
+        {record.state === "superseded" && (
+          <button disabled={disabled} onClick={restore}>
+            {submitting ? "正在恢复…" : "恢复此项"}
+          </button>
+        )}
+        {record.state !== "deleted" && (
+          <button disabled={disabled} onClick={() => openMode("forget")}>以后不记此主题</button>
+        )}
+        {record.state !== "deleted" && (
+          <button
+            className="danger-text"
+            disabled={disabled}
+            onClick={() => {
+              if (window.confirm("删除这条记忆及其历史链？此操作不能撤销。")) {
+                void onDelete(record);
+              }
+            }}
+          >
+            删除
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
+
 function EmptyConversation({
   character,
   onStarter,
@@ -231,7 +613,7 @@ export default function App() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [settings, setSettings] = useState<ProviderSettings | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
-  const [preferredProvider, setPreferredProvider] = useState<CloudProviderName>(initialCloudProvider);
+  const [preferredProvider, setPreferredProvider] = useState<ProviderName>(initialProvider);
   const [activeCharacter, setActiveCharacter] = useState<Character | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [view, setView] = useState<"discover" | "chat">("discover");
@@ -244,6 +626,7 @@ export default function App() {
   const [imagePreview, setImagePreview] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showMemory, setShowMemory] = useState(false);
+  const [showTrace, setShowTrace] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [deleteCharacterTarget, setDeleteCharacterTarget] = useState<Character | null>(null);
   const [editingCard, setEditingCard] = useState<CharacterCard | null>(null);
@@ -251,8 +634,11 @@ export default function App() {
   const [memoryNotes, setMemoryNotes] = useState("");
   const [keptMemoryItems, setKeptMemoryItems] = useState<Set<number>>(new Set());
   const [structuredMemories, setStructuredMemories] = useState<StructuredMemoryRecord[]>([]);
+  const [memorySuppressions, setMemorySuppressions] = useState<MemorySuppression[]>([]);
   const [structuredMemoryStatus, setStructuredMemoryStatus] = useState<StructuredMemoryStatus | null>(null);
   const [structuredMemoryBusy, setStructuredMemoryBusy] = useState(false);
+  const [traces, setTraces] = useState<TurnTrace[]>([]);
+  const [traceBusy, setTraceBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -295,32 +681,60 @@ export default function App() {
     };
   }, [imagePreview]);
 
-  const activeCloud = settings?.[preferredProvider];
-  const configured = activeCloud?.configured ?? false;
+  const activeTargetProvider = providerForCharacter(
+    view === "chat" ? activeCharacter : null,
+    preferredProvider,
+    settings,
+  );
+  const activeProvider = settings?.[activeTargetProvider];
+  const configured = providerIsReady(activeTargetProvider, settings);
   const usagePercent = useMemo(() => {
-    const used = settings?.[preferredProvider].usage.total_tokens ?? 0;
+    const used = settings?.[activeTargetProvider]?.usage.total_tokens ?? 0;
     const limit = settings?.token_limits.daily_token_limit ?? 1;
     return Math.min(100, Math.round((used / limit) * 100));
-  }, [preferredProvider, settings]);
+  }, [activeTargetProvider, settings]);
 
-  function chooseProvider(provider: CloudProviderName) {
+  async function chooseProvider(provider: ProviderName) {
+    if (busy) return;
     setPreferredProvider(provider);
     try {
-      localStorage.setItem("shiyu-cloud-provider", provider);
+      localStorage.setItem("shiyu-chat-provider", provider);
     } catch {
       // The selected provider still works for this page session.
+    }
+    const nextProvider = providerForCharacter(activeCharacter, provider, settings);
+    const nextSetting = settings?.[nextProvider];
+    if (
+      activeCharacter &&
+      session &&
+      nextSetting?.available &&
+      (!isCloudProvider(nextProvider) || nextSetting.configured)
+    ) {
+      try {
+        setStatus(`正在切换到${providerLabel(nextProvider)}…`);
+        const nextSession = await getRoleConversation(activeCharacter.id, provider);
+        setSession(nextSession);
+        setStatus(`已切换到${providerLabel(nextSession.provider)}，后续回答使用该模型`);
+      } catch (error) {
+        setStatus(errorText(error));
+      }
     }
   }
 
   async function openCharacter(character: Character) {
-    if (!configured) {
+    const targetProvider = providerForCharacter(character, preferredProvider, settings);
+    if (!providerIsReady(targetProvider, settings)) {
       setShowSettings(true);
-      setStatus(`先配置 ${providerLabel(preferredProvider)} API Key，再开始聊天。`);
+      setStatus(
+        isCloudProvider(targetProvider)
+          ? `先配置 ${providerLabel(targetProvider)} API Key，再开始聊天。`
+          : `${providerLabel(targetProvider)} 当前不可用，请先在角色档案中选择可用模型。`,
+      );
       return;
     }
     setStatus("正在打开这段故事…");
     try {
-      const nextSession = await getRoleConversation(character.id, preferredProvider);
+      const nextSession = await getRoleConversation(character.id, targetProvider);
       setActiveCharacter(character);
       setSession(nextSession);
       setView("chat");
@@ -332,7 +746,10 @@ export default function App() {
 
   async function refreshSession() {
     if (!session) return;
-    const next = await getRoleConversation(session.character_id, preferredProvider);
+    const next = await getRoleConversation(
+      session.character_id,
+      providerForCharacter(activeCharacter, preferredProvider, settings),
+    );
     setSession(next);
   }
 
@@ -435,10 +852,24 @@ export default function App() {
       setMemoryNotes(loaded.notes);
       setKeptMemoryItems(new Set(loaded.items.map((_, index) => index)));
       setStructuredMemories(structured?.records ?? []);
+      setMemorySuppressions(structured?.suppressions ?? []);
       setStructuredMemoryStatus(structuredStatus);
       setShowMemory(true);
     } catch (error) {
       setStatus(errorText(error));
+    }
+  }
+
+  async function openTrace() {
+    if (!session) return;
+    setTraceBusy(true);
+    try {
+      setTraces(await getTurnTraces(session.id, 20));
+      setShowTrace(true);
+    } catch (error) {
+      setStatus(errorText(error));
+    } finally {
+      setTraceBusy(false);
     }
   }
 
@@ -449,6 +880,7 @@ export default function App() {
       getStructuredMemoryStatus(activeCharacter.id),
     ]);
     setStructuredMemories(loaded.records);
+    setMemorySuppressions(loaded.suppressions ?? []);
     setStructuredMemoryStatus(nextStatus);
   }
 
@@ -462,6 +894,66 @@ export default function App() {
       });
       await refreshStructuredMemories();
       setStatus("记忆已删除，系统不会用同一段旧消息重新创建它");
+    } catch (error) {
+      setStatus(errorText(error));
+    } finally {
+      setStructuredMemoryBusy(false);
+    }
+  }
+
+  async function mutateMemoryRecord(
+    record: StructuredMemoryRecord,
+    mutation: StructuredMemoryMutation,
+    successMessage: string,
+  ): Promise<boolean> {
+    if (!activeCharacter || structuredMemoryBusy) return false;
+    setStructuredMemoryBusy(true);
+    try {
+      await updateStructuredMemory(
+        activeCharacter.id,
+        record.id,
+        {
+          ...mutation,
+          expected_updated_at: record.updated_at,
+        },
+      );
+      await refreshStructuredMemories();
+      setStatus(successMessage);
+      return true;
+    } catch (error) {
+      setStatus(errorText(error));
+      return false;
+    } finally {
+      setStructuredMemoryBusy(false);
+    }
+  }
+
+  async function forgetMemoryTopic(
+    body: MemoryTopicSuppressionRequest,
+    successMessage: string,
+  ): Promise<boolean> {
+    if (!activeCharacter || structuredMemoryBusy) return false;
+    setStructuredMemoryBusy(true);
+    try {
+      await forgetStructuredMemoryTopic(activeCharacter.id, body);
+      await refreshStructuredMemories();
+      setStatus(successMessage);
+      return true;
+    } catch (error) {
+      setStatus(errorText(error));
+      return false;
+    } finally {
+      setStructuredMemoryBusy(false);
+    }
+  }
+
+  async function allowMemoryTopicAgain(suppression: MemorySuppression) {
+    if (!activeCharacter || structuredMemoryBusy) return;
+    setStructuredMemoryBusy(true);
+    try {
+      await deleteStructuredMemorySuppression(activeCharacter.id, suppression.id);
+      await refreshStructuredMemories();
+      setStatus("已取消该主题的长期忽略规则");
     } catch (error) {
       setStatus(errorText(error));
     } finally {
@@ -496,6 +988,7 @@ export default function App() {
         setSession(null);
         setMemory(null);
         setStructuredMemories([]);
+        setMemorySuppressions([]);
         setStructuredMemoryStatus(null);
         setDraft("");
         setStreamText("");
@@ -653,8 +1146,11 @@ export default function App() {
         <div className="provider-card">
           <span className={configured ? "online" : ""} />
           <div>
-            <strong>{configured ? `${providerLabel(preferredProvider)} 已连接` : "尚未配置 API"}</strong>
-            <small>{activeCloud?.model_id ?? (preferredProvider === "opencode" ? "deepseek-v4.1-flash" : "deepseek-flash")}</small>
+            <strong>{configured ? `${providerLabel(activeTargetProvider)} 已连接` : "模型尚不可用"}</strong>
+            <small>
+              {providerDescription(activeTargetProvider)}
+              {activeProvider?.model_id ? ` · ${activeProvider.model_id}` : ""}
+            </small>
           </div>
         </div>
       </aside>
@@ -663,30 +1159,65 @@ export default function App() {
         {view === "discover" ? (
           <section className="discover">
             <header className="page-top">
-              <span>发现</span>
+              <div className="discovery-heading">
+                <h1>发现角色</h1>
+                <p>认识一个人，走进另一段故事。</p>
+              </div>
               <div>
-                <span className="usage-pill">今日 {activeCloud?.usage.total_tokens ?? 0} tokens</span>
-                <button className="icon-button" onClick={() => setShowSettings(true)}>
+                <span className="usage-pill">
+                  {isCloudProvider(activeTargetProvider)
+                    ? `今日 ${activeProvider?.usage.total_tokens ?? 0} tokens`
+                    : "本机推理"}
+                </span>
+                <button
+                  className="icon-button"
+                  aria-label="应用设置"
+                  title="应用设置"
+                  onClick={() => setShowSettings(true)}
+                >
                   <Icon name="settings" />
                 </button>
               </div>
             </header>
             <div className="hero">
-              <span className="eyebrow">A STORY THAT REMEMBERS</span>
-              <h1>不只回复一句话，<br /><em>而是记住这段故事。</em></h1>
-              <p>每位角色只有一个持续对话。你说过的、她经历过的，都会留在这段关系中。</p>
-              <button className="primary-button" onClick={() => {
-                setEditingCard(null);
-                setShowCreate(true);
-              }}>
-                <Icon name="plus" /> 创建一位角色
-              </button>
+              <div className="hero-copy">
+                <span className="eyebrow">让故事，从一句话开始</span>
+                <h2>不只回复一句话，<em>而是记住这段故事。</em></h2>
+                <p>每一次回来，都从这里继续。与喜欢的角色聊天，让共同的经历慢慢积累。</p>
+              </div>
+              <div className="hero-actions">
+                  <button className="primary-button" onClick={() => {
+                    setEditingCard(null);
+                    setShowCreate(true);
+                  }}>
+                    <Icon name="plus" /> 创建一位角色
+                  </button>
+                  <span className="hero-note">一个角色，一段持续的对话</span>
+              </div>
             </div>
             <div className="section-heading">
-              <div><span className="eyebrow">CHARACTERS</span><h2>此刻，想和谁聊聊？</h2></div>
+              <div><h2>此刻，想和谁聊聊？</h2><p>熟悉的相遇，未完的故事。</p></div>
               <span>{characters.length} 位角色</span>
             </div>
-            <div className="character-grid">
+            {characters.length === 0 ? (
+              <section className="empty-character-state">
+                <Icon name="mask" size={42} />
+                <div>
+                  <h3>还没有角色</h3>
+                  <p>拾语不再预置角色。创建一位原创人物，系统会为它建立唯一对话和长期记忆。</p>
+                </div>
+                <button
+                  className="primary-button"
+                  onClick={() => {
+                    setEditingCard(null);
+                    setShowCreate(true);
+                  }}
+                >
+                  <Icon name="plus" /> 创建第一位角色
+                </button>
+              </section>
+            ) : (
+              <div className="character-grid">
               {characters.map((character, index) => (
                 <div key={character.id} className="character-card-shell">
                   <button
@@ -694,14 +1225,17 @@ export default function App() {
                     onClick={() => openCharacter(character)}
                   >
                     <div className="character-art">
+                      <div className="character-cover">
                       {character.avatar_url || PORTRAITS[character.id]
                         ? <img src={character.avatar_url || PORTRAITS[character.id]} alt="" />
-                        : <div className="custom-art"><Icon name="mask" size={58} /></div>}
-                      <span>{character.tag}</span>
-                      <div className="card-gradient" />
+                        : <div className="custom-art" aria-hidden="true"><div className="cover-emblem"><Icon name="spark" size={32} /></div><span>故事，等你翻开</span></div>}
+                      <span className="character-cover-tag">{character.tag}</span>
+                      </div>
                       <div className="card-copy">
-                        <small>{character.profile?.scene || "原创角色"}</small>
-                        <h3>{character.name}</h3>
+                        <div className="card-identity">
+                          <CharacterAvatar character={character} size="small" />
+                          <div><h3>{character.name}</h3><small>{character.profile?.scene || character.tag}</small></div>
+                        </div>
                         <p>{character.profile?.line || character.description}</p>
                       </div>
                     </div>
@@ -723,9 +1257,10 @@ export default function App() {
                   )}
                 </div>
               ))}
-            </div>
+              </div>
+            )}
             <footer className="page-footer">
-              AI 的回答可能不准确 · 对话与记忆默认保存在本机 · 图片和文字会发送给 {providerLabel(preferredProvider)}
+              AI 的回答可能不准确 · 对话与记忆默认保存在本机 · 当前使用 {providerLabel(activeTargetProvider)}
             </footer>
           </section>
         ) : activeCharacter && session ? (
@@ -745,6 +1280,9 @@ export default function App() {
               </div>
               <div className="chat-actions">
                 <button onClick={openMemory}><Icon name="memory" /> 记忆</button>
+                <button onClick={openTrace} disabled={traceBusy}>
+                  <Icon name="settings" /> {traceBusy ? "读取中…" : "Trace"}
+                </button>
                 <button onClick={openCharacterEditor}><Icon name="mask" /> 档案</button>
                 <button className="danger-text" onClick={resetConversation}><Icon name="trash" /></button>
               </div>
@@ -815,16 +1353,20 @@ export default function App() {
                 />
                 <div className="composer-actions">
                   <div>
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/gif,image/webp"
-                      hidden
-                      onChange={(event) => chooseImage(event.target.files?.[0])}
-                    />
-                    <button className="icon-button" onClick={() => fileRef.current?.click()} title="上传图片">
-                      <Icon name="image" />
-                    </button>
+                    {activeProvider?.supports_images && (
+                      <>
+                        <input
+                          ref={fileRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/gif,image/webp"
+                          hidden
+                          onChange={(event) => chooseImage(event.target.files?.[0])}
+                        />
+                        <button className="icon-button" onClick={() => fileRef.current?.click()} title="上传图片">
+                          <Icon name="image" />
+                        </button>
+                      </>
+                    )}
                     <button
                       className={`icon-button ${recording ? "recording" : ""}`}
                       onClick={toggleRecording}
@@ -843,7 +1385,7 @@ export default function App() {
                 </div>
               </div>
               <p className="composer-note">
-                Enter 发送 · Shift + Enter 换行 · 图片支持由 {providerLabel(preferredProvider)} 提供
+                Enter 发送 · Shift + Enter 换行 · 当前模型：{providerLabel(activeTargetProvider)}
               </p>
             </div>
           </section>
@@ -857,7 +1399,22 @@ export default function App() {
           onProviderChange={chooseProvider}
           onClose={() => setShowSettings(false)}
           onSaved={async () => {
-            await reloadBase();
+            const refreshed = await reloadBase();
+            const targetProvider = providerForCharacter(
+              activeCharacter,
+              preferredProvider,
+              refreshed.nextSettings,
+            );
+            const selected = refreshed.nextSettings[targetProvider];
+            if (
+              activeCharacter &&
+              session &&
+              selected?.available &&
+              (!isCloudProvider(targetProvider) || selected.configured)
+            ) {
+              const nextSession = await getRoleConversation(activeCharacter.id, targetProvider);
+              setSession(nextSession);
+            }
             setStatus("设置已保存");
           }}
           usagePercent={usagePercent}
@@ -934,42 +1491,57 @@ export default function App() {
                 {structuredMemories.length === 0 && (
                   <p className="empty-copy">新一轮聊天完成后，系统会在后台自动整理值得长期保留的信息。</p>
                 )}
-                {structuredMemories.map((record) => {
-                  return (
-                    <article className={`structured-memory-record ${record.state}`} key={record.id}>
-                      <div>
-                        <span>
-                          {record.state === "active"
-                            ? "当前"
-                            : record.state === "contested"
-                              ? "有疑义"
-                              : record.state === "superseded"
-                                ? "历史旧值"
-                                : record.state === "candidate"
-                                  ? "历史草稿"
-                                  : "已删除"}
-                        </span>
-                        <strong>{record.content}</strong>
-                      </div>
-                      <p>
-                        {record.value ? `值：${record.value} · ` : ""}
-                        来源消息：{record.evidence.map((item) => item.message_id).join("、")}
-                      </p>
-                      <div className="structured-memory-actions">
-                        {record.state !== "deleted" && (
-                          <button
-                            className="danger-text"
-                            disabled={structuredMemoryBusy}
-                            onClick={() => deleteMemoryRecord(record)}
-                          >
-                            删除
-                          </button>
-                        )}
-                      </div>
-                    </article>
-                  );
-                })}
+                {structuredMemories.map((record) => (
+                  <StructuredMemoryRecordCard
+                    key={record.id}
+                    record={record}
+                    characterName={activeCharacter.name}
+                    busy={structuredMemoryBusy}
+                    onEdit={(target, body) => mutateMemoryRecord(
+                      target,
+                      body,
+                      "记忆已修正，新版本已进入当前上下文",
+                    )}
+                    onReject={(target, body) => mutateMemoryRecord(
+                      target,
+                      body,
+                      "错误记忆已停用，并已阻止同一证据再次生成",
+                    )}
+                    onRestore={(target, body) => mutateMemoryRecord(
+                      target,
+                      body,
+                      "历史值已恢复为新的当前版本",
+                    )}
+                    onDelete={deleteMemoryRecord}
+                    onForgetTopic={(_, body) => forgetMemoryTopic(
+                      body,
+                      "该主题已加入长期忽略列表",
+                    )}
+                  />
+                ))}
               </div>
+              {memorySuppressions.length > 0 && (
+                <div className="memory-suppressions">
+                  <h4>不再记录的主题</h4>
+                  <p>这些规则只阻止以后继续提取同类信息，不会恢复已经删除的记忆。</p>
+                  {memorySuppressions.map((item) => (
+                    <div className="memory-suppression-row" key={item.id}>
+                      <span>
+                        {item.subject ? MEMORY_SUBJECT_LABELS[item.subject] : "全部主体"}
+                        {item.category ? ` · ${MEMORY_TYPE_LABELS[item.category]}` : ""}
+                        {item.fact_key_prefix ? ` · ${item.fact_key_prefix}` : ""}
+                      </span>
+                      <small>{item.reason}</small>
+                      <button
+                        disabled={structuredMemoryBusy}
+                        onClick={() => allowMemoryTopicAgain(item)}
+                      >
+                        取消忽略
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
           )}
           <div className="modal-actions">
@@ -978,10 +1550,56 @@ export default function App() {
           </div>
         </Modal>
       )}
+      {showTrace && session && (
+        <Modal
+          title="最近回答 Trace"
+          eyebrow="LOCAL DEBUG METADATA"
+          onClose={() => setShowTrace(false)}
+          wide
+        >
+          <p className="modal-lead">
+            这里只显示本机保存的运行元数据，不保存 API Key；Prompt 以哈希、记忆 ID 和检索分数表示。
+          </p>
+          <div className="memory-list">
+            {traces.length === 0 && <p className="empty-copy">完成一轮聊天后，这里会出现 Trace。</p>}
+            {traces.map((trace) => (
+              <details className="structured-memory-record" key={trace.run_id}>
+                <summary>
+                  {formatTime(trace.created_at)} · {trace.model} · {trace.prompt_version}
+                </summary>
+                <pre className="trace-json">
+                  {JSON.stringify({
+                    run_id: trace.run_id,
+                    provider: trace.provider,
+                    model: trace.model,
+                    prompt_version: trace.prompt_version,
+                    prompt_hash: trace.prompt_hash,
+                    role_version: trace.role_version,
+                    generation_params: trace.generation_params,
+                    input_tokens: trace.input_tokens,
+                    output_tokens: trace.output_tokens,
+                    latency_ms: trace.latency_ms,
+                    metadata: trace.trace.metadata,
+                    usage: trace.trace.usage,
+                    background_memory: trace.trace.background_memory,
+                    user_message_id: trace.user_message_id,
+                    assistant_message_id: trace.assistant_message_id,
+                  }, null, 2)}
+                </pre>
+              </details>
+            ))}
+          </div>
+          <div className="modal-actions">
+            <span className="spacer" />
+            <button className="primary-button" onClick={() => setShowTrace(false)}>关闭</button>
+          </div>
+        </Modal>
+      )}
       {showCreate && (
         <CreateCharacterModal
           initialCard={editingCard}
           provider={preferredProvider}
+          settings={settings}
           onClose={() => {
             setShowCreate(false);
             setEditingCard(null);
@@ -1011,8 +1629,10 @@ export default function App() {
       )}
       {!configured && !showSettings && (
         <div className="setup-banner">
-          <span>使用 {providerLabel(preferredProvider)} 前需要填写自己的 API Key</span>
-          <button onClick={() => setShowSettings(true)}>现在配置</button>
+          <span>{isCloudProvider(activeTargetProvider)
+            ? `使用 ${providerLabel(activeTargetProvider)} 前需要填写自己的 API Key`
+            : `${providerLabel(activeTargetProvider)} 当前不可用`}</span>
+          <button onClick={() => setShowSettings(true)}>打开设置</button>
         </div>
       )}
     </div>
@@ -1028,8 +1648,8 @@ function SettingsModal({
   usagePercent,
 }: {
   settings: ProviderSettings | null;
-  provider: CloudProviderName;
-  onProviderChange: (provider: CloudProviderName) => void;
+  provider: ProviderName;
+  onProviderChange: (provider: ProviderName) => void | Promise<void>;
   onClose: () => void;
   onSaved: () => Promise<void>;
   usagePercent: number;
@@ -1072,26 +1692,27 @@ function SettingsModal({
       <section className="setting-section">
         <div className="setting-heading">
           <div>
-            <h3>当前聊天 Provider</h3>
-            <p>切换后，各角色继续使用原聊天记录和长期记忆。</p>
+            <h3>默认云端 API</h3>
+            <p>没有单独选择本地模型的角色，会使用这里的 API。每个角色的选择保存在角色档案中。</p>
           </div>
-          <span className={`provider-state ${active?.configured ? "ready" : ""}`}>
-            {active?.configured ? "已配置" : "未配置"}
+          <span className={`provider-state ${active?.available && active?.configured ? "ready" : ""}`}>
+            {active?.available && active?.configured ? "可用" : "不可用"}
           </span>
         </div>
         <div className="provider-choice" role="group" aria-label="聊天 Provider">
-          <button
-            className={provider === "opencode" ? "active" : ""}
-            onClick={() => onProviderChange("opencode")}
-          >
-            OpenCode Go
-          </button>
-          <button
-            className={provider === "deepseek" ? "active" : ""}
-            onClick={() => onProviderChange("deepseek")}
-          >
-            DeepSeek
-          </button>
+          {VISIBLE_PROVIDERS.map((name) => {
+            const option = settings?.[name];
+            return (
+              <button
+                key={name}
+                className={provider === name ? "active" : ""}
+                onClick={() => void onProviderChange(name)}
+              >
+                <strong>{providerLabel(name)}</strong>
+                <small>{option?.available && option?.configured ? providerDescription(name) : "当前不可用"}</small>
+              </button>
+            );
+          })}
         </div>
       </section>
       <section className="setting-section">
@@ -1176,13 +1797,17 @@ function SettingsModal({
           </label>
         </div>
         <div className="usage-line">
-          <span>{providerLabel(provider)} 今日已用 {active?.usage.total_tokens ?? 0} tokens</span>
-          <div><i style={{ width: `${usagePercent}%` }} /></div>
+          <span>
+            {isCloudProvider(provider)
+              ? `${providerLabel(provider)} 今日已用 ${active?.usage.total_tokens ?? 0} tokens`
+              : `${providerLabel(provider)} 在本机 GPU 上推理`}
+          </span>
+          {isCloudProvider(provider) && <div><i style={{ width: `${usagePercent}%` }} /></div>}
         </div>
       </section>
       <section className="setting-section compact">
-        <h3>本地功能</h3>
-        <p>网页语音使用现有的 Whisper 与 GPT-SoVITS。本地 Qwen 入口暂时隐藏。</p>
+        <h3>本地模型按角色生效</h3>
+        <p>在角色档案中选择“使用本地模型”，再决定使用基础模型、半轮 LoRA 或完整 LoRA。该设置只影响当前角色，其他角色仍按各自档案选择运行模型。</p>
       </section>
       {message && <p className="form-message">{message}</p>}
       <div className="modal-actions">
@@ -1197,17 +1822,20 @@ function SettingsModal({
 function CreateCharacterModal({
   initialCard,
   provider,
+  settings,
   onClose,
   onSaved,
 }: {
   initialCard?: CharacterCard | null;
-  provider: CloudProviderName;
+  provider: ProviderName;
+  settings: ProviderSettings | null;
   onClose: () => void;
   onSaved: (card: CharacterCard) => Promise<void>;
 }) {
+  const startingCard = initialCard ? withDefaultModelSettings(initialCard) : null;
   const [inspiration, setInspiration] = useState("");
-  const [card, setCard] = useState<CharacterCard | null>(initialCard ?? null);
-  const [rawCard, setRawCard] = useState(initialCard ? JSON.stringify(initialCard, null, 2) : "");
+  const [card, setCard] = useState<CharacterCard | null>(startingCard);
+  const [rawCard, setRawCard] = useState(startingCard ? JSON.stringify(startingCard, null, 2) : "");
   const [status, setStatus] = useState("");
   const [generating, setGenerating] = useState(false);
 
@@ -1246,6 +1874,20 @@ function CreateCharacterModal({
   ) {
     if (!card) return;
     setCard({ ...card, knowledge_boundary: { ...card.knowledge_boundary, [key]: value } });
+  }
+
+  function patchModelSettings<K extends keyof CharacterModelSettings>(
+    key: K,
+    value: CharacterModelSettings[K],
+  ) {
+    if (!card) return;
+    setCard({
+      ...card,
+      model_settings: {
+        ...card.model_settings,
+        [key]: value,
+      },
+    });
   }
 
   async function save() {
@@ -1308,6 +1950,61 @@ function CreateCharacterModal({
         <label className="field"><span>与用户的关系</span><textarea rows={2} value={card.relationship} onChange={(e) => patch("relationship", e.target.value)} /></label>
         <label className="field"><span>开场白</span><textarea rows={2} value={card.greeting} onChange={(e) => patch("greeting", e.target.value)} /></label>
       </div>
+      <h3 className="form-section-title">模型运行方式</h3>
+      <section className="character-model-settings">
+        <label className={`model-source-option ${card.model_settings.source === "api" ? "active" : ""}`}>
+          <input
+            type="radio"
+            name="character-model-source"
+            checked={card.model_settings.source === "api"}
+            onChange={() => patchModelSettings("source", "api")}
+          />
+          <span>
+            <strong>云端大模型 API</strong>
+            <small>
+              默认使用应用设置中的 {providerLabel(provider)}
+              {settings?.[provider]?.configured ? "，当前已配置" : "，尚未配置 API Key"}
+            </small>
+          </span>
+        </label>
+        <label className={`model-source-option ${card.model_settings.source === "local" ? "active" : ""}`}>
+          <input
+            type="radio"
+            name="character-model-source"
+            checked={card.model_settings.source === "local"}
+            onChange={() => patchModelSettings("source", "local")}
+          />
+          <span>
+            <strong>本地 Qwen3-1.7B</strong>
+            <small>在本机 GPU 推理；只有当前角色会使用这里的本地模型与 LoRA 设置。</small>
+          </span>
+        </label>
+        {card.model_settings.source === "local" && (
+          <label className="field">
+            <span>本地运行模式</span>
+            <select
+              value={card.model_settings.local_mode}
+              onChange={(event) => patchModelSettings(
+                "local_mode",
+                event.target.value as CharacterModelSettings["local_mode"],
+              )}
+            >
+              {LOCAL_MODEL_MODE_OPTIONS.map((option) => (
+                <option
+                  key={option.value}
+                  value={option.value}
+                  disabled={!settings?.[option.provider]?.available}
+                >
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <small className="field-hint">
+              LoRA 只在该角色的会话中启用；切换到其他角色时恢复各自设置。本地模式不支持图片上传。
+            </small>
+          </label>
+        )}
+      </section>
       <h3 className="form-section-title">认知边界</h3>
       <div className="form-grid">
         <label className="field">
@@ -1354,7 +2051,7 @@ function CreateCharacterModal({
           }}
           onBlur={() => {
             try {
-              setCard(JSON.parse(rawCard));
+              setCard(withDefaultModelSettings(JSON.parse(rawCard)));
               setStatus("JSON 格式有效");
             } catch {
               setStatus("JSON 格式暂时无效");

@@ -15,8 +15,11 @@ android {
         applicationId = "com.shiyu.chat"
         minSdk = 26
         targetSdk = 35
-        versionCode = 14
-        versionName = "0.9.4"
+        versionCode = 27
+        versionName = "0.14.3"
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
 
     buildFeatures {
@@ -52,14 +55,12 @@ android {
     }
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        jniLibs {
+            // The Dream backend is an executable packaged as a .so and must be
+            // extracted to nativeLibraryDir so Android can execute it.
+            useLegacyPackaging = true
+        }
     }
-}
-
-configurations.configureEach {
-    // MediaPipe 0.10.26.1 declares protobuf-javalite, but its ImageGenerator
-    // bytecode calls the covariant Any.Builder.build():Any found in
-    // protobuf-java. Shipping only javalite causes a runtime NoSuchMethodError.
-    exclude(group = "com.google.protobuf", module = "protobuf-javalite")
 }
 
 ksp {
@@ -73,6 +74,7 @@ dependencies {
     androidTestImplementation(composeBom)
 
     implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.collection:collection:1.4.4")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
@@ -88,8 +90,6 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.google.mediapipe:tasks-vision-image-generator:0.10.26.1")
-    implementation("com.google.protobuf:protobuf-java:4.26.1")
 
     testImplementation("junit:junit:4.13.2")
 }

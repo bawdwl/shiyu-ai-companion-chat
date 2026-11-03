@@ -1,0 +1,11 @@
+MNN / MNN Chat native runtime
+
+This application bundles the ARM64 libraries libMNN.so and libmnnllmapp.so
+from the Apache-2.0 licensed MNN project and its Android MNN Chat application.
+The original project and license are available at:
+
+https://github.com/alibaba/MNN
+
+The files in this directory are provided under the upstream Apache-2.0 license.
+They are third-party runtime components and are not covered by the project's
+root license.

@@ -1,0 +1,286 @@
+{
+  "schema_version": 1,
+  "description": "Non-private scenarios used to supplement the insufficient real-chat source.",
+  "specs": [
+    {
+      "id": "C02",
+      "title": "城市更正",
+      "topic": "生活和搬家",
+      "summary": "用户先住苏州，后来明确更正已经搬到杭州。",
+      "events": [
+        {"at": 3, "user": "我现在住在苏州，周末常去河边散步。", "assistant": "苏州的河边确实适合慢慢走。"},
+        {"at": 11, "user": "更正一下，我上个月已经搬到杭州了，苏州是以前的住处。", "assistant": "记住了，现在按杭州算，苏州只作为过去经历。"}
+      ],
+      "checks": {
+        "initial": {"after": 6, "question": "我现在住在哪里？", "required": [["user.current.place", "苏州", "active"]]},
+        "current": {"after": 14, "question": "我最近搬家了吗？现在住哪？", "required": [["user.current.place", "杭州", "active"]], "forbidden": ["我现在住苏州"]},
+        "historical": {"after": 18, "question": "我以前住过哪里，现在又住在哪？", "required": [["user.current.place", "杭州", "active"], ["user.current.place", "苏州", "superseded"]]},
+        "unknown": {"after": 22, "question": "我跟你说过自己搬到北京了吗？", "required": [], "forbidden": ["搬到北京"]},
+        "isolation": {"after": 24, "question": "杭州是我的情况，还是你自己的生活地点？", "required": [["user.current.place", "杭州", "active"]]}
+      }
+    },
+    {
+      "id": "C03",
+      "title": "职业更正",
+      "topic": "职业和工作",
+      "summary": "用户从电商运营转岗到后端开发。",
+      "events": [
+        {"at": 5, "user": "我目前做电商运营，最近在补 Python。", "assistant": "电商运营加 Python，听起来你在准备转岗。"},
+        {"at": 13, "user": "我确认转岗成功了，现在已经改成后端开发。", "assistant": "恭喜，工作信息我按后端开发更新。"}
+      ],
+      "checks": {
+        "initial": {"after": 8, "question": "我现在做什么工作？", "required": [["user.current.work", "电商运营", "active"]]},
+        "current": {"after": 16, "question": "我最近的工作有什么变化？", "required": [["user.current.work", "后端开发", "active"]]},
+        "historical": {"after": 20, "question": "我以前做什么，现在做什么？", "required": [["user.current.work", "后端开发", "active"], ["user.current.work", "电商运营", "superseded"]]},
+        "unknown": {"after": 22, "question": "我有跟你说过自己是医生吗？", "required": [], "forbidden": ["医生"]},
+        "isolation": {"after": 24, "question": "后端开发是我的职业吧？", "required": [["user.current.work", "后端开发", "active"]]}
+      }
+    },
+    {
+      "id": "C04",
+      "title": "面试计划改期",
+      "topic": "面试安排",
+      "summary": "用户面试从周三改到周五下午。",
+      "events": [
+        {"at": 3, "user": "我的面试原本安排在下周三上午。", "assistant": "我先把下周三上午记作原计划。"},
+        {"at": 11, "user": "面试时间更正了，改成这周五下午两点。", "assistant": "现在以周五下午两点为准，周三保留为旧计划。"}
+      ],
+      "checks": {
+        "initial": {"after": 6, "question": "我的面试原来安排在什么时候？", "required": [["user.interview.time", "下周三上午", "active"]]},
+        "current": {"after": 14, "question": "我下一次面试是什么时候？", "required": [["user.interview.time", "周五下午两点", "active"]]},
+        "historical": {"after": 18, "question": "面试时间改过吗？", "required": [["user.interview.time", "周五下午两点", "active"], ["user.interview.time", "下周三上午", "superseded"]]},
+        "unknown": {"after": 22, "question": "我的面试结果已经出来了吗？", "required": [], "forbidden": ["面试通过", "面试失败"]},
+        "isolation": {"after": 24, "question": "需要准备面试的是我还是你？", "required": [["user.interview.time", "周五下午两点", "active"]]}
+      }
+    },
+    {
+      "id": "C05",
+      "title": "饮品偏好变化",
+      "topic": "咖啡和茶",
+      "summary": "用户原来更喜欢奶茶，后来开始偏爱手冲咖啡。",
+      "events": [
+        {"at": 4, "user": "我以前最喜欢奶茶，尤其是三分糖的。", "assistant": "三分糖奶茶，这个偏好挺具体。"},
+        {"at": 12, "user": "口味变了，现在我更喜欢手冲咖啡，奶茶已经很少喝了。", "assistant": "那当前偏好记手冲咖啡，奶茶作为以前的口味。"}
+      ],
+      "checks": {
+        "initial": {"after": 8, "question": "我之前最喜欢喝什么？", "required": [["user.preference.drink", "奶茶", "active"]]},
+        "current": {"after": 15, "question": "我现在更喜欢喝什么？", "required": [["user.preference.drink", "手冲咖啡", "active"]]},
+        "historical": {"after": 19, "question": "我的饮品口味有变化吗？", "required": [["user.preference.drink", "手冲咖啡", "active"], ["user.preference.drink", "奶茶", "superseded"]]},
+        "unknown": {"after": 21, "question": "我喜欢喝高度白酒吗？", "required": [], "forbidden": ["喜欢喝高度白酒"]},
+        "isolation": {"after": 24, "question": "你记得我最近爱喝什么吗？", "required": [["user.preference.drink", "手冲咖啡", "active"]]}
+      }
+    },
+    {
+      "id": "C06",
+      "title": "养宠边界",
+      "topic": "猫咖和宠物",
+      "summary": "用户明确没有养猫，只是喜欢去猫咖。",
+      "events": [
+        {"at": 6, "user": "我没有养猫，只是周末会去猫咖。", "assistant": "所以我不能把你的经历说成家里有猫。"}
+      ],
+      "checks": {
+        "initial": {"after": 9, "question": "我家里有猫吗？", "required": [["user.pet.cat", "用户没有养猫", "active"]], "forbidden": ["你养了猫"]},
+        "current": {"after": 14, "question": "再说一次，我养宠物了吗？", "required": [["user.pet.cat", "用户没有养猫", "active"]]},
+        "historical": {"after": 18, "question": "我以前说过自己养猫吗？", "required": [["user.pet.cat", "用户没有养猫", "active"]]},
+        "unknown": {"after": 21, "question": "我家的狗叫什么名字？", "required": [], "forbidden": ["你家的狗"]},
+        "isolation": {"after": 24, "question": "喜欢去猫咖的是我，对吧？", "required": [["user.pet.cat", "用户没有养猫", "active"]]}
+      }
+    },
+    {
+      "id": "C07",
+      "title": "学历补充",
+      "topic": "学习和学校",
+      "summary": "用户本科毕业后正在读在职硕士。",
+      "events": [
+        {"at": 5, "user": "我本科读的是软件工程，已经毕业了。", "assistant": "本科专业记软件工程。"},
+        {"at": 13, "user": "补充一个信息，我现在还在读在职硕士。", "assistant": "我会区分本科已毕业和硕士在读。"}
+      ],
+      "checks": {
+        "initial": {"after": 8, "question": "我的本科专业是什么？", "required": [["user.education.bachelor", "软件工程", "active"]]},
+        "current": {"after": 16, "question": "我现在的学历和学习状态是什么？", "required": [["user.education.current", "在职硕士在读", "active"]]},
+        "historical": {"after": 20, "question": "我的学习经历是怎样的？", "required": [["user.education.bachelor", "软件工程", "active"], ["user.education.current", "在职硕士在读", "active"]]},
+        "unknown": {"after": 22, "question": "我有博士学位吗？", "required": [], "forbidden": ["博士毕业"]},
+        "isolation": {"after": 24, "question": "在读硕士的是我对吧？", "required": [["user.education.current", "在职硕士在读", "active"]]}
+      }
+    },
+    {
+      "id": "C08",
+      "title": "住址删除",
+      "topic": "隐私边界",
+      "summary": "用户先给出住址边界，随后要求彻底忘记这个话题。",
+      "events": [
+        {"at": 4, "user": "不要记录我的具体家庭住址。", "assistant": "明白，我不会记录具体住址。", "expected": [{"operation": "add", "kind": "user_report", "subject": "user", "fact_key": "user.boundary.address", "value": "家庭住址", "content": "用户不要记录家庭住址", "fact_type": "fact", "epistemic_status": "explicit", "source_authority": "user_explicit", "knowledge_source": "user_told"}]},
+        {"at": 12, "user": "以后也不要记这个住址话题，把它删掉。", "assistant": "我会删除这条边界记录并停止再提取这个话题。", "expected": [{"operation": "delete", "target_fact_key": "user.boundary.address", "kind": "user_report", "subject": "user", "fact_key": "user.boundary.address", "value": null, "content": "用户要求删除住址话题", "fact_type": "fact", "epistemic_status": "explicit", "source_authority": "user_explicit", "knowledge_source": "user_told"}]}
+      ],
+      "checks": {
+        "initial": {"after": 8, "question": "我不希望记录什么类型的信息？", "required": [["user.boundary.address", "不要记录家庭住址", "active"]]},
+        "current": {"after": 15, "question": "你还记得我的具体住址吗？", "required": [], "forbidden": ["门牌", "小区"]},
+        "historical": {"after": 18, "question": "我要求忘掉过哪类信息？", "required": [], "forbidden": ["用户住在", "地址是"]},
+        "unknown": {"after": 21, "question": "我叫什么、住哪儿？", "required": [], "forbidden": ["门牌"]},
+        "isolation": {"after": 24, "question": "我的隐私边界是什么？", "required": [], "forbidden": ["门牌"]}
+      }
+    },
+    {
+      "id": "C09",
+      "title": "主观观点",
+      "topic": "同事关系",
+      "summary": "用户只是觉得同事不靠谱，不能变成客观事实。",
+      "events": [
+        {"at": 6, "user": "我觉得那个同事不太靠谱，这只是我的主观感觉。", "assistant": "我会把它记作你的观点，不判断同事客观好坏。"}
+      ],
+      "checks": {
+        "initial": {"after": 9, "question": "我怎么看那个同事？", "required": [["user.opinion.colleague", "用户认为同事不太靠谱", "active"]]},
+        "current": {"after": 14, "question": "那个同事客观上是不是坏人？", "required": [], "forbidden": ["他一定是坏人"]},
+        "historical": {"after": 18, "question": "我对同事的看法是什么性质？", "required": [["user.opinion.colleague", "用户认为同事不太靠谱", "active"]]},
+        "unknown": {"after": 21, "question": "你知道那个同事的身份证号吗？", "required": [], "forbidden": ["身份证号是"]},
+        "isolation": {"after": 24, "question": "不喜欢那个同事的人是我，不是你吧？", "required": [["user.opinion.colleague", "用户认为同事不太靠谱", "active"]]}
+      }
+    },
+    {
+      "id": "C10",
+      "title": "角色自述不是设定",
+      "topic": "角色童年",
+      "summary": "角色曾即兴说自己在巴黎住过，但这只是角色自述，不是作者正式设定。",
+      "events": [
+        {"at": 4, "user": "你小时候在哪里生活？", "assistant": "我小时候在巴黎住过一阵。", "expected": [{"operation": "add", "kind": "role_claim", "subject": "character", "fact_key": "character.claim.childhood", "value": "巴黎", "content": "角色此前自述小时候在巴黎住过，这不是作者确认的正式设定", "fact_type": "role_claim", "epistemic_status": "explicit", "source_authority": "character_self_report", "knowledge_source": "character_told", "evidence": "assistant"}]}
+      ],
+      "checks": {
+        "initial": {"after": 8, "question": "你之前说自己小时候住哪里？", "required": [["character.claim.childhood", "巴黎", "active"]]},
+        "current": {"after": 14, "question": "巴黎是你的正式设定吗？", "required": [["character.claim.childhood", "角色此前自述小时候在巴黎住过，这不是作者确认的正式设定", "active"]]},
+        "historical": {"after": 18, "question": "你以前的角色自述是什么？", "required": [["character.claim.childhood", "角色此前自述小时候在巴黎住过，这不是作者确认的正式设定", "active"]]},
+        "unknown": {"after": 21, "question": "你确定自己真实出生在巴黎吗？", "required": [], "forbidden": ["正式设定是巴黎"]},
+        "isolation": {"after": 24, "question": "巴黎是我住过，还是你曾经这样说过？", "required": [["character.claim.childhood", "角色此前自述小时候在巴黎住过，这不是作者确认的正式设定", "active"]]}
+      }
+    },
+    {
+      "id": "C11",
+      "title": "共同事件与约定",
+      "topic": "一起读小说",
+      "summary": "双方约定下周继续讨论一本小说。",
+      "events": [
+        {"at": 6, "user": "我们下周继续聊《海边邮局》，先把它记成一个约定吧。", "assistant": "好，下周三继续聊《海边邮局》。", "expected": [{"operation": "add", "kind": "shared_event", "subject": "shared", "fact_key": "shared.plan.book_discussion", "value": "下周三继续讨论《海边邮局》", "content": "双方约定下周三继续讨论《海边邮局》", "fact_type": "event", "epistemic_status": "explicit", "source_authority": "shared_event", "knowledge_source": "observed", "evidence": "both"}]}
+      ],
+      "checks": {
+        "initial": {"after": 9, "question": "我们约好下次聊什么？", "required": [["shared.plan.book_discussion", "下周三继续讨论《海边邮局》", "active"]]},
+        "current": {"after": 14, "question": "你还记得我们的读书约定吗？", "required": [["shared.plan.book_discussion", "下周三继续讨论《海边邮局》", "active"]]},
+        "historical": {"after": 18, "question": "《海边邮局》的约定是什么？", "required": [["shared.plan.book_discussion", "下周三继续讨论《海边邮局》", "active"]]},
+        "unknown": {"after": 21, "question": "我们约好一起去看电影了吗？", "required": [], "forbidden": ["约好看电影"]},
+        "isolation": {"after": 24, "question": "这是我们两个人的约定，还是我自己的计划？", "required": [["shared.plan.book_discussion", "下周三继续讨论《海边邮局》", "active"]]}
+      }
+    },
+    {
+      "id": "C12",
+      "title": "假设不能变成事实",
+      "topic": "旅行愿望",
+      "summary": "用户只是说如果以后有机会想看极光，并没有决定或出发。",
+      "events": [
+        {"at": 5, "user": "如果以后有机会，我想去冰岛看极光，但现在只是想想。", "assistant": "我会把它保留为愿望，不写成已经决定的旅行。", "expected": [{"operation": "add", "kind": "user_report", "subject": "user", "fact_key": "user.travel.iceland", "value": "如果以后有机会想去看极光", "content": "用户把去冰岛看极光作为假设或愿望", "fact_type": "hypothesis", "epistemic_status": "uncertain", "source_authority": "user_explicit", "knowledge_source": "user_told"}]}
+      ],
+      "checks": {
+        "initial": {"after": 9, "question": "我现在决定去冰岛了吗？", "required": [["user.travel.iceland", "冰岛看极光", "active"]], "forbidden": ["已经决定去冰岛"]},
+        "current": {"after": 14, "question": "冰岛旅行是我已经完成的经历吗？", "required": [["user.travel.iceland", "冰岛看极光", "active"]], "forbidden": ["已经去过冰岛"]},
+        "historical": {"after": 18, "question": "我提过的冰岛旅行是什么性质？", "required": [["user.travel.iceland", "冰岛看极光", "active"]]},
+        "unknown": {"after": 21, "question": "我在冰岛住了几年？", "required": [], "forbidden": ["住了几年"]},
+        "isolation": {"after": 24, "question": "去看极光的是我不是你吧？", "required": [["user.travel.iceland", "冰岛看极光", "active"]]}
+      }
+    },
+    {
+      "id": "C13",
+      "title": "临时状态不变成永久人格",
+      "topic": "压力与休息",
+      "summary": "用户今天压力大，但不能把一次情绪写成永久性格。",
+      "events": [
+        {"at": 5, "user": "我今天压力很大，有点不想说话，但明天要交报告。", "assistant": "今天先休息，明天再处理报告。"}
+      ],
+      "checks": {
+        "initial": {"after": 8, "question": "我最近为什么压力大？", "required": [["user.current.pressure", "今天压力大", "active"]]},
+        "current": {"after": 14, "question": "我是一个永远不擅长表达的人吗？", "required": [], "forbidden": ["你永远不擅长表达"]},
+        "historical": {"after": 18, "question": "我今天的状态怎么样？", "required": [["user.current.pressure", "今天压力大", "active"]]},
+        "unknown": {"after": 21, "question": "我明天的报告已经交了吗？", "required": [], "forbidden": ["已经交了"]},
+        "isolation": {"after": 24, "question": "压力大的是我，不是你吧？", "required": [["user.current.pressure", "今天压力大", "active"]]}
+      }
+    },
+    {
+      "id": "C14",
+      "title": "物件状态更新",
+      "topic": "杯子",
+      "summary": "用户先说有一个蓝陶杯，后来杯子摔坏并换了玻璃杯。",
+      "events": [
+        {"at": 4, "user": "我有一个蓝色陶杯，每天早上都用它喝水。", "assistant": "蓝色陶杯是你的常用杯子。"},
+        {"at": 12, "user": "那个陶杯昨天摔碎了，现在换成透明玻璃杯了。", "assistant": "现在记玻璃杯，陶杯作为过去使用的物品。"}
+      ],
+      "checks": {
+        "initial": {"after": 8, "question": "我平时用什么杯子？", "required": [["user.item.cup", "蓝色陶杯", "active"]]},
+        "current": {"after": 15, "question": "那个陶杯现在还能用吗？", "required": [["user.item.cup", "透明玻璃杯", "active"]]},
+        "historical": {"after": 19, "question": "我的杯子发生过什么变化？", "required": [["user.item.cup", "透明玻璃杯", "active"], ["user.item.cup", "蓝色陶杯", "superseded"]]},
+        "unknown": {"after": 21, "question": "我用的是红色金属杯吗？", "required": [], "forbidden": ["红色金属杯"]},
+        "isolation": {"after": 24, "question": "玻璃杯是我的，不是你的吧？", "required": [["user.item.cup", "透明玻璃杯", "active"]]}
+      }
+    },
+    {
+      "id": "C15",
+      "title": "计划完成状态",
+      "topic": "交稿",
+      "summary": "用户先有一个交稿计划，后来报告已经完成。",
+      "events": [
+        {"at": 4, "user": "我计划周五下午交报告。", "assistant": "先记周五下午交报告。"},
+        {"at": 12, "user": "更正一下，我刚刚已经把报告交完了。", "assistant": "那现在记报告已完成，不再把交稿当成待办。"}
+      ],
+      "checks": {
+        "initial": {"after": 8, "question": "我原本什么时候交报告？", "required": [["user.plan.report", "周五下午交报告", "active"]]},
+        "current": {"after": 15, "question": "报告现在交了吗？", "required": [["user.plan.report", "报告已经交完", "active"]]},
+        "historical": {"after": 19, "question": "交报告这件事怎么变化的？", "required": [["user.plan.report", "报告已经交完", "active"], ["user.plan.report", "周五下午交报告", "superseded"]]},
+        "unknown": {"after": 21, "question": "老师已经批改报告了吗？", "required": [], "forbidden": ["已经批改"]},
+        "isolation": {"after": 24, "question": "交报告的是我，不是你吧？", "required": [["user.plan.report", "报告已经交完", "active"]]}
+      }
+    },
+    {
+      "id": "C16",
+      "title": "模糊指代",
+      "topic": "旧相机",
+      "summary": "用户提到一台旧相机，后面用“那个东西”回指，考察上下文检索。",
+      "events": [
+        {"at": 4, "user": "我手里有一台旧胶片相机，是爷爷留下来的。", "assistant": "这台旧胶片相机对你应该很有意义。"}
+      ],
+      "checks": {
+        "initial": {"after": 8, "question": "我提到的那个东西是什么来历？", "required": [["user.item.camera", "爷爷留下来的旧胶片相机", "active"]]},
+        "current": {"after": 14, "question": "那个东西是谁留下来的？", "required": [["user.item.camera", "爷爷留下来的旧胶片相机", "active"]]},
+        "historical": {"after": 18, "question": "那台相机有什么来历？", "required": [["user.item.camera", "爷爷留下来的旧胶片相机", "active"]]},
+        "unknown": {"after": 21, "question": "那台相机已经修好了吗？", "required": [], "forbidden": ["已经修好"]},
+        "isolation": {"after": 24, "question": "相机是我的还是你的？", "required": [["user.item.camera", "爷爷留下来的旧胶片相机", "active"]]}
+      }
+    },
+    {
+      "id": "C17",
+      "title": "被否定的事实",
+      "topic": "运动习惯",
+      "summary": "用户明确说没有参加马拉松，不能把玩笑记成事实。",
+      "events": [
+        {"at": 5, "user": "我开玩笑的，我根本没有参加马拉松，平时也不怎么跑步。", "assistant": "好的，我不会把马拉松当成你的真实经历。", "expected": [{"operation": "add", "kind": "user_report", "subject": "user", "fact_key": "user.sport.marathon", "value": "没有参加马拉松", "content": "用户没有参加马拉松，平时也不怎么跑步", "fact_type": "fact", "epistemic_status": "explicit", "source_authority": "user_explicit", "knowledge_source": "user_told"}]}
+      ],
+      "checks": {
+        "initial": {"after": 9, "question": "我参加过马拉松吗？", "required": [["user.sport.marathon", "没有参加马拉松", "active"]], "forbidden": ["你参加过马拉松"]},
+        "current": {"after": 14, "question": "我平时经常跑步吗？", "required": [["user.sport.marathon", "没有参加马拉松", "active"]]},
+        "historical": {"after": 18, "question": "关于马拉松，我说过什么？", "required": [["user.sport.marathon", "没有参加马拉松", "active"]]},
+        "unknown": {"after": 21, "question": "我跑马拉松的最好成绩是多少？", "required": [], "forbidden": ["最好成绩"]},
+        "isolation": {"after": 24, "question": "没参加马拉松的是我，对吧？", "required": [["user.sport.marathon", "没有参加马拉松", "active"]]}
+      }
+    },
+    {
+      "id": "C18",
+      "title": "偏好与边界同时存在",
+      "topic": "生日安排",
+      "summary": "用户喜欢安静的小型生日，不喜欢被安排惊喜。",
+      "events": [
+        {"at": 4, "user": "我喜欢安静的生日聚会，不喜欢突然准备惊喜。", "assistant": "我会记住安静的小型安排，也尊重不要突袭惊喜的边界。"}
+      ],
+      "checks": {
+        "initial": {"after": 8, "question": "我喜欢什么样的生日安排？", "required": [["user.preference.birthday", "安静的生日聚会", "active"]]},
+        "current": {"after": 14, "question": "给我准备突然惊喜合适吗？", "required": [], "forbidden": ["应该准备惊喜"]},
+        "historical": {"after": 18, "question": "我关于生日的偏好是什么？", "required": [["user.preference.birthday", "安静的生日聚会", "active"]]},
+        "unknown": {"after": 21, "question": "我喜欢上百人的派对吗？", "required": [], "forbidden": ["喜欢上百人的派对"]},
+        "isolation": {"after": 24, "question": "过生日的是我，这个偏好也是我的吧？", "required": [["user.preference.birthday", "安静的生日聚会", "active"]]}
+      }
+    }
+  ]
+}

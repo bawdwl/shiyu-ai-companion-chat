@@ -6,6 +6,7 @@ from uuid import uuid4
 
 
 MAX_WORLD_ENTRIES = 30
+LOCAL_MODEL_MODES = ('base', 'half', 'full', 'wukong', 'xucheng', 'haruhi')
 
 
 def _text(value, limit, field, *, required=False):
@@ -34,6 +35,31 @@ def normalize_card(data, *, generating=False):
     boundaries = _text(data.get('boundaries', ''), 800, '互动边界')
     scenario = _text(data.get('scenario', ''), 600, '当前情境')
     motivation = _text(data.get('motivation', ''), 400, '人物动机')
+    raw_model_settings = data.get('model_settings', {})
+    if not isinstance(raw_model_settings, dict):
+        raise ValueError('模型设置必须是对象')
+    model_source = _text(
+        raw_model_settings.get('source', 'api'),
+        20,
+        '模型来源',
+        required=True,
+    )
+    if model_source not in ('api', 'local'):
+        raise ValueError('模型来源只能是 api 或 local')
+    local_mode = _text(
+        raw_model_settings.get('local_mode', 'base'),
+        20,
+        '本地模型模式',
+        required=True,
+    )
+    if local_mode not in LOCAL_MODEL_MODES:
+        raise ValueError(
+            '本地模型模式只能是 base、half、full、wukong、xucheng 或 haruhi'
+        )
+    model_settings = {
+        'source': model_source,
+        'local_mode': local_mode,
+    }
     preset = data.get('generation_preset', {})
     if not isinstance(preset, dict):
         raise ValueError('生成预设必须是对象')
@@ -134,6 +160,7 @@ def normalize_card(data, *, generating=False):
         'background': background, 'personality': personality, 'speech_style': speech_style,
         'relationship': relationship, 'greeting': greeting or f'你好，我是{name}。',
         'scenario': scenario, 'motivation': motivation, 'generation_preset': preset,
+        'model_settings': model_settings,
         'source_notes': source_notes,
         'knowledge_boundary': knowledge_boundary,
         'boundaries': boundaries, 'fixed_facts': facts, 'worldbook': worldbook,
@@ -196,6 +223,7 @@ def card_to_runtime(card):
     return {
         'id': card['id'], 'name': card['name'], 'tag': '自定义角色', 'color': 'peach',
         'description': card['description'], 'greeting': card['greeting'], 'starters': [],
+        'model_settings': card['model_settings'],
         'prompt': '\n\n'.join(prompt_parts), 'identity': None, 'custom_card': card,
         'profile_policy': 'on_request',
         'profile': {'line': card['tagline'], 'tags': [], 'scene': '', 'about': card['description']},

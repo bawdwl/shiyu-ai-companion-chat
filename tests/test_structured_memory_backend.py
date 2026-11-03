@@ -11,6 +11,40 @@ from fastapi.testclient import TestClient
 from backend import create_app
 
 
+def verification_response(request):
+    items=[]
+    for index,item in enumerate(request.get('candidates',[])):
+        kind=item.get('kind')
+        fact_type={
+            'plan':'plan',
+            'belief':'opinion',
+            'shared_event':'event',
+            'role_claim':'role_claim',
+        }.get(kind,'fact')
+        authority=(
+            'character_self_report'
+            if kind in {'character_detail','role_claim'}
+            else 'shared_event' if kind=='shared_event'
+            else 'user_explicit'
+        )
+        source=(
+            'character_told'
+            if authority=='character_self_report'
+            else 'observed' if authority=='shared_event'
+            else 'user_told'
+        )
+        items.append({
+            'candidate_index':index,
+            'decision':'accept',
+            'fact_type':fact_type,
+            'epistemic_status':'explicit',
+            'source_authority':authority,
+            'knowledge_source':source,
+            'reason':'测试语义审核通过',
+        })
+    return json.dumps({'items':items},ensure_ascii=False)
+
+
 class FakeEngine:
     adapter_available=False
 
@@ -37,6 +71,11 @@ class FakeDeepSeekProvider:
 
     def reply(self,messages,max_new_tokens=512,generation_overrides=None):
         request=json.loads(messages[-1]['content'])
+        if 'candidates' in request and 'messages' not in request:
+            return verification_response(request),dict(
+                seconds=0.01,output_tokens=20,prompt_tokens=40,
+                total_tokens=60,model='deepseek-flash',
+            )
         rows=request['messages']
         self.last_existing_facts=request['existing_facts']
         target=next(item for item in rows if '改到周五' in item['content'])
@@ -53,6 +92,11 @@ class FakeDeepSeekProvider:
 class ReverseOrderProvider(FakeDeepSeekProvider):
     def reply(self,messages,max_new_tokens=512,generation_overrides=None):
         request=json.loads(messages[-1]['content'])
+        if 'candidates' in request and 'messages' not in request:
+            return verification_response(request),dict(
+                seconds=0.01,output_tokens=20,prompt_tokens=40,
+                total_tokens=60,model='deepseek-flash',
+            )
         rows=request['messages']
         old=next(item for item in rows if '周三' in item['content'])
         new=next(item for item in rows if '周五' in item['content'])
@@ -83,6 +127,11 @@ class AutomaticFakeDeepSeekProvider:
 
     def reply(self,messages,max_new_tokens=512,generation_overrides=None):
         request=json.loads(messages[-1]['content'])
+        if 'candidates' in request and 'messages' not in request:
+            return verification_response(request),dict(
+                seconds=0.01,output_tokens=20,prompt_tokens=40,
+                total_tokens=60,model='deepseek-flash',
+            )
         rows=request['messages']
         existing=request['existing_facts']
         correction=next((item for item in reversed(rows)
@@ -204,6 +253,11 @@ class StructuredMemoryBackendTests(unittest.TestCase):
             auto_memory_worker_enabled=False,
         ))
         self.client.__enter__()
+        response=self.client.put(
+            '/settings/deepseek-key',
+            json={'api_key':'sk-test-placeholder'},
+        )
+        self.assertEqual(response.status_code,200,response.text)
 
     def tearDown(self):
         self.client.__exit__(None,None,None)
@@ -515,6 +569,20 @@ class StructuredMemoryBackendTests(unittest.TestCase):
                     and item['fact_key']=='user.interview.time'
                 )
                 self.assertIsNotNone(active['origin_job_id'])
+                trace_deadline=time.monotonic()+3
+                traces=[]
+                while time.monotonic()<trace_deadline:
+                    traces=client.get(
+                        f'/sessions/{current["id"]}/traces'
+                    ).json()['traces']
+                    if traces and 'background_memory' in traces[-1]['trace']:
+                        break
+                    time.sleep(0.05)
+                self.assertTrue(traces)
+                self.assertIn('background_memory',traces[-1]['trace'])
+                self.assertTrue(
+                    traces[-1]['trace']['background_memory']['applied']
+                )
                 status=client.get(
                     '/characters/companion/structured-memory/status'
                 )

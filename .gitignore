@@ -40,6 +40,11 @@ android/.kotlin/
 android/**/build/
 android/**/.cxx/
 android/**/node_modules/
+recordings/
+voice-profiles/
+*.wav
+*.mp3
+*.sqlite
 
 *.pem
 *.jks

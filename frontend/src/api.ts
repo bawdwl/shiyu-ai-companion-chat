@@ -2,12 +2,17 @@ import type {
   Character,
   CharacterCard,
   Health,
+  ProviderName,
   ProviderSettings,
   Session,
   SessionMemory,
+  StructuredMemoryMutation,
+  StructuredMemoryMutationResult,
   StructuredMemoryList,
   StructuredMemoryRecord,
   StructuredMemoryStatus,
+  MemoryTopicSuppressionRequest,
+  TurnTrace,
 } from "./types";
 
 export class ApiError extends Error {
@@ -104,7 +109,7 @@ export const saveTokenLimits = (requestTokens: number, dailyTokens: number) =>
 
 export const getRoleConversation = (
   characterId: string,
-  provider: "opencode" | "deepseek" | "local" = "opencode",
+  provider: ProviderName = "opencode",
 ) =>
   api<Session>(
     `/characters/${encodeURIComponent(characterId)}/conversation?provider=${provider}`,
@@ -119,6 +124,11 @@ export const resetRoleConversation = (characterId: string) =>
 
 export const getSession = (sessionId: string) =>
   api<Session>(`/sessions/${sessionId}`);
+
+export const getTurnTraces = (sessionId: string, limit = 30) =>
+  api<{ traces: TurnTrace[] }>(
+    `/sessions/${sessionId}/traces?limit=${limit}`,
+  ).then((body) => body.traces);
 
 export const getMemory = (sessionId: string) =>
   api<SessionMemory>(`/sessions/${sessionId}/memory`);
@@ -172,6 +182,40 @@ export const reviewStructuredMemory = (
   api<{ action: string; item: StructuredMemoryRecord }>(
     `/characters/${encodeURIComponent(characterId)}/structured-memory/review`,
     { method: "POST", body: JSON.stringify(body) },
+  );
+
+export const updateStructuredMemory = (
+  characterId: string,
+  itemId: number,
+  body: StructuredMemoryMutation,
+) =>
+  api<StructuredMemoryMutationResult>(
+    `/characters/${encodeURIComponent(characterId)}/structured-memory/${itemId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    },
+  );
+
+export const forgetStructuredMemoryTopic = (
+  characterId: string,
+  body: MemoryTopicSuppressionRequest,
+) =>
+  api<StructuredMemoryMutationResult>(
+    `/characters/${encodeURIComponent(characterId)}/structured-memory/forget-topic`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+  );
+
+export const deleteStructuredMemorySuppression = (
+  characterId: string,
+  suppressionId: number,
+) =>
+  api<{ deleted: boolean; id: number }>(
+    `/characters/${encodeURIComponent(characterId)}/structured-memory/suppressions/${suppressionId}`,
+    { method: "DELETE" },
   );
 
 export const stopGeneration = (sessionId: string) =>

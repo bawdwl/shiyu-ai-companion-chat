@@ -19,7 +19,12 @@ class ChatStore:
             db.execute('PRAGMA journal_mode=WAL')
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS sessions(
-                    id TEXT PRIMARY KEY, model_mode TEXT NOT NULL CHECK(model_mode IN ('base','lora')),
+                    id TEXT PRIMARY KEY,
+                    model_mode TEXT NOT NULL CHECK(
+                        model_mode IN (
+                            'base','lora','half','full','wukong','xucheng','haruhi'
+                        )
+                    ),
                     created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS messages(
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,6 +70,27 @@ class ChatStore:
                     created_at TEXT NOT NULL);
                 CREATE INDEX IF NOT EXISTS model_usage_day
                     ON model_usage(provider,usage_day);
+                CREATE TABLE IF NOT EXISTS turn_traces(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id TEXT NOT NULL UNIQUE,
+                    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                    character_id TEXT NOT NULL,
+                    user_message_id INTEGER,
+                    assistant_message_id INTEGER,
+                    provider TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    prompt_version TEXT NOT NULL,
+                    prompt_hash TEXT NOT NULL,
+                    role_version TEXT NOT NULL,
+                    generation_params_json TEXT NOT NULL DEFAULT '{}',
+                    trace_json TEXT NOT NULL DEFAULT '{}',
+                    input_tokens INTEGER NOT NULL DEFAULT 0,
+                    output_tokens INTEGER NOT NULL DEFAULT 0,
+                    latency_ms REAL,
+                    status TEXT NOT NULL DEFAULT 'completed',
+                    created_at TEXT NOT NULL);
+                CREATE INDEX IF NOT EXISTS turn_traces_session
+                    ON turn_traces(session_id,id);
                 CREATE TABLE IF NOT EXISTS uploaded_images(
                     id TEXT PRIMARY KEY,
                     session_id TEXT REFERENCES sessions(id) ON DELETE CASCADE,
@@ -127,14 +153,47 @@ class ChatStore:
                 db.execute("ALTER TABLE sessions ADD COLUMN model_id TEXT NOT NULL DEFAULT 'Qwen/Qwen3-0.6B'")
             if 'provider' not in columns:
                 db.execute("ALTER TABLE sessions ADD COLUMN provider TEXT NOT NULL DEFAULT 'local'")
+            session_sql=db.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='sessions'"
+            ).fetchone()['sql']
+            if "'wukong'" not in session_sql:
+                # SQLite cannot alter a CHECK constraint. Rebuild the parent table
+                # while foreign keys are disabled; child tables keep referencing
+                # the restored `sessions` name and all rows are copied unchanged.
+                db.commit()
+                db.execute('PRAGMA foreign_keys=OFF')
+                try:
+                    db.execute('BEGIN IMMEDIATE')
+                    db.execute('''CREATE TABLE sessions_mode_migration(
+                        id TEXT PRIMARY KEY,
+                        model_mode TEXT NOT NULL CHECK(
+                            model_mode IN (
+                                'base','lora','half','full','wukong','xucheng','haruhi'
+                            )
+                        ),
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        character_id TEXT NOT NULL DEFAULT 'assistant',
+                        model_id TEXT NOT NULL DEFAULT 'Qwen/Qwen3-0.6B',
+                        provider TEXT NOT NULL DEFAULT 'local'
+                    )''')
+                    db.execute('''INSERT INTO sessions_mode_migration(
+                        id,model_mode,created_at,updated_at,
+                        character_id,model_id,provider
+                    )
+                    SELECT id,model_mode,created_at,updated_at,
+                           character_id,model_id,provider
+                    FROM sessions''')
+                    db.execute('DROP TABLE sessions')
+                    db.execute(
+                        'ALTER TABLE sessions_mode_migration RENAME TO sessions'
+                    )
+                    db.commit()
+                finally:
+                    db.execute('PRAGMA foreign_keys=ON')
             message_columns={r['name'] for r in db.execute('PRAGMA table_info(messages)')}
             if 'display_json' not in message_columns:
                 db.execute("ALTER TABLE messages ADD COLUMN display_json TEXT")
-            db.execute('''INSERT OR IGNORE INTO voice_profiles
-                          (character_id,display_name,voice_style,reference_text,reference_audio_path,language,updated_at)
-                          VALUES(?,?,?,?,?,?,?)''',
-                       ('companion','小满 · 日常音色','温柔、自然、轻柔，语速适中','',None,'zh',now()))
-
     @contextmanager
     def connect(self):
         # 每次操作在自己的线程创建连接，不跨线程共享SQLite连接。
@@ -176,9 +235,9 @@ class ChatStore:
                 sid=row['session_id']
                 db.execute(
                     '''UPDATE sessions
-                       SET provider=?,model_id=?,updated_at=?
+                       SET provider=?,model_mode=?,model_id=?,updated_at=?
                        WHERE id=?''',
-                    (provider,model_id,timestamp,sid),
+                    (provider,mode,model_id,timestamp,sid),
                 )
                 db.execute('UPDATE role_conversations SET updated_at=? WHERE character_id=?',
                            (timestamp,character_id))
@@ -210,6 +269,7 @@ class ChatStore:
             db.execute('DELETE FROM messages WHERE session_id=?',(current['id'],))
             db.execute('DELETE FROM session_memories WHERE session_id=?',(current['id'],))
             db.execute('DELETE FROM session_memory_versions WHERE session_id=?',(current['id'],))
+            db.execute('DELETE FROM turn_traces WHERE session_id=?',(current['id'],))
             db.execute('DELETE FROM uploaded_images WHERE session_id=?',(current['id'],))
             db.execute('DELETE FROM character_state WHERE character_id=?',(character_id,))
             db.execute('DELETE FROM long_term_memories WHERE character_id=?',(character_id,))
@@ -336,6 +396,7 @@ class ChatStore:
             db.execute('DELETE FROM messages WHERE session_id=?',(sid,))
             db.execute('DELETE FROM session_memories WHERE session_id=?',(sid,))
             db.execute('DELETE FROM session_memory_versions WHERE session_id=?',(sid,))
+            db.execute('DELETE FROM turn_traces WHERE session_id=?',(sid,))
             db.execute('UPDATE sessions SET updated_at=? WHERE id=?',(now(),sid))
 
     def delete_session(self,sid):
@@ -477,6 +538,111 @@ class ChatStore:
                        (request_id,provider,model,session_id,int(prompt_tokens),
                         int(completion_tokens),int(cached_tokens),usage_day,now()))
         return self.usage_for_day(provider,usage_day)
+
+    def save_turn_trace(self, session_id, character_id, trace, saved):
+        """Persist structured debugging metadata for one successful turn."""
+        usage = trace.get('usage') if isinstance(trace.get('usage'), dict) else {}
+        with self.connect() as db:
+            db.execute(
+                '''INSERT INTO turn_traces(
+                       run_id,session_id,character_id,user_message_id,
+                       assistant_message_id,provider,model,prompt_version,
+                       prompt_hash,role_version,generation_params_json,trace_json,
+                       input_tokens,output_tokens,latency_ms,status,created_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                (
+                    str(trace['run_id']),
+                    session_id,
+                    character_id,
+                    saved.get('user_message_id'),
+                    saved.get('assistant_message_id'),
+                    str(trace.get('provider') or 'unknown'),
+                    str(trace.get('model') or 'unknown'),
+                    str(trace.get('prompt_version') or ''),
+                    str(trace.get('prompt_hash') or ''),
+                    str(trace.get('role_version') or ''),
+                    json.dumps(
+                        trace.get('generation_params') or {},
+                        ensure_ascii=False,
+                        separators=(',', ':'),
+                    ),
+                    json.dumps(trace, ensure_ascii=False, separators=(',', ':')),
+                    int(usage.get('input_tokens') or 0),
+                    int(usage.get('output_tokens') or 0),
+                    (
+                        float(usage['seconds']) * 1000
+                        if usage.get('seconds') is not None
+                        else None
+                    ),
+                    'completed',
+                    now(),
+                ),
+            )
+        return self.get_turn_trace(trace['run_id'], session_id=session_id)
+
+    def get_turn_trace(self, run_id, session_id=None):
+        query = 'SELECT * FROM turn_traces WHERE run_id=?'
+        params = [run_id]
+        if session_id is not None:
+            query += ' AND session_id=?'
+            params.append(session_id)
+        with self.connect() as db:
+            row = db.execute(query, tuple(params)).fetchone()
+            if row is None:
+                raise KeyError(run_id)
+            result = dict(row)
+            result['generation_params'] = json.loads(
+                result.pop('generation_params_json') or '{}'
+            )
+            result['trace'] = json.loads(result.pop('trace_json') or '{}')
+            return result
+
+    def list_turn_traces(self, session_id, limit=30):
+        limit = max(1, min(100, int(limit)))
+        with self.connect() as db:
+            if db.execute('SELECT 1 FROM sessions WHERE id=?', (session_id,)).fetchone() is None:
+                raise KeyError(session_id)
+            rows = db.execute(
+                '''SELECT run_id,session_id,character_id,user_message_id,
+                          assistant_message_id,provider,model,prompt_version,
+                          prompt_hash,role_version,generation_params_json,
+                          trace_json,input_tokens,output_tokens,latency_ms,
+                          status,created_at
+                   FROM turn_traces WHERE session_id=?
+                   ORDER BY id DESC LIMIT ?''',
+                (session_id, limit),
+            ).fetchall()
+            results = []
+            for row in rows:
+                item = dict(row)
+                item['generation_params'] = json.loads(
+                    item.pop('generation_params_json') or '{}'
+                )
+                item['trace'] = json.loads(item.pop('trace_json') or '{}')
+                results.append(item)
+            return results
+
+    def attach_trace_memory_result(self, character_id, assistant_message_id, result):
+        """Attach the eventual background-memory outcome to its chat trace."""
+        with self.connect() as db:
+            row = db.execute(
+                '''SELECT id,trace_json FROM turn_traces
+                   WHERE character_id=? AND assistant_message_id=?
+                   ORDER BY id DESC LIMIT 1''',
+                (character_id, int(assistant_message_id)),
+            ).fetchone()
+            if row is None:
+                return False
+            payload = json.loads(row['trace_json'] or '{}')
+            payload['background_memory'] = result
+            db.execute(
+                'UPDATE turn_traces SET trace_json=? WHERE id=?',
+                (
+                    json.dumps(payload, ensure_ascii=False, separators=(',', ':')),
+                    row['id'],
+                ),
+            )
+            return True
 
     def usage_for_day(self,provider,usage_day=None):
         usage_day=usage_day or date.today().isoformat()

@@ -1,6 +1,7 @@
 # 许可与本地材料边界
 
-更新：2026-10-30。当前项目代码采用根目录LICENSE中的AGPL-3.0。历史MIT许可保存在archive/original-materials/LICENSE-MIT-LEGACY；本次清理不改变旧版本已取得的授权。
+更新：2026-11-03。当前项目代码采用根目录 `LICENSE` 中的 AGPL-3.0。历史版本已取得的
+MIT 授权不受当前重新许可影响。
 
 拾语使用自己的HTML/CSS/JavaScript页面，参考SillyTavern的角色卡、世界书与提示组织思路。SillyTavern参考源码仍在third_party/SillyTavern，其上游AGPL许可与版权声明保留；当前拾语运行不依赖酒馆服务。角色图片来源记录在web/portraits/README.md。
 
@@ -8,10 +9,17 @@ GPT-SoVITS实际源码已安装在third_party/GPT-SoVITS，本地上游LICENSE�
 
 PC记忆检索可选用 `BAAI/bge-small-zh-v1.5`。该模型卡当前标注MIT，模型权重不属于拾语代码许可；发布或再分发前仍须重新核对上游模型卡、文件哈希和许可原文。模型保存在被Git忽略的 `outputs/models/`。
 
-Android角色头像使用 `com.google.mediapipe:tasks-vision-image-generator:0.10.26.1`。MediaPipe Tasks运行库遵循其上游许可；可选的 Stable Diffusion 1.5 MediaPipe 转换权重由 `scripts/fetch_mediapipe_sd15.py` 单独下载，采用 CreativeML OpenRAIL-M，并按该许可的使用限制分发。模型不包含在APK、Git仓库或普通发布包中。
+Android 本地角色头像直接嵌入 Local Dream v2.8.1 的 SD1.5/QNN 推理后端，
+包含其编译后的后端可执行文件、Qualcomm QNN 运行库与安全检查器。Local Dream
+代码及随附编译产物采用 **CC BY-NC 4.0**，只允许非商业使用；许可与集成说明位于
+`android/app/src/main/assets/third_party/local-dream/`。MeinaMix V12、
+DreamShaper 等 QNN 模型包不包含在 APK、Git 仓库或普通发布包中，由用户在应用内
+单独导入，并分别遵守模型卡许可。若要商业发布，必须替换这部分 CC BY-NC 组件。
 
 Qwen3、MNN/GPTQ衍生产物、Whisper、MeloTTS、PyTorch、Transformers、PEFT以及其他依赖，保留各自上游许可和来源信息。项目许可不覆盖第三方模型或数据。当前公开代码仓库不含模型权重、Adapter、个人录音和聊天数据库。
 
 本机保留LCCC、NaturalConv、RoleBench等数据审查及历史实验，存在来源、研究用途和原作素材边界；原文、派生数据和相关Adapter不因本机保存就获得公开分发授权。旧项目原创教学样例保留其原许可记录，不把该授权扩大到第三方数据。
 
-archive包含旧代码/文档、用户原始材料及历史研究记录，outputs包含私人音频、数据库、模型和环境；两者默认不公开。以后准备新发布时仍须按具体文件、数据与权重复核。旧打包脚本已经归档，不能拿旧ZIP当当前可公开交付包。
+`archive/` 包含旧代码、文档、用户原始材料及历史研究记录；`outputs/` 包含私人
+音频、数据库、模型和环境，两者默认不公开。以后准备发布时仍须按具体文件、数据与
+权重复核。

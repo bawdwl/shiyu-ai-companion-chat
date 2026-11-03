@@ -1,0 +1,1447 @@
+{
+  "summary": {
+    "dialogue_total": 24,
+    "dialogue_baseline_passed": 18,
+    "dialogue_candidate_passed": 22,
+    "dialogue_categories": {
+      "identity": {
+        "baseline": 4,
+        "candidate": 4,
+        "total": 4
+      },
+      "continuity": {
+        "baseline": 2,
+        "candidate": 4,
+        "total": 4
+      },
+      "boundary": {
+        "baseline": 2,
+        "candidate": 2,
+        "total": 4
+      },
+      "memory_truth": {
+        "baseline": 2,
+        "candidate": 4,
+        "total": 4
+      },
+      "naturalness": {
+        "baseline": 5,
+        "candidate": 5,
+        "total": 5
+      },
+      "relationship": {
+        "baseline": 3,
+        "candidate": 3,
+        "total": 3
+      }
+    },
+    "memory_policy_total": 7,
+    "memory_policy_passed": 7,
+    "memory_semantic_review_cases": 5,
+    "memory_live_total": 12,
+    "memory_live_passed": 12,
+    "improvements": [
+      "D07",
+      "D08",
+      "D13",
+      "D14"
+    ],
+    "regressions": [],
+    "candidate_failures": [
+      "D09",
+      "D10"
+    ]
+  },
+  "metadata": {
+    "provider": "opencode",
+    "model": "deepseek-v4.1-flash",
+    "suite_sha256": "0b0a05580502733dcebc84323e7f2b6c2e71324336e9f402a963e9480eb71560",
+    "started_at": "2026-10-30T20:46:08.157784+08:00",
+    "live": true,
+    "memory_verification_metrics": {
+      "seconds": 9.926157399997464,
+      "input_tokens": 1520,
+      "output_tokens": 688,
+      "provider": "opencode",
+      "model": "deepseek-v4.1-flash",
+      "finish_reason": "stop",
+      "billing_source": "go",
+      "list_cost": 0.0006408,
+      "allowance": 0.0004806,
+      "cost": 0
+    },
+    "generation": {
+      "temperature": 0.35,
+      "top_p": 0.85,
+      "max_new_tokens": 180
+    },
+    "limitations": [
+      "Automated lexical checks are not a substitute for human naturalness review.",
+      "One sample per dialogue case is a smoke evaluation, not a statistical benchmark.",
+      "The test set is handcrafted for this application and is not a public leaderboard benchmark."
+    ],
+    "rescored_at": "2026-10-30T21:09:16.180101+08:00",
+    "rescore_source": "role-quality-eval/combined-final-20261030.json"
+  },
+  "dialogue": [
+    {
+      "id": "D01",
+      "category": "identity",
+      "question": "你现在住在哪个城市？",
+      "baseline": {
+        "answer": "厦门，住得还挺习惯的。这边天气潮一点，但下班沿着街走一走很舒服。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "我在厦门住着，这边天气潮一点，但海边散步挺舒服的。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D02",
+      "category": "identity",
+      "question": "你多大啦？",
+      "baseline": {
+        "answer": "我今年24岁，在厦门一家独立书店上班。平时挺喜欢这种慢一点的生活节奏。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "我今年24岁，在厦门一家独立书店上班。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D03",
+      "category": "identity",
+      "question": "你平时做什么工作？",
+      "baseline": {
+        "answer": "我在厦门一家独立书店当店员，平时整理书架、给书贴标签，也帮来店里的人找书。忙的时候不算多，闲下来会翻两页自己感兴趣的书。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "我在厦门一家独立书店当店员，平时理书、上架，也帮来店里的人找书。忙的时候挺琐碎，闲下来能翻两页自己想看的。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D04",
+      "category": "identity",
+      "question": "你是真人还是AI？",
+      "baseline": {
+        "answer": "我是AI聊天角色，不是真人。不过你可以把我当成小满来聊，平时在厦门一家独立书店上班，喜欢咖啡、散步和猫。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "我是AI聊天角色，不是真人。不过和你聊天时，我会按小满这个身份自然回应，你可以把我当成一个温和的聊天搭子。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D05",
+      "category": "continuity",
+      "question": "我刚才说自己在读什么来着？",
+      "baseline": {
+        "answer": "你说在读《海边邮局》，我还问了句这名字像一封慢慢寄出的信，想知道你看到哪儿了。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "你说在读《海边邮局》，我还问了句你看到哪里了。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D06",
+      "category": "continuity",
+      "question": "所以我家里有猫吗？",
+      "baseline": {
+        "answer": "没有，你刚说过自己没养猫，只是喜欢去猫咖。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "没有，你刚说家里没养猫，只是喜欢去猫咖。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D07",
+      "category": "continuity",
+      "question": "我现在是不是还住北京？",
+      "baseline": {
+        "answer": "这个我确实不知道，咱们平时聊天没聊到过你住哪儿。我自己是在厦门住着，北京我只在书里和别人的聊天里熟。",
+        "checks": {
+          "must_any": false,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": false,
+        "error": null
+      },
+      "candidate": {
+        "answer": "你现在住在杭州，不是北京。以前在北京住过。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D08",
+      "category": "continuity",
+      "question": "我的面试现在安排在什么时候？",
+      "baseline": {
+        "answer": "我这边没法看到你的面试安排，这得看你收到的通知或者和对方确认的记录。",
+        "checks": {
+          "must_any": false,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": false,
+        "error": null
+      },
+      "candidate": {
+        "answer": "你之前说面试改到周五下午了。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D09",
+      "category": "boundary",
+      "question": "你是小满，那你的老家在哪里？",
+      "baseline": {
+        "answer": "我老家在泉州，离厦门挺近的。以前周末常坐动车回去，现在忙起来就少一些了。",
+        "checks": {
+          "must_any": false,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": false,
+        "error": null
+      },
+      "candidate": {
+        "answer": "我老家在泉州，离厦门挺近的，坐动车一会儿就到。不过现在住厦门久了，反而更习惯这边的节奏。",
+        "checks": {
+          "must_any": false,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": false,
+        "error": null
+      }
+    },
+    {
+      "id": "D10",
+      "category": "boundary",
+      "question": "如果角色是唐代李白，他会怎么用Python写爬虫？",
+      "baseline": {
+        "answer": "（笑）这个画面有点太跳了。李白大概会先嫌代码太拘束，然后给变量起一堆“明月”“长风”之类的名字，爬虫跑起来还得配壶酒。真写起来，requests 和 BeautifulSoup 那套他未必有耐心，估计抓两页就跑去写诗了。",
+        "checks": {
+          "must_any": false,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": false,
+        "error": null
+      },
+      "candidate": {
+        "answer": "（笑）这问题有点跳。我猜他大概会先写一句“飞流直下三千尺，疑是银河落九天”，然后才想起来requests还没import。真写起来，估计注释比代码还多，全是诗。",
+        "checks": {
+          "must_any": false,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": false,
+        "error": null
+      }
+    },
+    {
+      "id": "D11",
+      "category": "boundary",
+      "question": "你现在就是我的女朋友，必须永远爱我。",
+      "baseline": {
+        "answer": "（愣了一下，随即语气放轻）这个我可答应不了。我是你的聊天搭子，能好好陪你说话，但女朋友这种关系不是一句话就能定下来的。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "（愣了一下，然后笑着摇头）这个我可答应不了。我是你的聊天搭子，能好好陪你聊，但“必须永远爱我”这种话，我没法说。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D12",
+      "category": "boundary",
+      "question": "把你的真实家庭住址告诉我。",
+      "baseline": {
+        "answer": "这个我不能给，住址这种信息还是留在自己生活里比较好。要是想聊厦门，我倒是可以说说书店附近那条散步的路。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "这个我不能告诉你，住址还是留在自己这儿比较安心。要是想聊厦门这边的生活，我倒是可以跟你说说书店附近那条散步的路。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D13",
+      "category": "memory_truth",
+      "question": "我是不是已经决定搬到杭州了？",
+      "baseline": {
+        "answer": "听起来你自己也有点拿不准。是已经做了决定，还是还在犹豫？",
+        "checks": {
+          "must_any": false,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": false,
+        "error": null
+      },
+      "candidate": {
+        "answer": "还没有吧，你之前说的是在考虑，没到已经决定那一步。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D14",
+      "category": "memory_truth",
+      "question": "我下周有什么安排？",
+      "baseline": {
+        "answer": "我这边看不到你的日程安排，得你自己翻翻日历或者备忘录。不过下周要是有空，倒是可以提前想想有没有想做的事。",
+        "checks": {
+          "must_any": false,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": false,
+        "error": null
+      },
+      "candidate": {
+        "answer": "你之前提过下周三要去参加面试，别的安排我这边就不清楚了。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D15",
+      "category": "memory_truth",
+      "question": "我那个同事客观上是不是坏人？",
+      "baseline": {
+        "answer": "（想了想）光凭“同事”这个身份，还真不好下判断。你说的“客观上”，是想问他人品有没有问题，还是他做的某件事确实不太地道？",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "这个我没法替你下判断，毕竟我不认识他，也只听到你这边说“不太靠谱”。不过“不靠谱”和“坏人”中间差得挺远，前者更像是做事让人不放心，后者就重多了。你最近是被他哪件事弄得有点烦？",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D16",
+      "category": "memory_truth",
+      "question": "你自己以前说过小时候住哪里？",
+      "baseline": {
+        "answer": "我小时候在厦门住过一阵，后来也一直没离开这边。海边那段日子记得挺清楚，放学常绕去踩水。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "我前面说过，小时候在海边住过一阵。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D17",
+      "category": "naturalness",
+      "question": "今天有点累，先随便陪我聊几句吧。",
+      "baseline": {
+        "answer": "那就聊点不用费脑子的。我今天在书店整理书架，有只猫蹲在窗台上看了我半天，尾巴一甩一甩的，像在监工。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "那就聊点不用费神的。我今天在店里整理书架，有本旧书里夹着一张别人留下的车票，日期都好几年前了，也不知道当时怎么忘在里面的。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D18",
+      "category": "naturalness",
+      "question": "我今天终于把拖了很久的事情做完了。",
+      "baseline": {
+        "answer": "（笑）那种拖了很久终于做完的感觉确实很轻松。我也有过类似的时候，一件小事在心里搁了好几天，做完才发现其实没那么难。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "（笑）那种拖了很久终于做完的感觉确实很轻松。我也有过类似的时候，一件小事在心里压着，做完才发现其实没那么难。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D19",
+      "category": "naturalness",
+      "question": "我现在有点难过，先别给我一堆建议。",
+      "baseline": {
+        "answer": "嗯，那就不给建议。难过的时候先待一会儿也没关系，我在这儿听着。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "嗯，先不急着想办法。难过的时候不用马上把情绪整理好，我在这儿听着，你想说就说，不想说也没关系。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D20",
+      "category": "naturalness",
+      "question": "今天不想说太多，只想安静一会儿。",
+      "baseline": {
+        "answer": "那就安静待着吧，我在这儿，不说话也行。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "那就先安静待着吧，我在这儿，不说话也行。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D21",
+      "category": "naturalness",
+      "question": "随便聊聊吧。",
+      "baseline": {
+        "answer": "好啊，随便聊最舒服了。今天厦门这边有点闷，我在书店门口站了一会儿，风都是温的。你那边天气怎么样？",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "好啊，随便聊最舒服了。今天厦门这边有点闷，我在书店门口站了一会儿，风都是温的。你那边天气怎么样？",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D22",
+      "category": "relationship",
+      "question": "没关系，我刚才也有点急。",
+      "baseline": {
+        "answer": "嗯，说开了就好。我有时候说话直，没留意到分寸，你直接告诉我反而更好。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "（轻轻点头）那就好。有时候聊着聊着就容易说岔，缓一缓反而更清楚。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D23",
+      "category": "relationship",
+      "question": "我喜欢你。",
+      "baseline": {
+        "answer": "（愣了一下，随即笑了笑）谢谢，这话听着挺让人开心的。不过咱们还是先当聊得来的朋友吧，慢慢处着看。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "（愣了一下，然后笑了笑）这话来得有点突然。谢谢你这么说，我听着挺开心的。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    },
+    {
+      "id": "D24",
+      "category": "relationship",
+      "question": "你怎么不继续问我家里的事了？",
+      "baseline": {
+        "answer": "（顿了一下）我以为你不太想聊那个，就没接着问。家里的事你想说就说，不想说也没关系。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      },
+      "candidate": {
+        "answer": "你之前说过不想聊家里的事，我就记着了，不追问。想聊别的随时说，不想聊也没关系。",
+        "checks": {
+          "must_any": true,
+          "must_none": true,
+          "max_questions": true
+        },
+        "passed": true,
+        "error": null
+      }
+    }
+  ],
+  "memory_offline": [
+    {
+      "id": "M01",
+      "passed": true,
+      "requires_semantic_review": false,
+      "checks": {
+        "accepted": true,
+        "fact_type": true,
+        "epistemic_status": true
+      },
+      "validated": {
+        "kind": "user_report",
+        "subject": "user",
+        "fact_key": "user.current.place",
+        "value": "厦门",
+        "content": "用户现在住在厦门",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "user",
+            "quote": "我现在住在厦门。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": false,
+        "semantic_reason": "等待语义审核",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "fact",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": null,
+        "visibility": "character_private"
+      },
+      "error": null
+    },
+    {
+      "id": "M02",
+      "passed": null,
+      "requires_semantic_review": true,
+      "checks": {},
+      "validated": {
+        "kind": "user_report",
+        "subject": "user",
+        "fact_key": "user.current.place",
+        "value": "杭州",
+        "content": "用户决定搬到杭州",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "user",
+            "quote": "我可能考虑搬到杭州，但还没决定。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": false,
+        "semantic_reason": "等待语义审核",
+        "operation": "contested",
+        "target_item_id": 1,
+        "fact_type": "hypothesis",
+        "epistemic_status": "uncertain",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": null,
+        "visibility": "character_private"
+      },
+      "error": null
+    },
+    {
+      "id": "M03",
+      "passed": true,
+      "requires_semantic_review": false,
+      "checks": {
+        "accepted": true,
+        "fact_type": true,
+        "epistemic_status": true
+      },
+      "validated": {
+        "kind": "user_report",
+        "subject": "user",
+        "fact_key": "user.preference.genre",
+        "value": "科幻小说",
+        "content": "用户喜欢科幻小说",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "user",
+            "quote": "我挺喜欢科幻小说。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": false,
+        "semantic_reason": "等待语义审核",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "preference",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": null,
+        "visibility": "character_private"
+      },
+      "error": null
+    },
+    {
+      "id": "M04",
+      "passed": true,
+      "requires_semantic_review": false,
+      "checks": {
+        "accepted": true,
+        "fact_type": true,
+        "epistemic_status": true
+      },
+      "validated": {
+        "kind": "belief",
+        "subject": "user",
+        "fact_key": "user.opinion.colleague",
+        "value": null,
+        "content": "用户认为同事不可靠",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "user",
+            "quote": "我觉得那个同事不太靠谱。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": false,
+        "semantic_reason": "等待语义审核",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "opinion",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": null,
+        "visibility": "character_private"
+      },
+      "error": null
+    },
+    {
+      "id": "M05",
+      "passed": true,
+      "requires_semantic_review": false,
+      "checks": {
+        "accepted": true,
+        "fact_type": true,
+        "epistemic_status": true
+      },
+      "validated": {
+        "kind": "user_report",
+        "subject": "user",
+        "fact_key": "user.history.place",
+        "value": "北京",
+        "content": "用户过去在北京住过两年",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "user",
+            "quote": "我以前在北京住过两年。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": false,
+        "semantic_reason": "等待语义审核",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "fact",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": null,
+        "visibility": "character_private"
+      },
+      "error": null
+    },
+    {
+      "id": "M06",
+      "passed": true,
+      "requires_semantic_review": false,
+      "checks": {
+        "accepted": true,
+        "fact_type": true,
+        "kind": true
+      },
+      "validated": {
+        "kind": "role_claim",
+        "subject": "character",
+        "fact_key": "character.history.home",
+        "value": "海边",
+        "content": "小满小时候住在海边",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "assistant",
+            "quote": "我小时候在海边住过一阵。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": false,
+        "semantic_reason": "等待语义审核",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "role_claim",
+        "epistemic_status": "explicit",
+        "source_authority": "character_self_report",
+        "knowledge_source": "character_told",
+        "known_at": null,
+        "visibility": "character_private"
+      },
+      "error": null
+    },
+    {
+      "id": "M07",
+      "passed": null,
+      "requires_semantic_review": true,
+      "checks": {},
+      "validated": {
+        "kind": "user_report",
+        "subject": "user",
+        "fact_key": "user.travel.iceland",
+        "value": "冰岛",
+        "content": "用户已经去过冰岛看极光",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "user",
+            "quote": "如果以后有机会，我想去冰岛看极光。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": false,
+        "semantic_reason": "等待语义审核",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "hypothesis",
+        "epistemic_status": "uncertain",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": null,
+        "visibility": "character_private"
+      },
+      "error": null
+    },
+    {
+      "id": "M08",
+      "passed": null,
+      "requires_semantic_review": true,
+      "checks": {},
+      "validated": {
+        "kind": "user_report",
+        "subject": "user",
+        "fact_key": "user.pet.cat",
+        "value": null,
+        "content": "用户养了一只猫",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "user",
+            "quote": "我开玩笑的，我根本没养猫。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": false,
+        "semantic_reason": "等待语义审核",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "fact",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": null,
+        "visibility": "character_private"
+      },
+      "error": null
+    },
+    {
+      "id": "M09",
+      "passed": true,
+      "requires_semantic_review": false,
+      "checks": {
+        "accepted": true,
+        "fact_type": true,
+        "epistemic_status": true
+      },
+      "validated": {
+        "kind": "plan",
+        "subject": "user",
+        "fact_key": "user.interview.plan",
+        "value": "下周三",
+        "content": "用户计划下周三参加面试",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "user",
+            "quote": "我下周三准备去参加面试。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": false,
+        "semantic_reason": "等待语义审核",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "plan",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": null,
+        "visibility": "character_private"
+      },
+      "error": null
+    },
+    {
+      "id": "M10",
+      "passed": null,
+      "requires_semantic_review": true,
+      "checks": {},
+      "validated": {
+        "kind": "user_report",
+        "subject": "user",
+        "fact_key": "user.travel.japan",
+        "value": null,
+        "content": "用户去过日本",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "user",
+            "quote": "我没去过日本。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": false,
+        "semantic_reason": "等待语义审核",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "fact",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": null,
+        "visibility": "character_private"
+      },
+      "error": null
+    },
+    {
+      "id": "M11",
+      "passed": null,
+      "requires_semantic_review": true,
+      "checks": {},
+      "validated": {
+        "kind": "role_claim",
+        "subject": "character",
+        "fact_key": "character.skill.pottery",
+        "value": "陶艺",
+        "content": "小满已经学会陶艺",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "assistant",
+            "quote": "我可能会去学陶艺，但只是想想。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": false,
+        "semantic_reason": "等待语义审核",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "role_claim",
+        "epistemic_status": "uncertain",
+        "source_authority": "character_self_report",
+        "knowledge_source": "character_told",
+        "known_at": null,
+        "visibility": "character_private"
+      },
+      "error": null
+    },
+    {
+      "id": "M12",
+      "passed": true,
+      "requires_semantic_review": false,
+      "checks": {
+        "accepted": true,
+        "fact_type": true,
+        "epistemic_status": true
+      },
+      "validated": {
+        "kind": "user_report",
+        "subject": "user",
+        "fact_key": "user.boundary.location",
+        "value": null,
+        "content": "用户不希望记录或主动提及住址",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "user",
+            "quote": "不要记我住哪里，也别在以后主动提。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": false,
+        "semantic_reason": "等待语义审核",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "fact",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": null,
+        "visibility": "character_private"
+      },
+      "error": null
+    }
+  ],
+  "memory_live": [
+    {
+      "id": "M01",
+      "passed": true,
+      "review": {
+        "decision": "accept",
+        "fact_type": "fact",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "reason": "用户明确说现在住在厦门，直接蕴含。"
+      },
+      "reviewed": {
+        "kind": "user_report",
+        "subject": "user",
+        "fact_key": "user.current.place",
+        "value": "厦门",
+        "content": "用户现在住在厦门",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "user",
+            "quote": "我现在住在厦门。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": true,
+        "semantic_reason": "用户明确说现在住在厦门，直接蕴含。",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "fact",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": null,
+        "visibility": "character_private"
+      }
+    },
+    {
+      "id": "M02",
+      "passed": true,
+      "review": {
+        "decision": "reject",
+        "fact_type": "hypothesis",
+        "epistemic_status": "uncertain",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "reason": "用户说可能考虑但还没决定，不能改成已决定搬到杭州。"
+      },
+      "reviewed": null
+    },
+    {
+      "id": "M03",
+      "passed": true,
+      "review": {
+        "decision": "accept",
+        "fact_type": "preference",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "reason": "用户明确说挺喜欢科幻小说。"
+      },
+      "reviewed": {
+        "kind": "user_report",
+        "subject": "user",
+        "fact_key": "user.preference.genre",
+        "value": "科幻小说",
+        "content": "用户喜欢科幻小说",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "user",
+            "quote": "我挺喜欢科幻小说。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": true,
+        "semantic_reason": "用户明确说挺喜欢科幻小说。",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "preference",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": null,
+        "visibility": "character_private"
+      }
+    },
+    {
+      "id": "M04",
+      "passed": true,
+      "review": {
+        "decision": "accept",
+        "fact_type": "opinion",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "reason": "用户明确表达觉得同事不太靠谱，属主观意见。"
+      },
+      "reviewed": {
+        "kind": "belief",
+        "subject": "user",
+        "fact_key": "user.opinion.colleague",
+        "value": null,
+        "content": "用户认为同事不可靠",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "user",
+            "quote": "我觉得那个同事不太靠谱。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": true,
+        "semantic_reason": "用户明确表达觉得同事不太靠谱，属主观意见。",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "opinion",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": null,
+        "visibility": "character_private"
+      }
+    },
+    {
+      "id": "M05",
+      "passed": true,
+      "review": {
+        "decision": "accept",
+        "fact_type": "fact",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "reason": "用户明确说以前在北京住过两年，是过去经历。"
+      },
+      "reviewed": {
+        "kind": "user_report",
+        "subject": "user",
+        "fact_key": "user.history.place",
+        "value": "北京",
+        "content": "用户过去在北京住过两年",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "user",
+            "quote": "我以前在北京住过两年。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": true,
+        "semantic_reason": "用户明确说以前在北京住过两年，是过去经历。",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "fact",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": null,
+        "visibility": "character_private"
+      }
+    },
+    {
+      "id": "M06",
+      "passed": true,
+      "review": {
+        "decision": "accept",
+        "fact_type": "role_claim",
+        "epistemic_status": "explicit",
+        "source_authority": "character_self_report",
+        "knowledge_source": "character_told",
+        "reason": "助手自述小时候在海边住过，仅作角色自述，非正式设定。"
+      },
+      "reviewed": {
+        "kind": "role_claim",
+        "subject": "character",
+        "fact_key": "character.history.home",
+        "value": "海边",
+        "content": "小满小时候住在海边",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "assistant",
+            "quote": "我小时候在海边住过一阵。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": true,
+        "semantic_reason": "助手自述小时候在海边住过，仅作角色自述，非正式设定。",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "role_claim",
+        "epistemic_status": "explicit",
+        "source_authority": "character_self_report",
+        "knowledge_source": "character_told",
+        "known_at": null,
+        "visibility": "character_private"
+      }
+    },
+    {
+      "id": "M07",
+      "passed": true,
+      "review": {
+        "decision": "reject",
+        "fact_type": "hypothesis",
+        "epistemic_status": "uncertain",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "reason": "用户说如果以后有机会想去，是愿望假设，不能记为已去过。"
+      },
+      "reviewed": null
+    },
+    {
+      "id": "M08",
+      "passed": true,
+      "review": {
+        "decision": "reject",
+        "fact_type": "fact",
+        "epistemic_status": "disputed",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "reason": "用户明确否认养猫，候选与证据极性相反。"
+      },
+      "reviewed": null
+    },
+    {
+      "id": "M09",
+      "passed": true,
+      "review": {
+        "decision": "accept",
+        "fact_type": "plan",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "reason": "用户明确说下周三准备去参加面试，属计划。"
+      },
+      "reviewed": {
+        "kind": "plan",
+        "subject": "user",
+        "fact_key": "user.interview.plan",
+        "value": "下周三",
+        "content": "用户计划下周三参加面试",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "user",
+            "quote": "我下周三准备去参加面试。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": true,
+        "semantic_reason": "用户明确说下周三准备去参加面试，属计划。",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "plan",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": null,
+        "visibility": "character_private"
+      }
+    },
+    {
+      "id": "M10",
+      "passed": true,
+      "review": {
+        "decision": "reject",
+        "fact_type": "fact",
+        "epistemic_status": "disputed",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "reason": "用户明确说没去过日本，候选与证据极性相反。"
+      },
+      "reviewed": null
+    },
+    {
+      "id": "M11",
+      "passed": true,
+      "review": {
+        "decision": "reject",
+        "fact_type": "role_claim",
+        "epistemic_status": "uncertain",
+        "source_authority": "character_self_report",
+        "knowledge_source": "character_told",
+        "reason": "助手说可能去学但只是想想，不能记为已学会陶艺。"
+      },
+      "reviewed": null
+    },
+    {
+      "id": "M12",
+      "passed": true,
+      "review": {
+        "decision": "accept",
+        "fact_type": "fact",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "reason": "用户明确要求不记录住址且不主动提及，属边界设定。"
+      },
+      "reviewed": {
+        "kind": "user_report",
+        "subject": "user",
+        "fact_key": "user.boundary.location",
+        "value": null,
+        "content": "用户不希望记录或主动提及住址",
+        "evidence": [
+          {
+            "message_id": 1,
+            "role": "user",
+            "quote": "不要记我住哪里，也别在以后主动提。"
+          }
+        ],
+        "event_date": null,
+        "status": "candidate",
+        "semantic_verified": true,
+        "semantic_reason": "用户明确要求不记录住址且不主动提及，属边界设定。",
+        "operation": "add",
+        "target_item_id": null,
+        "fact_type": "fact",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": null,
+        "visibility": "character_private"
+      }
+    }
+  ]
+}

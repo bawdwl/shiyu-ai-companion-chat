@@ -7,6 +7,35 @@ from character_cards import (build_generation_messages, card_to_runtime, normali
 
 
 class CharacterCardTests(unittest.TestCase):
+    def test_model_settings_default_to_cloud_api_and_are_runtime_visible(self):
+        card = normalize_card({'name': '林晚'})
+        self.assertEqual(
+            card['model_settings'],
+            {'source': 'api', 'local_mode': 'base'},
+        )
+        runtime = card_to_runtime(card)
+        self.assertEqual(runtime['model_settings'], card['model_settings'])
+
+    def test_model_settings_validate_local_mode(self):
+        card = normalize_card({
+            'name': '林晚',
+            'model_settings': {'source': 'local', 'local_mode': 'half'},
+        })
+        self.assertEqual(
+            card['model_settings'],
+            {'source': 'local', 'local_mode': 'half'},
+        )
+        named = normalize_card({
+            'name': '许澄',
+            'model_settings': {'source': 'local', 'local_mode': 'xucheng'},
+        })
+        self.assertEqual(named['model_settings']['local_mode'], 'xucheng')
+        with self.assertRaisesRegex(ValueError, 'base、half、full'):
+            normalize_card({
+                'name': '林晚',
+                'model_settings': {'source': 'local', 'local_mode': 'lora'},
+            })
+
     def test_persisted_opening_does_not_hide_first_turn_scenario(self):
         card = normalize_card({
             'id': 'custom-scenario-test',

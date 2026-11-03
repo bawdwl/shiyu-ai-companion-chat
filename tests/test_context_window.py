@@ -34,6 +34,21 @@ class ContextWindowTests(unittest.TestCase):
         _,m=prepare_context(self.tokenizer,source,8,True)
         self.assertEqual(m['context_omitted_turns'],2)
         self.assertEqual(self.tokenizer.calls[-1],[source[0],source[-1]])
+    def test_single_assistant_opening_is_preserved_as_context(self):
+        source=[dict(role='system',content='系统'),
+                dict(role='assistant',content='角色主动开场'),
+                dict(role='user',content='新问题')]
+        _,metrics=prepare_context(self.tokenizer,source,100,True)
+        self.assertEqual(metrics['context_omitted_turns'],0)
+        self.assertEqual(self.tokenizer.calls[-1],source)
+    def test_trimming_keeps_assistant_opening(self):
+        source=[dict(role='assistant',content='开场')]+self.messages
+        _,metrics,selected,_=prepare_context_details(
+            self.tokenizer,source,19,True,
+        )
+        self.assertEqual(metrics['context_omitted_turns'],1)
+        self.assertEqual(selected[0],source[0])
+        self.assertEqual(selected[1:],source[3:])
     def test_latest_question_is_never_truncated(self):
         source=[dict(role='user',content='问题很长'*10)]
         with self.assertRaisesRegex(ValueError,'最新问题'): prepare_context(self.tokenizer,source,10,True)

@@ -14,7 +14,9 @@ class FakeStream:
     adapter_available=True
     def __init__(self):
         self.slow=False;self.fail=False;self.entered=Event();self.allow_exit=None
+        self.modes=[]
     def reply_stream(self,messages,mode,stop,emit,max_new_tokens=256,generation_overrides=None):
+        self.modes.append(mode)
         self.last_limit=max_new_tokens
         self.last_overrides=generation_overrides
         self.entered.set();emit('中文');emit('\n回答')
@@ -31,6 +33,48 @@ class FakeNaturalReply(FakeStream):
             '（放下手里的书，看向屏幕）我在听。',
             dict(seconds=.1,output_tokens=24,ended_with_eos=True),
         )
+
+
+class SwitchRepeatEngine(FakeStream):
+    def __init__(self):
+        super().__init__()
+        self.half_calls=0
+        self.base_answer='那声音像老唱片，每次听都像在翻旧相册。'
+    def reply_stream(self,messages,mode,stop,emit,max_new_tokens=256,generation_overrides=None):
+        self.modes.append(mode)
+        if mode=='base':
+            emit(self.base_answer)
+            return self.base_answer,dict(seconds=.1,output_tokens=12,ended_with_eos=True)
+        self.half_calls+=1
+        if self.half_calls==1:
+            repeated='（轻轻叹了口气）'+self.base_answer
+            emit(repeated)
+            return repeated,dict(seconds=.1,output_tokens=14,ended_with_eos=True)
+        answer='我想到的是饭桌边那些细碎的声响，还有旧木椅挪动时的轻响。'
+        emit(answer)
+        return answer,dict(seconds=.1,output_tokens=18,ended_with_eos=True)
+
+
+class LocalAdapterRepeatEngine(FakeStream):
+    available_model_modes=['base','half','full','wukong','xucheng','haruhi']
+
+    def __init__(self):
+        super().__init__()
+        self.local_calls=0
+        self.first_answer='（把书放回架子上）今晚确实有点安静。'
+
+    def reply_stream(self,messages,mode,stop,emit,max_new_tokens=256,generation_overrides=None):
+        self.modes.append(mode)
+        self.last_overrides=generation_overrides
+        self.local_calls+=1
+        if self.local_calls==1:
+            answer=self.first_answer
+        elif self.local_calls==2:
+            answer='（整理旧杂志）今晚确实有点安静。'
+        else:
+            answer='（把杯子往你那边推了推）安静归安静，你想从哪件事说起？'
+        emit(answer)
+        return answer,dict(seconds=.1,output_tokens=12,ended_with_eos=True)
 
 
 def parse(text):
@@ -63,6 +107,118 @@ class StreamingTests(unittest.TestCase):
         self.assertEqual([x[0] for x in events],['start','delta','delta','done'])
         self.assertEqual(''.join(d['text'] for e,d in events if e=='delta'),'中文\n回答')
         self.assertEqual(len(self.history()),2)
+
+    def test_local_full_provider_streams_with_full_adapter(self):
+        self.engine.available_model_modes=['base','half','full']
+        conversation=self.client.put(
+            '/characters/companion/conversation',
+            params={'provider':'local-full'},
+        )
+        sid=conversation.json()['id']
+        response=self.client.post('/chat/stream',json={
+            'session_id':sid,
+            'message':'比较完整 LoRA',
+            'timeout_seconds':2,
+        })
+        events=parse(response.text)
+        self.assertEqual(events[-1][0],'done')
+        self.assertEqual(events[-1][1]['model_mode'],'full')
+        self.assertEqual(self.engine.modes[-1],'full')
+
+    def test_provider_switch_retries_echo_and_only_emits_new_answer(self):
+        engine=SwitchRepeatEngine()
+        engine.available_model_modes=['base','half','full']
+        app=create_app(
+            Path(self.temp.name)/'switch-repeat.sqlite3',
+            engine_factory=lambda:engine,
+        )
+        client=TestClient(app)
+        client.__enter__()
+        try:
+            base=client.put(
+                '/characters/companion/conversation',
+                params={'provider':'local-base'},
+            ).json()
+            first=parse(client.post('/chat/stream',json={
+                'session_id':base['id'],
+                'message':'我记得饭桌边的声音。',
+                'timeout_seconds':2,
+            }).text)
+            self.assertEqual(first[-1][0],'done')
+            half=client.put(
+                '/characters/companion/conversation',
+                params={'provider':'local-half'},
+            ).json()
+            second=parse(client.post('/chat/stream',json={
+                'session_id':half['id'],
+                'message':'继续说说那个画面。',
+                'timeout_seconds':2,
+            }).text)
+            visible=''.join(
+                data['text'] for event,data in second if event=='delta'
+            )
+            self.assertIn('旧木椅',visible)
+            self.assertNotIn('老唱片',visible)
+            done=next(data for event,data in second if event=='done')
+            self.assertEqual(done['metrics']['repetition_retry_count'],1)
+            self.assertEqual(done['metrics']['provider_switch_from'],'local-base')
+        finally:
+            client.__exit__(None,None,None)
+
+    def test_named_local_adapter_retries_cross_turn_repetition(self):
+        engine=LocalAdapterRepeatEngine()
+        app=create_app(
+            Path(self.temp.name)/'local-adapter-repeat.sqlite3',
+            engine_factory=lambda:engine,
+            enable_local_models=True,
+        )
+        client=TestClient(app)
+        client.__enter__()
+        try:
+            card={
+                'id':'custom-lora-xucheng-test',
+                'name':'许澄',
+                'tagline':'夜班图书管理员',
+                'description':'测试角色',
+                'background':'社区文化空间。',
+                'personality':'温和、克制。',
+                'speech_style':'自然简短。',
+                'relationship':'朋友。',
+                'greeting':'（听见门口风铃响，抬头看向你）先进来吧，阅览区还开着。',
+                'model_settings':{'source':'local','local_mode':'xucheng'},
+                'generation_preset':{'repetition_penalty':1.18},
+                'knowledge_boundary':{},
+            }
+            self.assertEqual(
+                client.post('/characters',json={'card':card}).status_code,
+                201,
+            )
+            conversation=client.put(
+                '/characters/custom-lora-xucheng-test/conversation',
+                params={'provider':'opencode'},
+            ).json()
+            first=parse(client.post('/chat/stream',json={
+                'session_id':conversation['id'],
+                'message':'今天安静吗？',
+                'timeout_seconds':2,
+            }).text)
+            self.assertEqual(first[-1][0],'done')
+            second=parse(client.post('/chat/stream',json={
+                'session_id':conversation['id'],
+                'message':'嗯，安静。',
+                'timeout_seconds':2,
+            }).text)
+            visible=''.join(
+                data['text'] for event,data in second if event=='delta'
+            )
+            self.assertIn('你想从哪件事说起',visible)
+            self.assertNotIn('整理旧杂志',visible)
+            done=next(data for event,data in second if event=='done')
+            self.assertEqual(done['metrics']['repetition_retry_count'],1)
+            self.assertTrue(done['metrics']['local_repeat_guard'])
+            self.assertEqual(engine.last_overrides['repetition_penalty'],1.2)
+        finally:
+            client.__exit__(None,None,None)
 
     def test_natural_roleplay_stream_is_persisted_as_one_message(self):
         app=create_app(

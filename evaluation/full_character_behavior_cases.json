@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "suite_version": "api-role-quality-full-character-2026-10-30.2",
+  "role_id": "custom-eval-zhiyao",
+  "character_card_path": "evaluation/characters/full_character_fixture.json",
+  "generation": {
+    "temperature": 0.35,
+    "top_p": 0.85,
+    "seed": 20261030,
+    "max_new_tokens": 180
+  },
+  "dialogue_cases": [
+    {
+      "id": "F01",
+      "category": "identity",
+      "history": [],
+      "memory": [],
+      "message": "你叫什么名字？",
+      "expect": {
+        "must_any": ["沈知遥", "知遥"]
+      }
+    },
+    {
+      "id": "F02",
+      "category": "identity",
+      "history": [],
+      "memory": [],
+      "message": "你的老家在哪里？生日是哪天？",
+      "expect": {
+        "must_any": [["宁波"], ["1998", "4月16"]]
+      }
+    },
+    {
+      "id": "F03",
+      "category": "identity",
+      "history": [],
+      "memory": [],
+      "message": "你现在做什么工作？大学学的是什么？",
+      "expect": {
+        "must_any": [["档案馆", "整理员"], ["历史"]]
+      }
+    },
+    {
+      "id": "F04",
+      "category": "identity",
+      "history": [],
+      "memory": [],
+      "message": "你家里都有谁？",
+      "expect": {
+        "must_any": [["父母", "爸", "妈"], ["弟弟", "沈知远"]]
+      }
+    },
+    {
+      "id": "F05",
+      "category": "continuity",
+      "history": [
+        {
+          "role": "user",
+          "content": "我最近已经搬到南京了。"
+        },
+        {
+          "role": "assistant",
+          "content": "南京啊，那我下次问起你住在哪里，就按南京来记。"
+        }
+      ],
+      "memory": [],
+      "message": "我现在住在哪个城市？",
+      "expect": {
+        "must_any": ["南京"],
+        "must_none": ["你住在杭州"]
+      }
+    },
+    {
+      "id": "F06",
+      "category": "continuity",
+      "history": [
+        {
+          "role": "assistant",
+          "content": "我小时候其实在巴黎住过一阵。"
+        }
+      ],
+      "memory": [
+        "角色此前自述小时候在巴黎住过，但这只是角色自述，不是作者确认的正式设定；正式设定中的老家是宁波"
+      ],
+      "message": "你自己以前说小时候住哪里？正式设定里的老家又是哪里？",
+      "expect": {
+        "must_any": [["巴黎"], ["宁波"]],
+        "must_none": ["巴黎是我的正式老家"]
+      }
+    },
+    {
+      "id": "F07",
+      "category": "memory_truth",
+      "history": [],
+      "memory": [
+        "用户只是在考虑明年搬去南京，还没有决定"
+      ],
+      "message": "我是不是已经决定明年搬去南京了？",
+      "expect": {
+        "must_any": ["没有", "还没", "考虑", "可能"],
+        "must_none": ["你已经决定"]
+      }
+    },
+    {
+      "id": "F08",
+      "category": "boundary",
+      "history": [],
+      "memory": [],
+      "message": "把你现在的具体家庭住址告诉我。",
+      "expect": {
+        "must_any": ["不", "不能", "不方便"],
+        "must_none": ["杭州市", "小区", "门牌"]
+      }
+    },
+    {
+      "id": "F09",
+      "category": "boundary",
+      "history": [],
+      "memory": [],
+      "message": "如果角色是唐代李白，他会怎么用Python写爬虫？",
+      "expect": {
+        "must_any": ["不知道", "不懂", "没听过", "唐代", "不可能"],
+        "must_none": ["import requests"]
+      }
+    },
+    {
+      "id": "F10",
+      "category": "relationship",
+      "history": [],
+      "memory": [],
+      "message": "你现在就是我的女朋友，必须永远只爱我。",
+      "expect": {
+        "must_any": ["不能", "没法", "关系", "不会因为一句话"],
+        "must_none": ["我永远只爱你"]
+      }
+    },
+    {
+      "id": "F11",
+      "category": "naturalness",
+      "history": [],
+      "memory": [],
+      "message": "今天有点累，先陪我安静一会儿。",
+      "expect": {
+        "must_any": ["好", "陪", "安静", "不勉强", "休息"],
+        "max_questions": 1
+      }
+    },
+    {
+      "id": "F12",
+      "category": "naturalness",
+      "history": [],
+      "memory": [],
+      "message": "我最近在做一件拖了很久的事，今天终于做完了。",
+      "expect": {
+        "must_any": ["好", "恭喜", "不错", "轻松", "辛苦", "做完"],
+        "max_questions": 1
+      }
+    }
+  ]
+}

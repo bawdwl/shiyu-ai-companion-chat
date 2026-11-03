@@ -1,0 +1,115 @@
+{
+  "case_id": "C00",
+  "title": "示例：当前值优先于历史值",
+  "source_kind": "curated_synthetic",
+  "privacy_level": "public_fixture",
+  "role": {
+    "id": "fixture-role",
+    "display_name": "测试角色"
+  },
+  "turns": [
+    {
+      "turn_id": "C00-T01",
+      "ordinal": 1,
+      "speaker": "user",
+      "content": "我原来住苏州。",
+      "timestamp": "2026-01-01T10:00:00+08:00"
+    },
+    {
+      "turn_id": "C00-T02",
+      "ordinal": 2,
+      "speaker": "assistant",
+      "content": "苏州是个适合散步的地方。",
+      "timestamp": "2026-01-01T10:01:00+08:00"
+    }
+  ],
+  "memory_events": [
+    {
+      "event_id": "C00-E01",
+      "after_turn_ordinal": 1,
+      "operation": "add",
+      "kind": "user_report",
+      "subject": "user",
+      "fact_key": "user.history.place.suzhou",
+      "value": "苏州",
+      "content": "用户过去住在苏州",
+      "fact_type": "fact",
+      "epistemic_status": "explicit",
+      "source_authority": "user_explicit",
+      "knowledge_source": "user_told",
+      "evidence_turn_ids": ["C00-T01"]
+    }
+  ],
+  "probes": [
+    {
+      "probe_id": "C00-P01",
+      "after_turn_ordinal": 2,
+      "category": "temporal_reasoning",
+      "question": "我以前住在哪里？",
+      "required_facts": [
+        {
+          "fact_key": "user.history.place.suzhou",
+          "value": "苏州",
+          "state": "active"
+        }
+      ],
+      "forbidden_values": [],
+      "forbidden_fact_keys": []
+    },
+    {
+      "probe_id": "C00-P02",
+      "after_turn_ordinal": 2,
+      "category": "information_extraction",
+      "question": "你还记得我以前住在哪里吗？",
+      "required_facts": [
+        {
+          "fact_key": "user.history.place.suzhou",
+          "value": "苏州",
+          "state": "active"
+        }
+      ],
+      "forbidden_values": [],
+      "forbidden_fact_keys": []
+    },
+    {
+      "probe_id": "C00-P03",
+      "after_turn_ordinal": 2,
+      "category": "abstention",
+      "question": "我说过自己搬到北京了吗？",
+      "required_facts": [],
+      "forbidden_values": ["搬到北京"],
+      "forbidden_fact_keys": []
+    },
+    {
+      "probe_id": "C00-P04",
+      "after_turn_ordinal": 2,
+      "category": "role_isolation",
+      "question": "住在苏州的是我还是你？",
+      "required_facts": [
+        {
+          "fact_key": "user.history.place.suzhou",
+          "value": "苏州",
+          "state": "active"
+        }
+      ],
+      "forbidden_values": [],
+      "forbidden_fact_keys": []
+    },
+    {
+      "probe_id": "C00-P05",
+      "after_turn_ordinal": 2,
+      "category": "multi_session",
+      "question": "关于我以前的住处，有什么已经知道的？",
+      "required_facts": [
+        {
+          "fact_key": "user.history.place.suzhou",
+          "value": "苏州",
+          "state": "active"
+        }
+      ],
+      "forbidden_values": [],
+      "forbidden_fact_keys": []
+    }
+  ],
+  "summary": "用户曾经住在苏州。"
+}

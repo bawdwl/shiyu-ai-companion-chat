@@ -555,6 +555,27 @@ test('structured memory never asks users to approve routine memories', () => {
   assert.match(source, /聊天过程中由后台自动整理/);
 });
 
+test('structured memory settings expose evidence and safe correction actions', () => {
+  const app = fs.readFileSync(
+    path.join(__dirname, '..', 'frontend', 'src', 'App.tsx'),
+    'utf8',
+  );
+  const api = fs.readFileSync(
+    path.join(__dirname, '..', 'frontend', 'src', 'api.ts'),
+    'utf8',
+  );
+  assert.match(app, /function StructuredMemoryRecordCard/);
+  assert.match(app, /修正内容/);
+  assert.match(app, /标记错误/);
+  assert.match(app, /恢复此项/);
+  assert.match(app, /以后不记此主题/);
+  assert.match(app, /memory-evidence/);
+  assert.match(app, /expected_updated_at/);
+  assert.match(api, /updateStructuredMemory/);
+  assert.match(api, /forgetStructuredMemoryTopic/);
+  assert.match(api, /structured-memory\/forget-topic/);
+});
+
 test('chat auto-scroll is confined to the message viewport', () => {
   const source = fs.readFileSync(
     path.join(__dirname, '..', 'frontend', 'src', 'App.tsx'),

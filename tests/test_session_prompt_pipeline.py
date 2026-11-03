@@ -135,6 +135,36 @@ class SessionMemoryTests(unittest.TestCase):
         self.assertEqual(result[-1]['content'],'可以')
         self.assertEqual(reduce_repeated_history(messages,'你刚才说了什么？')[1],0)
 
+    def test_one_long_sentence_repeated_across_models_is_removed(self):
+        repeated = '你有没有觉得，有些声音会像老照片里的影子，明明已经不在了，却总在你心里？'
+        messages=[
+            dict(role='system',content='角色'),
+            dict(role='user',content='我小时候常听到家人的吆喝声。'),
+            dict(role='assistant',content='我整理过一段早餐店录音。'+repeated),
+            dict(role='user',content='我不太明白这句话。'),
+            dict(role='assistant',content='你高祖的画像一直放在大厅里。'+repeated),
+            dict(role='user',content='没有'),
+        ]
+        result,count=reduce_repeated_history(messages,'没有')
+        self.assertEqual(count,2)
+        self.assertNotIn(repeated,result[2]['content'])
+        self.assertNotIn(repeated,result[4]['content'])
+        self.assertIn(repeated,messages[2]['content'])
+
+    def test_provider_switch_adds_anti_repeat_boundary(self):
+        current=dict(character_id='interview',messages=[
+            dict(id=1,role='assistant',content='上一模型的开场。'),
+        ])
+        messages,trace=assemble_prompt(
+            current,
+            '继续',
+            CHARACTERS,
+            provider_switch_from='local-base',
+        )
+        self.assertEqual(trace['provider_switch_from'],'local-base')
+        self.assertIn('模型切换连续性',messages[0]['content'])
+        self.assertIn('不要逐字或近似复述',messages[0]['content'])
+
     def test_single_repeated_fact_is_not_removed(self):
         messages=[dict(role='system',content='角色'),dict(role='user',content='是什么颜色？'),
             dict(role='assistant',content='我的杯子是蓝色的。'),dict(role='user',content='还是蓝色吗？'),
@@ -192,6 +222,10 @@ class MemoryApiTests(unittest.TestCase):
             preview = client.get(url + '/prompt', params=dict(message='杯子呢？')).json()
             self.assertIn('杯子是绿色的。', preview['messages'][0]['content'])
             self.assertEqual(preview['messages'][-1]['content'], '杯子呢？')
+            self.assertEqual(preview['provider'], 'local')
+            self.assertEqual(preview['input_budget'], 4096)
+            self.assertGreater(preview['input_tokens_estimate'], 0)
+            self.assertIsNone(preview['input_tokens'])
             self.assertEqual(client.put(url + '/memory', json=dict(notes='x',auto_enabled='yes',revision=1)).status_code, 422)
 
     def test_removed_quote_is_not_reintroduced_by_retrieval_and_restore_works(self):

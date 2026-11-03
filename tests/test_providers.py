@@ -190,14 +190,18 @@ class DeepSeekProviderTests(unittest.TestCase):
         )
         answer, metrics = provider.reply(
             [{"role": "user", "content": "你好"}],
-            generation_overrides={"_opencode_session_id": "session-test"},
+            generation_overrides={
+                "_opencode_session_id": "session-test",
+                "seed": 20261030,
+            },
         )
         self.assertEqual(answer, "准备好了")
         self.assertEqual(seen["url"], "https://opencode.ai/zen/go/v1/chat/completions")
         self.assertEqual(seen["authorization"], "Bearer oc_sk_test")
         self.assertEqual(seen["session"], "session-test")
-        self.assertEqual(seen["user_agent"], "shiyu-chat/0.9.3")
+        self.assertEqual(seen["user_agent"], "shiyu-chat/0.12.0")
         self.assertEqual(seen["payload"]["model"], "deepseek-v4.1-flash")
+        self.assertEqual(seen["payload"]["seed"], 20261030)
         self.assertNotIn("_opencode_session_id", seen["payload"])
         self.assertEqual(metrics["provider"], "opencode")
         self.assertEqual(metrics["billing_source"], "go")

@@ -25,10 +25,16 @@ from uuid import UUID, uuid4
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse,StreamingResponse,Response,FileResponse,RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from storage import ChatStore
-from stream_job import StreamJob,encode_sse
+from stream_job import (
+    REPEAT_REQUEST_CUES,
+    StreamJob,
+    answer_repeats_previous,
+    encode_sse,
+    retry_messages_without_previous_answer,
+)
 from secret_store import LocalSecretStore, SecretStoreError
 from providers import (DeepSeekChatEngine, DeepSeekProvider, ProviderConfigurationError,
                        OpenCodeProvider, ProviderError, estimate_tokens)
@@ -38,9 +44,17 @@ from characters import (CHARACTERS,DEFAULT_CHARACTER_IDS,ai_identity_reply,catal
 from character_cards import (build_generation_messages,card_to_runtime,normalize_card,
                              parse_generated_card,retrieve_worldbook,build_enrichment_messages,apply_enrichment)
 from prompt_pipeline import assemble_prompt
+from chat_trace import make_turn_trace
 from roleplay_response import tts_text_from_content
 from session_memory import refresh_memory,retrieve_covered_history
 from memory_records import validate_candidate
+from memory_query import compose_memory_retrieval_query
+from memory_semantics import (
+    SEMANTIC_MEMORY_VERIFICATION_PROMPT,
+    apply_verification,
+    build_verification_payload,
+    parse_verification_result,
+)
 from structured_memory import (
     CandidateStore,
     MemoryWorker,
@@ -52,18 +66,175 @@ from structured_memory import (
 
 logger=logging.getLogger(__name__)
 
+PROVIDER_VALUES=(
+    'opencode','deepseek',
+    'local','local-base','local-half','local-full',
+    'local-wukong','local-xucheng','local-haruhi',
+    'local-raw','local-brief','local-full-prompt',
+    'local-wukong-brief','local-wukong-full-prompt',
+)
+LOCAL_PROVIDER_MODES={
+    'local-base':'base',
+    'local-half':'half',
+    'local-full':'full',
+    'local-wukong':'wukong',
+    'local-xucheng':'xucheng',
+    'local-haruhi':'haruhi',
+    'local-raw':'base',
+    'local-brief':'base',
+    'local-full-prompt':'base',
+    'local-wukong-brief':'base',
+    'local-wukong-full-prompt':'base',
+}
+LOCAL_PROMPT_TEST_MODES={
+    'local-raw':'raw',
+    'local-brief':'brief',
+    'local-full-prompt':'full',
+    'local-wukong-brief':'wukong_brief',
+    'local-wukong-full-prompt':'wukong_full',
+}
+LOCAL_PROMPT_TEST_CHARACTER_PROVIDERS={
+    'custom-model-eval-zhiyao-raw':'local-raw',
+    'custom-model-eval-zhiyao-brief':'local-brief',
+    'custom-model-eval-zhiyao-full':'local-full-prompt',
+    'custom-model-eval-wukong-brief':'local-wukong-brief',
+    'custom-model-eval-wukong-full':'local-wukong-full-prompt',
+}
+LOCAL_PROMPT_TEST_CHARACTER_TAGS={
+    'custom-model-eval-zhiyao-raw':'模型对照 · 无提示',
+    'custom-model-eval-zhiyao-brief':'模型对照 · 少量提示',
+    'custom-model-eval-zhiyao-full':'模型对照 · 完整提示',
+    'custom-model-eval-wukong-brief':'孙悟空对照 · 少量核心提示',
+    'custom-model-eval-wukong-full':'孙悟空对照 · 完整提示',
+}
+LOCAL_MODEL_EVALUATION_CARD_ID='custom-model-eval-zhiyao'
+LOCAL_REPEAT_GUARD_PROVIDERS={'local-wukong','local-xucheng','local-haruhi'}
+PRODUCT_CHARACTER_TAGS={
+    'custom-lora-wukong-v1':'LoRA 微调',
+    'custom-lora-xucheng-v1':'LoRA 微调',
+    'custom-lora-haruhi-v1':'LoRA 微调',
+}
+
+
+def is_local_provider(provider):
+    return provider=='local' or provider in LOCAL_PROVIDER_MODES
+
+
+def local_mode_for_provider(provider,fallback='base'):
+    if provider=='local':
+        return fallback
+    return LOCAL_PROVIDER_MODES.get(provider,fallback)
+
+
+def is_local_prompt_test_provider(provider):
+    return provider in LOCAL_PROMPT_TEST_MODES
+
+
+def prompt_mode_for_provider(provider):
+    return LOCAL_PROMPT_TEST_MODES.get(provider,'full')
+
+
+def provider_for_character(character_id,requested,card=None,cloud_fallback='opencode'):
+    fixed=LOCAL_PROMPT_TEST_CHARACTER_PROVIDERS.get(character_id)
+    if fixed:
+        return fixed
+    if card is None or not isinstance(card.get('model_settings'),dict):
+        return requested
+    settings=card['model_settings']
+    if settings.get('source')=='local':
+        mode=settings.get('local_mode','base')
+        return 'local-'+mode
+    if requested in ('opencode','deepseek'):
+        return requested
+    return cloud_fallback
+
+
+def seed_local_model_evaluation_character(store):
+    """Install the complete role and three isolated prompt-condition copies."""
+    created=False
+    fixture_path=(
+        Path(__file__).resolve().parent.parent
+        /'evaluation'
+        /'characters'
+        /'full_character_fixture.json'
+    )
+    card=json.loads(fixture_path.read_text(encoding='utf-8'))
+    fixtures={
+        LOCAL_MODEL_EVALUATION_CARD_ID:(
+            '用于比较云端模型和本地 Qwen3-1.7B 检查点的固定虚拟角色。'
+        ),
+        'custom-model-eval-zhiyao-raw':(
+            '本地 Qwen3-1.7B Base 无系统提示对照组。'
+        ),
+        'custom-model-eval-zhiyao-brief':(
+            '本地 Qwen3-1.7B Base 少量角色提示对照组。'
+        ),
+        'custom-model-eval-zhiyao-full':(
+            '本地 Qwen3-1.7B Base 完整角色卡、世界书和知识边界对照组。'
+        ),
+        'custom-model-eval-wukong-brief':(
+            '本地 Qwen3-1.7B Base 孙悟空少量核心提示对照组。'
+        ),
+        'custom-model-eval-wukong-full':(
+            '本地 Qwen3-1.7B Base 孙悟空完整提示、固定事实和世界书对照组。'
+        ),
+    }
+    for character_id,note in fixtures.items():
+        try:
+            store.get_character_card(character_id)
+            continue
+        except KeyError:
+            pass
+        row=json.loads(json.dumps(card,ensure_ascii=False))
+        row['id']=character_id
+        if character_id.startswith('custom-model-eval-wukong-'):
+            row['name']='孙悟空'
+            row['tagline']='花果山水帘洞石猴，齐天大圣。'
+            row['description']='《西游记》孙悟空的本地模型提示条件对照角色。'
+            row['background']=(
+                '花果山石猴，曾拜菩提祖师学艺，自称齐天大圣，'
+                '后来保护唐僧西天取经。'
+            )
+            row['fixed_facts']=[
+                {'key':'姓名','value':'孙悟空','status':'confirmed'},
+                {'key':'别称','value':'美猴王、齐天大圣','status':'confirmed'},
+                {'key':'师承','value':'菩提祖师','status':'confirmed'},
+                {'key':'同伴','value':'唐僧、猪八戒、沙僧、白龙马','status':'confirmed'},
+            ]
+        row['source_notes']=(
+            note+'所有人物、学校、档案馆和城市细节均为虚构；'
+            '本卡只用于本地模型提示条件对照。'
+        )
+        store.save_character_card(normalize_card(row))
+        created=True
+    return created
+
 
 class SessionRequest(BaseModel):
     model_config=ConfigDict(extra='forbid')
     model_mode: Literal['base','lora']='base'
-    character_id: str=Field(default='interview',min_length=1,max_length=80)
-    provider: Literal['local','deepseek','opencode'] | None=None
+    # The legacy /sessions API keeps an internal fallback for compatibility.
+    # User-facing role discovery is empty after retiring the showcase roles.
+    character_id: str=Field(default='assistant',min_length=1,max_length=80)
+    provider: Literal[
+        'local','local-base','local-half','local-full',
+        'local-wukong','local-xucheng','local-haruhi',
+        'local-raw','local-brief','local-full-prompt',
+        'local-wukong-brief','local-wukong-full-prompt',
+        'deepseek','opencode'
+    ] | None=None
 
 
 class CharacterIdeaRequest(BaseModel):
     model_config=ConfigDict(extra='forbid')
     inspiration: str=Field(strict=True,min_length=1,max_length=1800)
-    provider: Literal['local','deepseek','opencode'] | None=None
+    provider: Literal[
+        'local','local-base','local-half','local-full',
+        'local-wukong','local-xucheng','local-haruhi',
+        'local-raw','local-brief','local-full-prompt',
+        'local-wukong-brief','local-wukong-full-prompt',
+        'deepseek','opencode'
+    ] | None=None
 
     @field_validator('inspiration')
     @classmethod
@@ -102,12 +273,14 @@ class StructuredMemoryEvidenceRequest(BaseModel):
 
 class StructuredMemoryCandidateRequest(BaseModel):
     model_config=ConfigDict(extra='forbid')
-    kind: Literal['user_report','character_detail','shared_event','belief','plan']
+    kind: Literal['user_report','character_detail','role_claim','shared_event','belief','plan']
     subject: Literal['user','character','shared'] | None=None
     fact_key: str | None=Field(default=None,max_length=120)
     value: str | None=Field(default=None,max_length=200)
     content: str=Field(strict=True,min_length=1,max_length=600)
     event_date: str | None=None
+    fact_type: Literal['fact','preference','plan','hypothesis','opinion','event','role_claim'] | None=None
+    epistemic_status: Literal['explicit','uncertain','inferred','disputed'] | None=None
     operation: Literal['add','merge','supersede','contested','ignore']='add'
     target_item_id: int | None=Field(default=None,strict=True,gt=0)
     evidence: list[StructuredMemoryEvidenceRequest]=Field(min_length=1,max_length=12)
@@ -118,6 +291,45 @@ class StructuredMemoryReviewRequest(BaseModel):
     action: Literal['activate','revise','delete']
     item_id: int=Field(strict=True,gt=0)
     old_item_id: int | None=Field(default=None,strict=True,gt=0)
+
+
+class StructuredMemoryEditRequest(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    action: Literal['edit','reject','restore']
+    content: str | None=Field(default=None,strict=True,min_length=1,max_length=600)
+    value: str | None=Field(default=None,strict=True,max_length=200)
+    reason: str=Field(default='用户在记忆设置中修正了这条记忆',strict=True,min_length=1,max_length=300)
+    expected_updated_at: str | None=Field(default=None,strict=True,max_length=80)
+
+    @model_validator(mode='after')
+    def validate_action_payload(self):
+        self.reason=self.reason.strip()
+        if not self.reason:
+            raise ValueError('记忆修正原因不能为空')
+        if self.action=='edit':
+            if self.content is None or not self.content.strip():
+                raise ValueError('修正后的记忆不能为空')
+            self.content=self.content.strip()
+        elif self.content is not None or self.value is not None:
+            raise ValueError('只有 edit 操作可以提交新的记忆内容')
+        if self.value is not None:
+            self.value=self.value.strip() or None
+        return self
+
+
+class StructuredMemoryActionRequest(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    reason: str=Field(strict=True,min_length=1,max_length=300)
+
+
+class StructuredMemorySuppressionRequest(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    subject: Literal['user','character','shared'] | None=None
+    fact_key_prefix: str | None=Field(default=None,min_length=1,max_length=120)
+    category: Literal[
+        'fact','preference','plan','hypothesis','opinion','event','role_claim'
+    ] | None=None
+    reason: str=Field(strict=True,min_length=1,max_length=300)
 
 
 class VoiceProfileRequest(BaseModel):
@@ -206,17 +418,26 @@ class ProviderSettingsRequest(BaseModel):
     daily_token_limit: int=Field(default=200000,strict=True,ge=1000,le=100000000)
 
 
-def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=None,speech_factory=None,asr_factory=None,
+def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None,
+               engine_factory=None,speech_factory=None,asr_factory=None,
                model_profile='qwen3-0.6b',same_chat_memory=False,lan_enabled=False,
                lan_pair_code=None,lan_pair_ttl=300,default_provider='local',secret_path=None,
                deepseek_provider=None,opencode_provider=None,
                structured_memory=False,structured_memory_db_path=None,
                auto_memory_worker_enabled=False,memory_daily_token_limit=30000,
-               memory_job_ready_seconds=8.0,memory_embedding_model_path=None):
-    if engine_factory is None and default_provider=='local':
+               memory_job_ready_seconds=8.0,memory_embedding_model_path=None,
+               enable_local_models=False,seed_evaluation_character=False):
+    local_models_enabled=bool(
+        enable_local_models
+        or is_local_provider(default_provider)
+        or adapter_run
+        or adapter_runs
+    )
+    if engine_factory is None and local_models_enabled:
         def engine_factory():
             from inference import QwenChat
-            return QwenChat(adapter_run=adapter_run,trim_history=True,model_profile=model_profile,
+            return QwenChat(adapter_run=adapter_run,adapter_runs=adapter_runs,
+                            trim_history=True,model_profile=model_profile,
                             same_chat_memory=same_chat_memory,input_budget=4096)
     elif engine_factory is None:
         engine_factory=lambda:None
@@ -224,6 +445,8 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
     @asynccontextmanager
     async def lifespan(app):
         app.state.store=ChatStore(db_path)
+        if seed_evaluation_character:
+            seed_local_model_evaluation_character(app.state.store)
         app.state.secret_store=LocalSecretStore(
             secret_path or (Path(db_path).resolve().parent/'secrets.json')
         )
@@ -316,7 +539,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
                 )
         app.state.structured_memory=None
 
-    app=FastAPI(title='Qwen3 IM Chat API',version='0.9.3',lifespan=lifespan)
+    app=FastAPI(title='Qwen3 IM Chat API',version='0.12.0',lifespan=lifespan)
 
     def is_loopback_client(request):
         host=request.client.host if request.client else ''
@@ -424,12 +647,28 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
     @app.get('/characters')
     def characters():
         rows=catalogue(DEFAULT_CHARACTER_IDS)
-        for card in app.state.store.list_character_cards():
+        for raw_card in app.state.store.list_character_cards():
+            card=normalize_card(raw_card)
+            if (
+                card['id']==LOCAL_MODEL_EVALUATION_CARD_ID
+                or card['id'] in LOCAL_PROMPT_TEST_CHARACTER_PROVIDERS
+            ):
+                continue
             avatar=app.state.store.latest_character_asset(card['id'],'avatar')
-            rows.append(dict(id=card['id'],name=card['name'],tag='自定义角色',color='peach',
-                             description=card['description'],greeting=card['greeting'],starters=[],
-                             profile=dict(line=card['tagline'],tags=[],scene='',about=card['description']),
+            tag=(
+                PRODUCT_CHARACTER_TAGS.get(card['id'])
+                or LOCAL_PROMPT_TEST_CHARACTER_TAGS.get(card['id'],'自定义角色')
+            )
+            description=(
+                tag+'。'+card['description']
+                if card['id'] in LOCAL_PROMPT_TEST_CHARACTER_TAGS
+                else card['description']
+            )
+            rows.append(dict(id=card['id'],name=card['name'],tag=tag,color='peach',
+                             description=description,greeting=card['greeting'],starters=[],
+                             profile=dict(line=card['tagline'],tags=[],scene='',about=description),
                              custom=True,
+                             model_settings=card['model_settings'],
                              avatar_url=(f"/characters/{card['id']}/avatar" if avatar else None)))
         return dict(characters=rows)
 
@@ -438,12 +677,50 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
         rows.update({card['id']:card_to_runtime(card) for card in app.state.store.list_character_cards()})
         return rows
 
+    def available_local_model_modes():
+        engine=app.state.engine
+        if engine is None:
+            return []
+        modes=getattr(engine,'available_model_modes',None)
+        if modes is None:
+            return (
+                ['base','lora']
+                if getattr(engine,'adapter_available',False)
+                else ['base']
+            )
+        return list(modes)
+
+    def model_mode_for_session(current):
+        return local_mode_for_provider(
+            provider_name_for_session(current),
+            current.get('model_mode','base'),
+        )
+
     @app.get('/settings/providers')
     def get_provider_settings():
         limits=token_limits()
+        local_modes=available_local_model_modes()
+        local_engine=app.state.engine
+
+        def local_setting(mode,prompt_mode=None):
+            available=local_engine is not None and mode in local_modes
+            result={
+                'available':available,
+                'configured':available,
+                'model_id':getattr(local_engine,'model_id',None),
+                'model_mode':mode,
+                'supports_text':True,
+                'supports_images':False,
+                'usage':app.state.store.usage_for_day('local-'+mode),
+            }
+            if prompt_mode:
+                result['prompt_mode']=prompt_mode
+            return result
+
         return {
             'default_provider':app.state.default_provider,
             'deepseek':{
+                'available':True,
                 'model_id':app.state.deepseek_engine.model_id,
                 'configured':deepseek_key_configured(),
                 'supports_text':True,
@@ -451,6 +728,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
                 'usage':app.state.store.usage_for_day('deepseek'),
             },
             'opencode':{
+                'available':True,
                 'model_id':app.state.opencode_engine.model_id,
                 'configured':opencode_key_configured(),
                 'supports_text':True,
@@ -458,11 +736,25 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
                 'usage':app.state.store.usage_for_day('opencode'),
             },
             'local':{
-                'available':app.state.engine is not None,
-                'model_id':getattr(app.state.engine,'model_id',None),
+                'available':local_engine is not None,
+                'configured':local_engine is not None,
+                'model_id':getattr(local_engine,'model_id',None),
+                'model_mode':'base',
                 'supports_text':True,
                 'supports_images':False,
+                'usage':app.state.store.usage_for_day('local'),
             },
+            'local-base':local_setting('base'),
+            'local-half':local_setting('half'),
+            'local-full':local_setting('full'),
+            'local-wukong':local_setting('wukong'),
+            'local-xucheng':local_setting('xucheng'),
+            'local-haruhi':local_setting('haruhi'),
+            'local-raw':local_setting('base','raw'),
+            'local-brief':local_setting('base','brief'),
+            'local-full-prompt':local_setting('base','full'),
+            'local-wukong-brief':local_setting('base','wukong_brief'),
+            'local-wukong-full-prompt':local_setting('base','wukong_full'),
             'token_limits':{
                 'request_token_limit':limits['request'],
                 'daily_token_limit':limits['daily'],
@@ -528,7 +820,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
             if app.state.opencode_engine is None:
                 raise HTTPException(503,'OpenCode Go 服务尚未初始化。')
             return app.state.opencode_engine
-        if provider=='local':
+        if is_local_provider(provider):
             if app.state.engine is None:
                 raise HTTPException(503,'本地模型未就绪，请查看启动终端。')
             return app.state.engine
@@ -536,6 +828,31 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
 
     def provider_name_for_session(current):
         return current.get('provider') or app.state.default_provider
+
+    def save_turn_trace(current,registry,messages,prompt_trace,metrics,selected,
+                        saved,max_new_tokens,run_id,response_source='model'):
+        role=registry.get(current.get('character_id'),registry.get('assistant',{}))
+        trace=make_turn_trace(
+            run_id=run_id,
+            provider=selected,
+            model=(metrics.get('model') if isinstance(metrics,dict) else None),
+            role=role,
+            messages=messages,
+            prompt_trace=prompt_trace,
+            metrics=metrics,
+            max_new_tokens=max_new_tokens,
+            response_source=response_source,
+        )
+        app.state.store.save_turn_trace(
+            current['id'],
+            current.get('character_id','assistant'),
+            trace,
+            saved,
+        )
+        if isinstance(metrics,dict):
+            metrics['run_id']=trace['run_id']
+            metrics['prompt_version']=trace['prompt_version']
+        return trace
 
     def deepseek_key_configured():
         try:
@@ -554,6 +871,8 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
             return deepseek_key_configured()
         if provider=='opencode':
             return opencode_key_configured()
+        if is_local_provider(provider):
+            return app.state.engine is not None
         return False
 
     def preferred_cloud_provider():
@@ -566,6 +885,39 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
         if deepseek_key_configured():
             return 'deepseek'
         return None
+
+    def resolved_provider_for_character(character_id,requested):
+        """Resolve one role's persisted model choice.
+
+        Character-local settings override the page-level API preference.
+        Special evaluation fixtures retain their fixed prompt-condition
+        provider so historical experiments stay reproducible.
+        """
+        try:
+            card=normalize_card(app.state.store.get_character_card(character_id))
+        except KeyError:
+            card=None
+        fallback=preferred_cloud_provider()
+        if fallback is None:
+            fallback=(
+                app.state.default_provider
+                if app.state.default_provider in ('opencode','deepseek')
+                else 'opencode'
+            )
+        selected=provider_for_character(
+            character_id,
+            requested or app.state.default_provider,
+            card=card,
+            cloud_fallback=fallback,
+        )
+        if is_local_provider(selected):
+            mode=local_mode_for_provider(selected)
+            if app.state.engine is None:
+                raise HTTPException(503,'本地模型未就绪，请查看启动终端。')
+            if mode not in available_local_model_modes():
+                label={'base':'基础模型','half':'半轮 LoRA','full':'完整 LoRA'}.get(mode,mode)
+                raise HTTPException(409,f'该角色选择的{label}当前没有加载。')
+        return selected
 
     def token_limits():
         stored=app.state.store.get_setting('token_limits',{})
@@ -681,6 +1033,15 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
             return
         memory=memory or {}
         character_id=current.get('character_id','assistant')
+        retrieval_query, retrieval_source_ids=compose_memory_retrieval_query(
+            current.get('messages',[]),
+            question,
+        )
+        trace['memory_retrieval_query_hash']=hashlib.sha256(
+            retrieval_query.encode('utf-8')
+        ).hexdigest()
+        trace['memory_retrieval_expanded']=retrieval_query != str(question or '').strip()
+        trace['memory_retrieval_source_message_ids']=retrieval_source_ids
         if '_unified_memory_context' not in memory:
             excerpts=[]
             seen=set()
@@ -704,12 +1065,16 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
             context,memory_trace=build_unified_memory_context(
                 store,
                 character_id,
-                question,
+                retrieval_query,
                 excerpts=excerpts,
                 summary_notes=memory.get('notes',''),
                 max_facts=8,
                 max_excerpts=4,
                 max_chars=1600,
+                max_tokens=480,
+                token_estimator=lambda text: estimate_tokens([
+                    {'role':'system','content':str(text)}
+                ]),
             )
             memory['_unified_memory_context']=context
             memory['_unified_memory_trace']=memory_trace
@@ -722,6 +1087,12 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
         trace['structured_memory_ids']=memory_trace.get('selected_ids',[])
         trace['session_memory_ids']=memory_trace.get('selected_excerpt_ids',[])
         trace['structured_memory_chars']=memory_trace.get('characters',0)
+        trace['structured_memory_tokens']=memory_trace.get(
+            'estimated_tokens',0
+        )
+        trace['structured_memory_token_budget']=memory_trace.get(
+            'token_budget'
+        )
         trace['memory_retrieval_mode']=memory_trace.get('retrieval_mode','lexical')
         trace['memory_retrieval_scores']=memory_trace.get('scores',[])
         state_text=memory.get('_internal_state_text') or store.internal_state.render_prompt(
@@ -779,8 +1150,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
             worker.wake()
         return job_id
 
-    def ingest_extracted_candidates(character_id,candidates,sources,
-                                    *,job_id=None,processed_through=0):
+    def validate_extracted_candidates(candidates,sources):
         validated_items=[]
         rejected=[]
         for candidate in candidates:
@@ -796,7 +1166,45 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
                 evidence['message_id'] for evidence in item['evidence']
             )
         )
+        return validated_items,rejected
+
+    def verify_extracted_candidates(validated_items,engine,character_id,job_id):
+        if not validated_items:
+            return [],[],None
+        payload=build_verification_payload(validated_items)
+        messages=[
+            {'role':'system','content':SEMANTIC_MEMORY_VERIFICATION_PROMPT},
+            {'role':'user','content':json.dumps(payload,ensure_ascii=False)},
+        ]
+        max_tokens=1200
+        overrides={
+            'temperature':0,
+            'response_format':{'type':'json_object'},
+            '_opencode_session_id':f'memory-verify-{character_id}-{job_id}',
+        }
+        raw,metrics=engine.reply(
+            messages,max_new_tokens=max_tokens,
+            generation_overrides=overrides,
+        )
+        reviews=parse_verification_result(raw,len(validated_items))
+        accepted=[]
+        rejected=[]
+        for index,item in enumerate(validated_items):
+            reviewed=apply_verification(item,reviews.get(index))
+            if reviewed is None:
+                rejected.append({
+                    'reason':'语义审核未通过',
+                    'candidate':item,
+                    'review':reviews.get(index),
+                })
+            else:
+                accepted.append(reviewed)
+        return accepted,rejected,metrics
+
+    def apply_validated_candidates(character_id,validated_items,
+                                   *,job_id=None,processed_through=0):
         applied=[]
+        rejected=[]
         store=structured_memory_store()
         for validated in validated_items:
             source_max=max(
@@ -864,7 +1272,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
         sources=context+new_batch
 
         selected=provider_name_for_session(current)
-        if selected=='local' or not provider_key_configured(selected):
+        if is_local_provider(selected) or not provider_key_configured(selected):
             selected=preferred_cloud_provider()
         if selected is None:
             return {
@@ -882,6 +1290,9 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
                 'fact_key':item['fact_key'],
                 'value':item['value'],
                 'content':item['content'],
+                'fact_type':item.get('fact_type'),
+                'epistemic_status':item.get('epistemic_status'),
+                'source_authority':item.get('source_authority'),
                 'state':item['state'],
             }
             for item in store.extraction_facts(
@@ -900,7 +1311,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
                 },ensure_ascii=False)},
         ]
         max_tokens=1600
-        estimated=int((estimate_tokens(extraction_messages)+max_tokens)*1.15)
+        estimated=int((estimate_tokens(extraction_messages)+max_tokens+1200)*1.15)
         usage=store.memory_usage_for_day(character_id)
         if usage['total_tokens']+estimated>app.state.memory_daily_token_limit:
             now=datetime.now().astimezone()
@@ -943,13 +1354,61 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
             character_id,selected,str(metrics.get('model',getattr(engine,'model_id',selected))),
             prompt_tokens,completion_tokens,job_id=job['id'],
         )
+        validated_candidates,rejected=validate_extracted_candidates(
+            candidates,sources
+        )
+        try:
+            reviewed_candidates,verification_rejected,verification_metrics=(
+                verify_extracted_candidates(
+                    validated_candidates,
+                    engine,
+                    character_id,
+                    job['id'],
+                )
+            )
+        except (ProviderConfigurationError,ProviderError) as exc:
+            return {
+                'defer': True,
+                'retry_after':60,
+                'reason':f'语义审核暂时不可用：{exc}',
+            }
+        rejected.extend(verification_rejected)
+        if verification_metrics is not None:
+            verification_prompt=int(
+                verification_metrics.get('prompt_tokens')
+                or estimate_tokens([{
+                    'role':'user',
+                    'content':json.dumps(
+                        build_verification_payload(validated_candidates),
+                        ensure_ascii=False,
+                    ),
+                }])
+            )
+            verification_completion=int(
+                verification_metrics.get('output_tokens') or 0
+            )
+            store.record_memory_usage(
+                character_id,
+                selected,
+                str(
+                    verification_metrics.get(
+                        'model',getattr(engine,'model_id',selected)
+                    )
+                ),
+                verification_prompt,
+                verification_completion,
+                job_id=-int(job['id']),
+            )
+            prompt_tokens+=verification_prompt
+            completion_tokens+=verification_completion
         if not store.job_is_running(job['id']):
             return 'job was cancelled before memory commit'
 
-        applied,rejected=ingest_extracted_candidates(
-            character_id,candidates,sources,
+        applied,apply_rejected=apply_validated_candidates(
+            character_id,reviewed_candidates,
             job_id=job['id'],processed_through=processed_through,
         )
+        rejected.extend(apply_rejected)
         try:
             store.warm_candidate_embeddings(character_id)
         except Exception:
@@ -969,7 +1428,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
                 state_error=str(exc)
         store.advance_cursor(character_id,batch_through)
         has_more=int(job['message_end'])>batch_through
-        return {
+        result = {
             'provider':selected,
             'source_messages':len(sources),
             'new_messages':len(new_batch),
@@ -984,31 +1443,87 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
             'requeue':has_more,
             **({'retry_after':0} if has_more else {}),
         }
+        try:
+            app.state.store.attach_trace_memory_result(
+                character_id,
+                batch_through,
+                {
+                    'job_id':job['id'],
+                    'applied':applied,
+                    'rejected':rejected,
+                    'state_update':state_result,
+                    'state_error':state_error,
+                    'requeue':has_more,
+                },
+            )
+        except Exception:
+            logger.exception('回答已保存，但后台记忆结果未能附加到 Trace')
+        return result
 
     def prepare_chat(current,question,registry,stop=None,image_id=None):
-        engine=provider_engine(provider_name_for_session(current))
-        memory=unify_session_and_structured_memory(
-            current,app.state.store.get_memory(current['id'])
+        selected_provider=provider_name_for_session(current)
+        engine=provider_engine(selected_provider)
+        prompt_test=is_local_prompt_test_provider(selected_provider)
+        memory=(
+            None
+            if prompt_test
+            else unify_session_and_structured_memory(
+                current,app.state.store.get_memory(current['id'])
+            )
         )
         warning=None
+        provider_switch_from=None
         try:
-            draft,draft_trace=assemble_prompt(current,question,registry,memory)
-            apply_structured_memory(
-                draft,current,question,draft_trace,memory
+            previous_assistant=next(
+                (
+                    message for message in reversed(current.get('messages',[]))
+                    if message.get('role')=='assistant'
+                ),
+                None,
             )
-            attach_image_to_messages(draft,current,image_id)
-            tokenizer=getattr(engine,'tokenizer',None)
-            budget=getattr(engine,'input_budget',4096)
-            should_refresh=False
-            if tokenizer:
-                encoded=tokenizer.apply_chat_template(draft,tokenize=True,add_generation_prompt=True,
-                                                      enable_thinking=False,return_dict=True,return_tensors='pt')
-                should_refresh=encoded['input_ids'].shape[-1] >= int(budget*0.75)
-            else:
-                should_refresh=estimate_tokens(draft)>=int(budget*0.75)
-            if should_refresh:
-                memory=refresh_memory(app.state.store,current,engine,stop)
-                memory=unify_session_and_structured_memory(current,memory)
+            if previous_assistant is not None:
+                try:
+                    traces=app.state.store.list_turn_traces(current['id'],limit=10)
+                except KeyError:
+                    traces=[]
+                previous_trace=next(
+                    (
+                        trace for trace in traces
+                        if trace.get('assistant_message_id')
+                        == previous_assistant.get('id')
+                    ),
+                    None,
+                )
+                if (
+                    previous_trace
+                    and previous_trace.get('provider')
+                    and previous_trace['provider'] != selected_provider
+                ):
+                    provider_switch_from=previous_trace['provider']
+            if not prompt_test:
+                draft,draft_trace=assemble_prompt(
+                    current,
+                    question,
+                    registry,
+                    memory,
+                    provider_switch_from=provider_switch_from,
+                )
+                apply_structured_memory(
+                    draft,current,question,draft_trace,memory
+                )
+                attach_image_to_messages(draft,current,image_id)
+                tokenizer=getattr(engine,'tokenizer',None)
+                budget=getattr(engine,'input_budget',4096)
+                should_refresh=False
+                if tokenizer:
+                    encoded=tokenizer.apply_chat_template(draft,tokenize=True,add_generation_prompt=True,
+                                                          enable_thinking=False,return_dict=True,return_tensors='pt')
+                    should_refresh=encoded['input_ids'].shape[-1] >= int(budget*0.75)
+                else:
+                    should_refresh=estimate_tokens(draft)>=int(budget*0.75)
+                if should_refresh:
+                    memory=refresh_memory(app.state.store,current,engine,stop)
+                    memory=unify_session_and_structured_memory(current,memory)
         except ValueError as exc:
             warning=str(exc)
         except Exception:
@@ -1016,13 +1531,30 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
                 raise
             logger.exception('会话摘要失败，继续使用原始历史')
             warning='摘要暂未更新，继续使用原始历史。'
-        messages,trace=assemble_prompt(current,question,registry,memory)
-        apply_structured_memory(messages,current,question,trace,memory)
+        messages,trace=assemble_prompt(
+            current,
+            question,
+            registry,
+            memory,
+            provider_switch_from=provider_switch_from,
+            prompt_mode=prompt_mode_for_provider(selected_provider),
+        )
+        if not prompt_test:
+            apply_structured_memory(messages,current,question,trace,memory)
+        else:
+            # Prompt conditions use identical generation settings and no
+            # memory, worldbook, policy, or card-specific decoding overrides.
+            trace['generation_preset']={}
+        trace['local_repeat_guard']=selected_provider in LOCAL_REPEAT_GUARD_PROVIDERS
         preset=provider_request_overrides(
             provider_name_for_session(current),current['id'],trace.get('generation_preset'))
         if preset:
             trace['generation_preset']=preset
-        image=attach_image_to_messages(messages,current,image_id)
+        image=(
+            None
+            if prompt_test
+            else attach_image_to_messages(messages,current,image_id)
+        )
         trace['image_id']=image['id'] if image else None
         trace['memory_warning']=warning
         return messages,trace
@@ -1038,7 +1570,9 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
             check_token_limits(selected,generation_messages,900)
             session_id=f'character-generation-{uuid4()}'
             generated,generation_metrics=engine.reply(
-                generation_messages,model_mode='base',max_new_tokens=900,
+                generation_messages,
+                model_mode=local_mode_for_provider(selected,'base'),
+                max_new_tokens=900,
                 generation_overrides=provider_request_overrides(selected,session_id))
             record_provider_usage(selected,None,uuid4(),generation_metrics)
             card=parse_generated_card(generated,body.inspiration)
@@ -1046,7 +1580,9 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
                 enrichment_messages=build_enrichment_messages(card)
                 check_token_limits(selected,enrichment_messages,1000)
                 enrichment,enrichment_metrics=engine.reply(
-                    enrichment_messages,model_mode='base',max_new_tokens=1000,
+                    enrichment_messages,
+                    model_mode=local_mode_for_provider(selected,'base'),
+                    max_new_tokens=1000,
                     generation_overrides=provider_request_overrides(selected,session_id))
                 record_provider_usage(selected,None,uuid4(),enrichment_metrics)
                 card=apply_enrichment(card,enrichment)
@@ -1080,7 +1616,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
     @app.get('/characters/{character_id}')
     def get_character_card(character_id:str):
         try:
-            return {'card':app.state.store.get_character_card(character_id)}
+            return {'card':normalize_card(app.state.store.get_character_card(character_id))}
         except KeyError:
             raise HTTPException(404,'自定义角色不存在。') from None
 
@@ -1358,19 +1894,19 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
         deepseek_ready=deepseek_key_configured()
         opencode_ready=opencode_key_configured()
         local_ready=app.state.engine is not None
-        ready=(local_ready if default_provider=='local'
+        local_modes=available_local_model_modes()
+        ready=(local_ready if is_local_provider(default_provider)
                else provider_key_configured(default_provider))
         active_engine={
             'deepseek':app.state.deepseek_engine,
             'opencode':app.state.opencode_engine,
-            'local':app.state.engine,
-        }.get(default_provider)
+        }.get(default_provider,app.state.engine if is_local_provider(default_provider) else None)
         deepseek_usage=app.state.store.usage_for_day('deepseek')
         opencode_usage=app.state.store.usage_for_day('opencode')
         limits=token_limits()
         return JSONResponse(status_code=200 if ready else 503,content=dict(
             status='ready' if ready else 'model_unavailable',
-            app_version='0.9.3',
+            app_version='0.12.0',
             default_provider=default_provider,
             providers={
                 'deepseek':{'available':True,'configured':deepseek_ready,
@@ -1381,8 +1917,74 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
                             'supports_images':True},
                 'local':{'available':local_ready,
                          'model_id':getattr(app.state.engine,'model_id',None),
-                         'supports_images':False}},
-            model_modes=['base','lora'] if local_ready and getattr(app.state.engine,'adapter_available',False) else ['base'],
+                         'supports_images':False},
+                'local-base':{
+                    'available':local_ready and 'base' in local_modes,
+                    'configured':local_ready and 'base' in local_modes,
+                    'model_id':getattr(app.state.engine,'model_id',None),
+                    'supports_images':False,
+                },
+                'local-half':{
+                    'available':local_ready and 'half' in local_modes,
+                    'configured':local_ready and 'half' in local_modes,
+                    'model_id':getattr(app.state.engine,'model_id',None),
+                    'supports_images':False,
+                },
+                'local-full':{
+                    'available':local_ready and 'full' in local_modes,
+                    'configured':local_ready and 'full' in local_modes,
+                    'model_id':getattr(app.state.engine,'model_id',None),
+                    'supports_images':False,
+                },
+                'local-wukong':{
+                    'available':local_ready and 'wukong' in local_modes,
+                    'configured':local_ready and 'wukong' in local_modes,
+                    'model_id':getattr(app.state.engine,'model_id',None),
+                    'supports_images':False,
+                },
+                'local-xucheng':{
+                    'available':local_ready and 'xucheng' in local_modes,
+                    'configured':local_ready and 'xucheng' in local_modes,
+                    'model_id':getattr(app.state.engine,'model_id',None),
+                    'supports_images':False,
+                },
+                'local-haruhi':{
+                    'available':local_ready and 'haruhi' in local_modes,
+                    'configured':local_ready and 'haruhi' in local_modes,
+                    'model_id':getattr(app.state.engine,'model_id',None),
+                    'supports_images':False,
+                },
+                'local-raw':{
+                    'available':local_ready and 'base' in local_modes,
+                    'configured':local_ready and 'base' in local_modes,
+                    'model_id':getattr(app.state.engine,'model_id',None),
+                    'supports_images':False,
+                },
+                'local-brief':{
+                    'available':local_ready and 'base' in local_modes,
+                    'configured':local_ready and 'base' in local_modes,
+                    'model_id':getattr(app.state.engine,'model_id',None),
+                    'supports_images':False,
+                },
+                'local-full-prompt':{
+                    'available':local_ready and 'base' in local_modes,
+                    'configured':local_ready and 'base' in local_modes,
+                    'model_id':getattr(app.state.engine,'model_id',None),
+                    'supports_images':False,
+                },
+                'local-wukong-brief':{
+                    'available':local_ready and 'base' in local_modes,
+                    'configured':local_ready and 'base' in local_modes,
+                    'model_id':getattr(app.state.engine,'model_id',None),
+                    'supports_images':False,
+                },
+                'local-wukong-full-prompt':{
+                    'available':local_ready and 'base' in local_modes,
+                    'configured':local_ready and 'base' in local_modes,
+                    'model_id':getattr(app.state.engine,'model_id',None),
+                    'supports_images':False,
+                }},
+            model_modes=local_modes,
             storage='sqlite',generation_busy=app.state.gate.locked(),
             model_id=getattr(active_engine,'model_id',None) if ready else None,
             same_chat_memory_enabled=bool(getattr(app.state.engine,'same_chat_memory',False)) if local_ready else False,
@@ -1557,7 +2159,10 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
 
     @app.post('/sessions',status_code=201)
     def create_session(body:SessionRequest):
-        selected=body.provider or app.state.default_provider
+        selected=resolved_provider_for_character(
+            body.character_id,
+            body.provider or app.state.default_provider,
+        )
         engine=provider_engine(selected)
         if body.character_id not in runtime_characters():
             raise HTTPException(404,'角色不存在，请刷新角色列表后重试。')
@@ -1567,7 +2172,9 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
             body.model_mode,body.character_id,
             getattr(engine,'model_id','Qwen/Qwen3-0.6B'),selected)
 
-    def ensure_character_opening(current,character_id,registry):
+    def ensure_character_opening(current,character_id,registry,provider=None):
+        if is_local_prompt_test_provider(provider):
+            return current
         greeting=str(
             registry.get(character_id,{}).get('greeting') or ''
         ).strip()
@@ -1579,17 +2186,28 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
 
     @app.put('/characters/{character_id}/conversation')
     def open_character_conversation(character_id:str,
-                                    provider:Literal['local','deepseek','opencode'] | None=None):
+                                    provider:Literal[
+                                        'local','local-base','local-half',
+                                        'local-full','local-wukong','local-xucheng',
+                                        'local-haruhi','local-raw','local-brief',
+                                        'local-full-prompt','local-wukong-brief',
+                                        'local-wukong-full-prompt','deepseek','opencode'
+                                    ] | None=None):
         if character_id not in runtime_characters():
             raise HTTPException(404,'角色不存在，请刷新角色列表后重试。')
-        selected=provider or app.state.default_provider
+        selected=resolved_provider_for_character(
+            character_id,
+            provider or app.state.default_provider,
+        )
         engine=provider_engine(selected)
         with exclusive():
             current=app.state.store.get_or_create_role_conversation(
-                character_id,model_id=getattr(engine,'model_id','Qwen/Qwen3-0.6B'),
+                character_id,
+                mode=local_mode_for_provider(selected,'base'),
+                model_id=getattr(engine,'model_id','Qwen/Qwen3-0.6B'),
                 provider=selected)
             return ensure_character_opening(
-                current,character_id,runtime_characters()
+                current,character_id,runtime_characters(),selected
             )
 
     def structured_memory_store():
@@ -1620,10 +2238,14 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
             raise HTTPException(404,'角色不存在。')
         records=store.list_items(character_id,include_inactive=include_inactive)
         return {'character_id':character_id,'records':records,
+                'suppressions':store.list_suppressions(character_id),
+                'admin_events':store.list_admin_events(character_id,limit=100),
                 'counts':{
                     'current':sum(item['state']=='active' for item in records),
                     'candidate':sum(item['state']=='candidate' for item in records),
                       'contested':sum(item['state']=='contested' for item in records),
+                    'historical':sum(item['state']=='superseded' for item in records),
+                    'deleted':sum(item['state']=='deleted' for item in records),
                   },
                 'jobs':store.job_counts(character_id),
                 'usage':store.memory_usage_for_day(character_id),
@@ -1667,9 +2289,30 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
         messages=structured_memory_sources(character_id)
         try:
             candidate=validate_candidate(body.model_dump(),messages)
-            result=store.auto_ingest(character_id,candidate)
+            selected=provider_name_for_session(
+                structured_memory_conversation(character_id)
+            )
+            if is_local_provider(selected):
+                selected=preferred_cloud_provider()
+            if selected is None:
+                raise ValueError('语义审核需要先配置 OpenCode Go 或 DeepSeek API Key')
+            engine=provider_engine(selected)
+            reviewed,rejected,metrics=verify_extracted_candidates(
+                [candidate],engine,character_id,f'candidate-{uuid4()}'
+            )
+            if not reviewed:
+                raise ValueError(
+                    '候选未通过语义审核：'
+                    + (
+                        str(rejected[0].get('review',{}).get('reason') or '')
+                        if rejected else ''
+                    )
+                )
+            result=store.auto_ingest(character_id,reviewed[0])
         except ValueError as exc:
             raise HTTPException(422,str(exc)) from exc
+        except (ProviderConfigurationError,ProviderError) as exc:
+            raise HTTPException(503,f'语义审核暂时不可用：{exc}') from exc
         return result
 
     @app.post('/characters/{character_id}/structured-memory/extract')
@@ -1679,10 +2322,10 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
         current=structured_memory_conversation(character_id)
         sources=current['messages']
         selected=provider_name_for_session(current)
-        if selected=='local':
+        if is_local_provider(selected):
             selected=('opencode' if opencode_key_configured() else
                       'deepseek' if deepseek_key_configured() else 'local')
-        if not provider_key_configured(selected):
+        if is_local_provider(selected) or not provider_key_configured(selected):
             raise HTTPException(503,'提取候选记忆需要先配置 OpenCode Go 或 DeepSeek API Key。')
         engine=provider_engine(selected)
         batch=sources[-message_limit:]
@@ -1728,9 +2371,32 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
                 logger.exception('结构化记忆候选提取失败')
                 raise HTTPException(502,'候选记忆提取未返回有效结果。') from exc
             record_provider_usage(selected,current['id'],uuid4(),metrics)
-        actions,rejected=ingest_extracted_candidates(
-            character_id,candidates,sources
+        validated,rejected=validate_extracted_candidates(candidates,sources)
+        try:
+            reviewed,verification_rejected,verification_metrics=(
+                verify_extracted_candidates(
+                    validated,
+                    engine,
+                    character_id,
+                    f'debug-{uuid4()}',
+                )
+            )
+        except (ProviderConfigurationError,ProviderError) as exc:
+            raise HTTPException(503,f'语义审核暂时不可用：{exc}') from exc
+        except ValueError as exc:
+            raise HTTPException(502,'语义审核未返回有效结果。') from exc
+        rejected.extend(verification_rejected)
+        if verification_metrics is not None:
+            record_provider_usage(
+                selected,
+                current['id'],
+                uuid4(),
+                verification_metrics,
+            )
+        actions,apply_rejected=apply_validated_candidates(
+            character_id,reviewed
         )
+        rejected.extend(apply_rejected)
         created=[]
         duplicates=[]
         superseded=[]
@@ -1752,6 +2418,127 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
         return {'created':created,'duplicates':duplicates,'superseded':superseded,
                 'contested':contested,'ignored':ignored,'rejected':rejected,
                 'source_messages':len(batch),'usage':metrics}
+
+    @app.patch('/characters/{character_id}/structured-memory/{item_id}')
+    def edit_structured_memory(character_id:str,item_id:int,
+                               body:StructuredMemoryEditRequest):
+        store=structured_memory_store()
+        if character_id not in runtime_characters():
+            raise HTTPException(404,'角色不存在。')
+        current=store.get(character_id,item_id)
+        if current is None:
+            raise HTTPException(404,'记忆条目不存在。')
+        if body.expected_updated_at and current['updated_at']!=body.expected_updated_at:
+            raise HTTPException(409,'这条记忆已经变化，请刷新后重试。')
+        try:
+            if body.action=='edit':
+                item=store.manual_edit(
+                    character_id,item_id,
+                    content=body.content,value=body.value,reason=body.reason,
+                    expected_updated_at=body.expected_updated_at,
+                )
+            elif body.action=='reject':
+                item=store.mark_incorrect(
+                    character_id,item_id,reason=body.reason,
+                    expected_updated_at=body.expected_updated_at,
+                )
+            else:
+                item=store.restore_history(
+                    character_id,item_id,reason=body.reason,
+                    expected_updated_at=body.expected_updated_at,
+                )
+            store.warm_candidate_embeddings(character_id)
+        except ValueError as exc:
+            raise HTTPException(409,str(exc)) from exc
+        return {
+            'action':body.action,
+            'record':item,
+            'affected_ids':[item_id] if item else [],
+        }
+
+    @app.post('/characters/{character_id}/structured-memory/{item_id}/mark-incorrect')
+    def mark_structured_memory_incorrect(character_id:str,item_id:int,
+                                         body:StructuredMemoryActionRequest):
+        store=structured_memory_store()
+        if character_id not in runtime_characters():
+            raise HTTPException(404,'角色不存在。')
+        try:
+            item=store.mark_incorrect(
+                character_id,item_id,reason=body.reason
+            )
+        except ValueError as exc:
+            raise HTTPException(409,str(exc)) from exc
+        return {'updated':True,'record':item}
+
+    @app.post('/characters/{character_id}/structured-memory/{item_id}/restore')
+    def restore_structured_memory(character_id:str,item_id:int,
+                                  body:StructuredMemoryActionRequest):
+        store=structured_memory_store()
+        if character_id not in runtime_characters():
+            raise HTTPException(404,'角色不存在。')
+        try:
+            item=store.restore_history(
+                character_id,item_id,reason=body.reason
+            )
+            store.warm_candidate_embeddings(character_id)
+        except ValueError as exc:
+            raise HTTPException(409,str(exc)) from exc
+        return {'updated':True,'record':item}
+
+    @app.get('/characters/{character_id}/structured-memory/suppressions')
+    def list_memory_suppressions(character_id:str):
+        store=structured_memory_store()
+        if character_id not in runtime_characters():
+            raise HTTPException(404,'角色不存在。')
+        return {
+            'character_id':character_id,
+            'suppressions':store.list_suppressions(character_id),
+        }
+
+    @app.post('/characters/{character_id}/structured-memory/suppressions',status_code=201)
+    def create_memory_suppression(character_id:str,
+                                  body:StructuredMemorySuppressionRequest):
+        store=structured_memory_store()
+        if character_id not in runtime_characters():
+            raise HTTPException(404,'角色不存在。')
+        try:
+            item=store.create_suppression(
+                character_id,
+                subject=body.subject,
+                fact_key_prefix=body.fact_key_prefix,
+                category=body.category,
+                reason=body.reason,
+            )
+        except ValueError as exc:
+            raise HTTPException(422,str(exc)) from exc
+        return {'created':True,'suppression':item}
+
+    @app.post(
+        '/characters/{character_id}/structured-memory/forget-topic',
+        status_code=201,
+    )
+    def forget_structured_memory_topic(
+        character_id:str,
+        body:StructuredMemorySuppressionRequest,
+    ):
+        result=create_memory_suppression(character_id,body)
+        suppression=result['suppression']
+        return {
+            'action':'forget_topic',
+            'affected_ids':suppression.get('affected_ids',[]),
+            'suppressions':[suppression],
+        }
+
+    @app.delete('/characters/{character_id}/structured-memory/suppressions/{suppression_id}')
+    def delete_memory_suppression(character_id:str,suppression_id:int):
+        store=structured_memory_store()
+        if character_id not in runtime_characters():
+            raise HTTPException(404,'角色不存在。')
+        try:
+            store.delete_suppression(character_id,suppression_id)
+        except ValueError as exc:
+            raise HTTPException(404,str(exc)) from exc
+        return {'deleted':True,'id':suppression_id}
 
     @app.post('/characters/{character_id}/structured-memory/review')
     def review_structured_memory(character_id:str,body:StructuredMemoryReviewRequest):
@@ -1790,15 +2577,22 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
             try:
                 result=app.state.store.clear_role_conversation(character_id)
             except KeyError:
-                engine=provider_engine(app.state.default_provider)
-                result=app.state.store.get_or_create_role_conversation(
-                    character_id,model_id=getattr(engine,'model_id','Qwen/Qwen3-0.6B'),
-                    provider=app.state.default_provider)
+                result=None
+            selected=resolved_provider_for_character(
+                character_id,
+                (existing or {}).get('provider') or app.state.default_provider,
+            )
+            engine=provider_engine(selected)
+            result=app.state.store.get_or_create_role_conversation(
+                character_id,
+                mode=local_mode_for_provider(selected,'base'),
+                model_id=getattr(engine,'model_id','Qwen/Qwen3-0.6B'),
+                provider=selected)
             if app.state.structured_memory is not None:
                 app.state.structured_memory.clear_scope(character_id)
             remove_character_asset_files(character_id)
             return ensure_character_opening(
-                result,character_id,runtime_characters()
+                result,character_id,runtime_characters(),selected
             )
 
     @app.get('/sessions')
@@ -1884,25 +2678,67 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
     @app.get('/sessions/{session_id}/prompt')
     def inspect_prompt(session_id:UUID,message:str=Query(default='继续聊聊',max_length=4096)):
         current=session(session_id)
-        memory=unify_session_and_structured_memory(
-            current,app.state.store.get_memory(str(session_id))
+        selected=provider_name_for_session(current)
+        engine=provider_engine(selected)
+        prompt_test=is_local_prompt_test_provider(selected)
+        memory=(
+            None
+            if prompt_test
+            else unify_session_and_structured_memory(
+                current,app.state.store.get_memory(str(session_id))
+            )
         )
-        messages,trace=assemble_prompt(current,message,runtime_characters(),memory)
-        apply_structured_memory(messages,current,message,trace,memory)
-        tokenizer=getattr(app.state.engine,'tokenizer',None)
-        trace['input_budget']=getattr(app.state.engine,'input_budget',4096)
+        messages,trace=assemble_prompt(
+            current,
+            message,
+            runtime_characters(),
+            memory,
+            prompt_mode=prompt_mode_for_provider(selected),
+        )
+        if not prompt_test:
+            apply_structured_memory(messages,current,message,trace,memory)
+        else:
+            trace['generation_preset']={}
+        tokenizer=getattr(engine,'tokenizer',None)
+        trace['provider']=selected
+        trace['model_id']=getattr(engine,'model_id',None)
+        trace['local_repeat_guard']=selected in LOCAL_REPEAT_GUARD_PROVIDERS
+        trace['input_budget']=getattr(engine,'input_budget',4096)
         trace['messages']=messages
         trace['input_tokens']=None
         if tokenizer:
             from context_window import prepare_context_details
             try:
-                inputs,metrics,selected,_=prepare_context_details(tokenizer,messages,budget=trace['input_budget'],trim_history=True)
+                inputs,metrics,trimmed_messages,_=prepare_context_details(
+                    tokenizer,
+                    messages,
+                    budget=trace['input_budget'],
+                    trim_history=True,
+                )
                 trace.update(metrics)
-                trace['messages']=selected
+                trace['messages']=trimmed_messages
                 trace['input_tokens']=int(inputs['input_ids'].shape[-1])
             except ValueError as exc:
                 trace['warning']=str(exc)
+        else:
+            # Cloud providers use their own tokenizer server-side. Expose a
+            # clearly named local estimate rather than pretending it is exact.
+            trace['input_tokens_estimate']=estimate_tokens(messages)
+            trace['context_policy']='provider_tokenizer_server_side'
         return trace
+
+    @app.get('/sessions/{session_id}/traces')
+    def list_session_traces(session_id:UUID,limit:int=Query(default=30,ge=1,le=100)):
+        session(session_id)
+        return {'traces':app.state.store.list_turn_traces(str(session_id),limit=limit)}
+
+    @app.get('/sessions/{session_id}/traces/{run_id}')
+    def get_session_trace(session_id:UUID,run_id:str):
+        session(session_id)
+        try:
+            return app.state.store.get_turn_trace(run_id,session_id=str(session_id))
+        except KeyError:
+            raise HTTPException(404,'该轮 Trace 不存在')
 
     @app.post('/chat')
     def chat(body:ChatRequest):
@@ -1910,24 +2746,82 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
             current=session(body.session_id)
             selected=provider_name_for_session(current)
             engine=provider_engine(selected)
+            prompt_test=is_local_prompt_test_provider(selected)
             check_session_model(current,engine)
             check_session_character(current)
             registry=runtime_characters()
+            messages=[]
+            trace={}
+            response_source='model'
             try:
-                profile_reply=character_profile_reply(current['character_id'],body.message,registry)
-                if is_explicit_ai_identity_question(body.message):
+                profile_reply=(
+                    None
+                    if prompt_test
+                    else character_profile_reply(current['character_id'],body.message,registry)
+                )
+                if not prompt_test and is_explicit_ai_identity_question(body.message):
                     answer=ai_identity_reply(current['character_id'],registry)
                     metrics=dict(seconds=0.0,output_tokens=0,response_source='identity_policy')
+                    response_source='identity_policy'
                 elif profile_reply is not None:
                     answer=profile_reply
                     metrics=dict(seconds=0.0,output_tokens=0,response_source='persona_policy')
+                    response_source='persona_policy'
                 else:
                     messages,trace=prepare_chat(current,body.message,registry,image_id=body.image_id)
                     check_token_limits(selected,messages,body.max_new_tokens)
                     options={'generation_overrides':trace['generation_preset']} if trace['generation_preset'] else {}
-                    answer,metrics=engine.reply(messages,model_mode=current['model_mode'],max_new_tokens=body.max_new_tokens,**options)
-                    answer,guard_metrics=apply_knowledge_guard(answer,current,registry)
-                    metrics.update(guard_metrics)
+                    answer,metrics=engine.reply(
+                        messages,
+                        model_mode=model_mode_for_session(current),
+                        max_new_tokens=body.max_new_tokens,
+                        **options,
+                    )
+                    if (
+                        trace.get('local_repeat_guard')
+                        and not any(
+                            cue in body.message for cue in REPEAT_REQUEST_CUES
+                        )
+                    ):
+                        repeated,similarity=answer_repeats_previous(
+                            answer,messages
+                        )
+                        retry_count=0
+                        while repeated and retry_count<2:
+                            retry_count+=1
+                            retry_messages=(
+                                messages
+                                if retry_count==1
+                                else retry_messages_without_previous_answer(messages)
+                            )
+                            retry_overrides=dict(
+                                options.get('generation_overrides') or {}
+                            )
+                            retry_overrides['repetition_penalty']=max(
+                                float(
+                                    retry_overrides.get(
+                                        'repetition_penalty',1.0
+                                    )
+                                ),
+                                1.2 if retry_count==1 else 1.3,
+                            )
+                            answer,metrics=engine.reply(
+                                retry_messages,
+                                model_mode=model_mode_for_session(current),
+                                max_new_tokens=body.max_new_tokens,
+                                generation_overrides=retry_overrides,
+                            )
+                            repeated,similarity=answer_repeats_previous(
+                                answer,retry_messages
+                            )
+                        metrics['local_repeat_guard']=True
+                        metrics['repetition_retry_count']=retry_count
+                        metrics['repetition_guard_similarity']=round(
+                            similarity,3
+                        )
+                    if not prompt_test:
+                        answer,guard_metrics=apply_knowledge_guard(answer,current,registry)
+                        metrics.update(guard_metrics)
                     metrics['memory_warning']=trace['memory_warning']
                     if metrics.get('context_omitted_turns'):
                         metrics['memory_warning']='本轮仍有部分旧对话超过上下文预算，可在会话记忆中继续整理。'
@@ -1952,12 +2846,32 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
                 str(body.session_id),body.message,answer,
                 image_id=str(body.image_id) if body.image_id else None,
             )
-            record_provider_usage(selected,current['id'],body.request_id,metrics)
+            trace_metrics=dict(metrics)
             try:
-                schedule_auto_memory(current,saved)
+                save_turn_trace(
+                    current,
+                    registry,
+                    messages,
+                    trace,
+                    trace_metrics,
+                    selected,
+                    saved,
+                    body.max_new_tokens,
+                    body.request_id or str(uuid4()),
+                    response_source,
+                )
+                metrics['run_id']=trace_metrics.get('run_id')
+                metrics['prompt_version']=trace_metrics.get('prompt_version')
             except Exception:
-                logger.exception('聊天已保存，但自动记忆任务入队失败')
-            return dict(session_id=str(body.session_id),model_mode=current['model_mode'],
+                logger.exception('聊天已保存，但调试追踪写入失败')
+            record_provider_usage(selected,current['id'],body.request_id,metrics)
+            if not prompt_test:
+                try:
+                    schedule_auto_memory(current,saved)
+                except Exception:
+                    logger.exception('聊天已保存，但自动记忆任务入队失败')
+            return dict(session_id=str(body.session_id),
+                        model_mode=model_mode_for_session(current),
                         provider=selected,answer=answer,display=None,metrics=metrics,
                         message_count=len(current['messages'])+2)
 
@@ -2009,16 +2923,29 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
             current=session(body.session_id)
             selected=provider_name_for_session(current)
             engine=provider_engine(selected)
+            prompt_test=is_local_prompt_test_provider(selected)
             check_session_model(current,engine)
             check_session_character(current)
-            explicit_identity=is_explicit_ai_identity_question(body.message)
+            explicit_identity=(
+                False
+                if prompt_test
+                else is_explicit_ai_identity_question(body.message)
+            )
             policy_source='identity_policy' if explicit_identity else 'persona_policy'
             registry=runtime_characters()
-            policy_reply=(ai_identity_reply(current['character_id'],registry) if explicit_identity
-                          else character_profile_reply(current['character_id'],body.message,registry))
+            policy_reply=(
+                None
+                if prompt_test
+                else (
+                    ai_identity_reply(current['character_id'],registry)
+                    if explicit_identity
+                    else character_profile_reply(current['character_id'],body.message,registry)
+                )
+            )
             boundary_card=role_card(current,registry)
             strict_boundary=bool(
-                policy_reply is None
+                not prompt_test
+                and policy_reply is None
                 and (
                     query_boundary_risk(boundary_card,body.message)['risky']
                     or (
@@ -2027,20 +2954,43 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
                     )
                 )
             )
+            def after_save_details(current,saved,message,answer,messages,prompt_trace,
+                                   metrics,response_source):
+                save_turn_trace(
+                    current,
+                    registry,
+                    messages,
+                    prompt_trace,
+                    metrics,
+                    selected,
+                    saved,
+                    body.max_new_tokens,
+                    body.request_id or str(uuid4()),
+                    response_source,
+                )
+
             job=StreamJob(engine,app.state.store,current,body.message,app.state.gate,body.timeout_seconds,
                           body.max_new_tokens,policy_reply=policy_reply,response_source=policy_source,
                           characters=registry,prompt_builder=lambda stop:prepare_chat(
                               current,body.message,registry,stop,body.image_id),
+                          model_mode=model_mode_for_session(current),
                           provider_name=selected,request_id=body.request_id,
                           record_usage=record_stream_usage,
-                          after_save=lambda current,saved,message,answer:schedule_auto_memory(
-                              current,saved),
+                          after_save=lambda current,saved,message,answer:(
+                              None
+                              if prompt_test
+                              else schedule_auto_memory(current,saved)
+                          ),
                           validate_messages=lambda messages: check_stream_token_limits(
                               selected,messages,body.max_new_tokens),
                           image_id=str(body.image_id) if body.image_id else None,
                           buffer_until_validated=strict_boundary,
-                          transform_answer=lambda answer:apply_knowledge_guard(
-                              answer,current,registry))
+                          transform_answer=lambda answer:(
+                              answer
+                              if prompt_test
+                              else apply_knowledge_guard(answer,current,registry)
+                          ),
+                          after_save_details=after_save_details)
             app.state.job=job
             job.start()
         except Exception:
@@ -2051,7 +3001,8 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
             terminal=False
             try:
                 yield encode_sse(dict(event='start',data=dict(
-                    session_id=current['id'],model_mode=current['model_mode'],
+                    session_id=current['id'],
+                    model_mode=model_mode_for_session(current),
                     provider=selected)))
                 while True:
                     if await request.is_disconnected():
@@ -2075,12 +3026,28 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,engine_factory=No
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--db',default='outputs/chat.sqlite3')
+    parser.add_argument('--secret-path',default=None,
+                        help='API Key encrypted store path; defaults beside the chat database')
     parser.add_argument('--adapter-run',default=None)
+    parser.add_argument('--half-adapter',default=None,
+                        help='半轮 LoRA PEFT adapter directory')
+    parser.add_argument('--full-adapter',default=None,
+                        help='完整 LoRA PEFT adapter directory')
+    parser.add_argument('--wukong-adapter',default=None,
+                        help='孙悟空第一版 LoRA PEFT adapter directory')
+    parser.add_argument('--xucheng-adapter',default=None,
+                        help='许澄 half1 LoRA PEFT adapter directory')
+    parser.add_argument('--haruhi-adapter',default=None,
+                        help='凉宫春日最终 LoRA PEFT adapter directory')
+    parser.add_argument('--enable-local-models',action='store_true',
+                        help='即使默认使用云端 Provider，也同时加载本地 Qwen 与 Adapter')
+    parser.add_argument('--seed-evaluation-character',action='store_true',
+                        help='确保本地/云端模型对照角色存在')
     parser.add_argument('--port',type=int,default=8000)
     parser.add_argument('--lan',action='store_true',
                         help='显式启用受限局域网配对入口；服务会绑定 0.0.0.0，其余 API 仍只允许本机访问')
     parser.add_argument('--model-profile',choices=['qwen3-0.6b','qwen3-1.7b'],default='qwen3-0.6b')
-    parser.add_argument('--provider',choices=['opencode','deepseek','local'],default='opencode')
+    parser.add_argument('--provider',choices=PROVIDER_VALUES,default='opencode')
     parser.add_argument('--same-chat-memory',action='store_true',
                         help='实验开关：从本会话被裁剪的旧助手回答中检索小满自述；新会话不共享记忆')
     structured_memory=parser.add_mutually_exclusive_group()
@@ -2128,10 +3095,24 @@ if __name__=='__main__':
     if args.asr_provider=='whisper':
         from recognition import WhisperRecognition
         asr_factory=lambda:WhisperRecognition(args.asr_model_dir)
-    uvicorn.run(create_app(args.db,args.adapter_run,speech_factory=speech_factory,asr_factory=asr_factory,
+    adapter_runs={
+        name:path for name,path in (
+            ('half',args.half_adapter),
+            ('full',args.full_adapter),
+            ('wukong',args.wukong_adapter),
+            ('xucheng',args.xucheng_adapter),
+            ('haruhi',args.haruhi_adapter),
+        ) if path
+    }
+    uvicorn.run(create_app(
+                           args.db,args.adapter_run,adapter_runs=adapter_runs,
+                           enable_local_models=args.enable_local_models,
+                           seed_evaluation_character=args.seed_evaluation_character,
+                           speech_factory=speech_factory,asr_factory=asr_factory,
                            model_profile=args.model_profile,same_chat_memory=args.same_chat_memory,
                            lan_enabled=args.lan,lan_pair_code=lan_pair_code,
                            default_provider=args.provider,
+                           secret_path=args.secret_path,
                            structured_memory=args.structured_memory,
                            structured_memory_db_path=args.structured_memory_db,
                            auto_memory_worker_enabled=args.structured_memory,

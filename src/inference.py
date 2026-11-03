@@ -1,11 +1,12 @@
 """Qwen3 单轮推理示例：下载、GPU 推理，并记录本次真实结果。"""
 import argparse
 import json
+import re
 import time
 from datetime import datetime
 from pathlib import Path
 from threading import Lock
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 
 import torch
 from huggingface_hub import HfApi
@@ -49,7 +50,8 @@ def load_model(cache_dir=None, revision=MODEL_REVISION, local_files_only=True,mo
 class QwenChat:
     """只负责推理，历史由调用者传入，不把不同用户的对话存在模型中。"""
 
-    def __init__(self, adapter_run=None, trim_history=False,model_profile='qwen3-0.6b',same_chat_memory=False,input_budget=2048):
+    def __init__(self, adapter_run=None, adapter_runs=None, trim_history=False,
+                 model_profile='qwen3-0.6b',same_chat_memory=False,input_budget=2048):
         # 默认保持离线评估原有的超长拒绝策略；在线服务单独启用窗口选择。
         self.trim_history=trim_history
         self.same_chat_memory=bool(same_chat_memory)
@@ -57,20 +59,104 @@ class QwenChat:
         profile=get_profile(model_profile)
         self.model_id=profile['model_id'];self.model_revision=profile['revision']
         self.adapter_available = False
+        self.adapter_paths = {}
+        self.adapter_names = {}
         if adapter_run:
             root = Path(adapter_run)
-            config = json.loads((root / 'run-config.json').read_text(encoding='utf-8'))
-            if config['base_model'] != self.model_id or config['revision'] != self.model_revision:
-                raise ValueError('Adapter 训练记录与基础模型版本不匹配')
+            config_path = root / 'run-config.json'
+            if config_path.is_file():
+                config = json.loads(config_path.read_text(encoding='utf-8'))
+                if (
+                    config.get('base_model') != self.model_id
+                    or config.get('revision') != self.model_revision
+                ):
+                    raise ValueError('Adapter 训练记录与基础模型版本不匹配')
+            self.adapter_paths['lora'] = root
+            self.adapter_names['lora'] = 'shiyu_lora'
+        for name, path in (adapter_runs or {}).items():
+            if not re.fullmatch(r'[a-z][a-z0-9_]{0,31}', name):
+                raise ValueError(f'Adapter 名称无效：{name}')
+            self.adapter_paths[name] = Path(path)
+            self.adapter_names[name] = f'shiyu_{name}'
+        self.adapter_directories = {
+            name:self._adapter_directory(path)
+            for name,path in self.adapter_paths.items()
+        }
+        if self.adapter_directories:
+            from peft import PeftConfig
+            for name,adapter_path in self.adapter_directories.items():
+                metadata = PeftConfig.from_pretrained(adapter_path)
+                if not adapter_base_matches(
+                    metadata.base_model_name_or_path,
+                    self.model_id,
+                    profile['local_path'],
+                ):
+                    raise ValueError(f'Adapter {name} 元数据与基础模型不匹配')
         self.tokenizer, self.model = load_model(model_id=self.model_id,revision=self.model_revision,model_path=profile['local_path'])
-        if adapter_run:
-            from peft import PeftConfig, PeftModel
-            metadata = PeftConfig.from_pretrained(root / 'adapter')
-            if not adapter_base_matches(metadata.base_model_name_or_path, self.model_id, profile['local_path']):
-                raise ValueError('Adapter 元数据与基础模型不匹配')
-            self.model = PeftModel.from_pretrained(self.model, root / 'adapter', is_trainable=False).eval()
+        if self.adapter_directories:
+            from peft import PeftModel
+            first_name, first_path = next(iter(self.adapter_paths.items()))
+            first_adapter = self.adapter_directories[first_name]
+            self.model = PeftModel.from_pretrained(
+                self.model, first_adapter,
+                adapter_name=self.adapter_names[first_name],
+                is_trainable=False,
+            ).eval()
+            for name, path in list(self.adapter_paths.items())[1:]:
+                adapter_path = self.adapter_directories[name]
+                self.model.load_adapter(
+                    str(adapter_path), adapter_name=self.adapter_names[name],
+                    is_trainable=False,
+                )
+            self.model.eval()
             self.adapter_available = True
+        self.available_model_modes = ['base']
+        if self.adapter_available:
+            self.available_model_modes.extend(
+                name for name in self.adapter_paths
+                if name != 'lora'
+            )
+            if 'lora' in self.adapter_paths:
+                self.available_model_modes.append('lora')
+        self._default_adapter = (
+            'full' if 'full' in self.adapter_paths else
+            'half' if 'half' in self.adapter_paths else
+            next(iter(self.adapter_paths), None)
+        )
         self.lock = Lock()
+
+    @staticmethod
+    def _adapter_directory(path):
+        """Accept both LLaMA-Factory run directories and raw PEFT adapters."""
+        root = Path(path)
+        if (root / 'adapter_config.json').is_file():
+            return root
+        if (root / 'adapter' / 'adapter_config.json').is_file():
+            return root / 'adapter'
+        raise FileNotFoundError(f'Adapter 目录缺少 adapter_config.json：{root}')
+
+    def _resolve_model_mode(self, model_mode):
+        mode = 'base' if model_mode in (None, 'base') else str(model_mode)
+        if mode == 'lora':
+            mode = self._default_adapter or 'lora'
+        if mode == 'base':
+            return mode
+        if mode not in self.adapter_paths:
+            raise ValueError(f'模型模式不可用：{mode}')
+        return mode
+
+    @contextmanager
+    def _select_model_mode(self, model_mode):
+        mode = self._resolve_model_mode(model_mode)
+        if mode == 'base':
+            if self.adapter_available:
+                with self.model.disable_adapter():
+                    yield
+            else:
+                yield
+            return
+        self.model.set_adapter(self.adapter_names[mode])
+        yield
 
     def _prepare_inputs(self,messages):
         inputs,metrics,_,omitted_pairs=prepare_context_details(
@@ -97,8 +183,7 @@ class QwenChat:
         from stream_job import GenerationStopped
         settings=for_request(GENERATION_SETTINGS,max_new_tokens,generation_overrides)
         with self.lock:
-            if model_mode not in ('base','lora') or (model_mode=='lora' and not self.adapter_available):
-                raise ValueError('模型模式不可用')
+            resolved_mode = self._resolve_model_mode(model_mode)
             if stop_event.is_set():
                 raise GenerationStopped()
             inputs,context_metrics=self._prepare_inputs(messages)
@@ -116,8 +201,7 @@ class QwenChat:
                 def __call__(self,input_ids,scores,**kwargs):
                     return stop_event.is_set()
             streamer=CallbackStreamer(self.tokenizer,skip_prompt=True,skip_special_tokens=True)
-            context=self.model.disable_adapter() if self.adapter_available and model_mode=='base' else nullcontext()
-            with context,torch.inference_mode():
+            with self._select_model_mode(resolved_mode),torch.inference_mode():
                 generated=self.model.generate(**inputs,**settings,streamer=streamer,
                                               stopping_criteria=StoppingCriteriaList([Stop()]))
             torch.cuda.synchronize()
@@ -129,6 +213,7 @@ class QwenChat:
                 **context_metrics,
                 input_tokens=input_tokens,output_tokens=len(tokens),max_new_tokens=settings['max_new_tokens'],seconds=time.perf_counter()-started,
                 first_visible_text_seconds=first_text[0],ended_with_eos=int(tokens[-1]) in ([eos] if isinstance(eos,int) else eos),
+                model_mode=resolved_mode,
                 peak_allocated_gib=torch.cuda.max_memory_allocated()/1024**3,
                 peak_reserved_gib=torch.cuda.max_memory_reserved()/1024**3)
 
@@ -136,19 +221,15 @@ class QwenChat:
         # 串行使用 GPU，避免多个请求同时生成导致显存峰值叠加。
         settings=for_request(GENERATION_SETTINGS,max_new_tokens,generation_overrides)
         with self.lock:
-            if model_mode not in ('base', 'lora'):
-                raise ValueError('模型选择无效')
-            if model_mode == 'lora' and not self.adapter_available:
-                raise ValueError('尚未加载 LoRA Adapter，请检查启动参数')
+            resolved_mode = self._resolve_model_mode(model_mode)
             inputs,context_metrics=self._prepare_inputs(messages)
             input_tokens = inputs['input_ids'].shape[-1]
             inputs = inputs.to('cuda:0')
             torch.cuda.reset_peak_memory_stats()
             torch.cuda.synchronize()
             started = time.perf_counter()
-            # 只在本次请求内禁用 Adapter，锁覆盖开关与生成，避免不同会话串用模型。
-            context = self.model.disable_adapter() if self.adapter_available and model_mode == 'base' else nullcontext()
-            with context, torch.inference_mode():
+            # 锁覆盖 Adapter 切换与生成，避免不同会话串用模型。
+            with self._select_model_mode(resolved_mode), torch.inference_mode():
                 generated = self.model.generate(**inputs, **settings)
             torch.cuda.synchronize()
             elapsed = time.perf_counter() - started
@@ -163,6 +244,7 @@ class QwenChat:
                 'input_tokens': input_tokens, 'output_tokens': len(new_tokens),
                 'max_new_tokens': settings['max_new_tokens'],
                 'seconds': elapsed, 'ended_with_eos': ended,
+                'model_mode': resolved_mode,
                 'peak_allocated_gib': torch.cuda.max_memory_allocated() / 1024**3,
                 'peak_reserved_gib': torch.cuda.max_memory_reserved() / 1024**3,
             }

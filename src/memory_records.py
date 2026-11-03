@@ -6,7 +6,17 @@ The memory store applies a conservative operation policy after this check.
 from datetime import date
 import re
 
-KINDS = {'user_report', 'character_detail', 'shared_event', 'belief', 'plan'}
+from memory_semantics import classify_candidate
+
+
+KINDS = {
+    'user_report',
+    'character_detail',
+    'role_claim',
+    'shared_event',
+    'belief',
+    'plan',
+}
 SUBJECTS = {'user', 'character', 'shared'}
 OPERATIONS = {'add', 'merge', 'supersede', 'contested', 'ignore'}
 _FACT_KEY = re.compile(r'[a-z][a-z0-9_.-]{2,119}\Z')
@@ -47,13 +57,25 @@ def validate_candidate(candidate, messages):
     content = candidate.get('content')
     if not isinstance(content, str) or not 1 <= len(content.strip()) <= 600:
         raise ValueError('invalid memory content')
-    subject = candidate.get('subject') or _infer_subject(kind, checked)
+    provisional = {
+        **candidate,
+        'kind': kind,
+        'subject': candidate.get('subject') or _infer_subject(kind, checked),
+    }
+    provisional = classify_candidate(provisional, checked)
+    kind = provisional['kind']
+    subject = provisional['subject']
     if subject not in SUBJECTS:
         raise ValueError('unsupported memory subject')
     if kind == 'user_report' and subject != 'user':
         raise ValueError('user reports must use the user subject')
     if kind == 'character_detail' and subject != 'character':
         raise ValueError('character details must use the character subject')
+    if kind == 'role_claim' and (
+        subject != 'character'
+        or {item['role'] for item in checked} != {'assistant'}
+    ):
+        raise ValueError('role claims require assistant evidence and character subject')
     fact_key = candidate.get('fact_key')
     if fact_key is not None:
         if not isinstance(fact_key, str) or not _FACT_KEY.fullmatch(fact_key.strip().lower()):
@@ -83,11 +105,26 @@ def validate_candidate(candidate, messages):
         raise ValueError('invalid memory target')
     if operation in {'merge', 'supersede', 'contested'} and target_item_id is None:
         raise ValueError('memory operation requires a target')
-    return {'kind': kind, 'subject': subject, 'fact_key': fact_key, 'value': value,
-            'content': content.strip(), 'evidence': checked,
-            'event_date': event_date, 'status': 'candidate',
-            'semantic_verified': False, 'operation': operation,
-            'target_item_id': target_item_id}
+    return {
+        'kind': kind,
+        'subject': subject,
+        'fact_key': fact_key,
+        'value': value,
+        'content': content.strip(),
+        'evidence': checked,
+        'event_date': event_date,
+        'status': 'candidate',
+        'semantic_verified': False,
+        'semantic_reason': provisional.get('semantic_reason', ''),
+        'operation': provisional.get('operation', operation),
+        'target_item_id': target_item_id,
+        'fact_type': provisional['fact_type'],
+        'epistemic_status': provisional['epistemic_status'],
+        'source_authority': provisional['source_authority'],
+        'knowledge_source': provisional['knowledge_source'],
+        'known_at': provisional.get('known_at'),
+        'visibility': provisional.get('visibility', 'character_private'),
+    }
 
 
 def propose_revision(current, candidate, *, same_subject_and_fact=False):

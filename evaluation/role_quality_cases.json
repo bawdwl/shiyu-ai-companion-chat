@@ -1,0 +1,289 @@
+{
+  "schema_version": 1,
+  "suite_version": "api-role-quality-2026-10-30.1",
+  "role_id": "companion",
+  "generation": {
+    "temperature": 0.35,
+    "top_p": 0.85,
+    "max_new_tokens": 180
+  },
+  "memory_cases": [
+    {
+      "id": "M01",
+      "message": {"id": 1, "role": "user", "content": "我现在住在厦门。"},
+      "candidate": {"kind": "user_report", "subject": "user", "fact_key": "user.current.place", "value": "厦门", "content": "用户现在住在厦门", "operation": "add", "evidence": [{"message_id": 1, "role": "user", "quote": "我现在住在厦门。"}]},
+      "expect": {"accepted": true, "fact_type": "fact", "epistemic_status": "explicit", "authority": "user_explicit"}
+    },
+    {
+      "id": "M02",
+      "message": {"id": 1, "role": "user", "content": "我可能考虑搬到杭州，但还没决定。"},
+      "candidate": {"kind": "user_report", "subject": "user", "fact_key": "user.current.place", "value": "杭州", "content": "用户决定搬到杭州", "operation": "supersede", "target_item_id": 1, "evidence": [{"message_id": 1, "role": "user", "quote": "我可能考虑搬到杭州，但还没决定。"}]},
+      "expect": {"accepted": false}
+    },
+    {
+      "id": "M03",
+      "message": {"id": 1, "role": "user", "content": "我挺喜欢科幻小说。"},
+      "candidate": {"kind": "user_report", "subject": "user", "fact_key": "user.preference.genre", "value": "科幻小说", "content": "用户喜欢科幻小说", "operation": "add", "evidence": [{"message_id": 1, "role": "user", "quote": "我挺喜欢科幻小说。"}]},
+      "expect": {"accepted": true, "fact_type": "preference", "epistemic_status": "explicit", "authority": "user_explicit"}
+    },
+    {
+      "id": "M04",
+      "message": {"id": 1, "role": "user", "content": "我觉得那个同事不太靠谱。"},
+      "candidate": {"kind": "belief", "subject": "user", "fact_key": "user.opinion.colleague", "value": null, "content": "用户认为同事不可靠", "operation": "add", "evidence": [{"message_id": 1, "role": "user", "quote": "我觉得那个同事不太靠谱。"}]},
+      "expect": {"accepted": true, "fact_type": "opinion", "epistemic_status": "explicit", "authority": "user_explicit"}
+    },
+    {
+      "id": "M05",
+      "message": {"id": 1, "role": "user", "content": "我以前在北京住过两年。"},
+      "candidate": {"kind": "user_report", "subject": "user", "fact_key": "user.history.place", "value": "北京", "content": "用户过去在北京住过两年", "operation": "add", "evidence": [{"message_id": 1, "role": "user", "quote": "我以前在北京住过两年。"}]},
+      "expect": {"accepted": true, "fact_type": "fact", "epistemic_status": "explicit", "authority": "user_explicit"}
+    },
+    {
+      "id": "M06",
+      "message": {"id": 1, "role": "assistant", "content": "我小时候在海边住过一阵。"},
+      "candidate": {"kind": "character_detail", "subject": "character", "fact_key": "character.history.home", "value": "海边", "content": "小满小时候住在海边", "operation": "add", "evidence": [{"message_id": 1, "role": "assistant", "quote": "我小时候在海边住过一阵。"}]},
+      "expect": {"accepted": true, "kind": "role_claim", "fact_type": "role_claim", "authority": "character_self_report"}
+    },
+    {
+      "id": "M07",
+      "message": {"id": 1, "role": "user", "content": "如果以后有机会，我想去冰岛看极光。"},
+      "candidate": {"kind": "user_report", "subject": "user", "fact_key": "user.travel.iceland", "value": "冰岛", "content": "用户已经去过冰岛看极光", "operation": "add", "evidence": [{"message_id": 1, "role": "user", "quote": "如果以后有机会，我想去冰岛看极光。"}]},
+      "expect": {"accepted": false}
+    },
+    {
+      "id": "M08",
+      "message": {"id": 1, "role": "user", "content": "我开玩笑的，我根本没养猫。"},
+      "candidate": {"kind": "user_report", "subject": "user", "fact_key": "user.pet.cat", "value": null, "content": "用户养了一只猫", "operation": "add", "evidence": [{"message_id": 1, "role": "user", "quote": "我开玩笑的，我根本没养猫。"}]},
+      "expect": {"accepted": false}
+    },
+    {
+      "id": "M09",
+      "message": {"id": 1, "role": "user", "content": "我下周三准备去参加面试。"},
+      "candidate": {"kind": "plan", "subject": "user", "fact_key": "user.interview.plan", "value": "下周三", "content": "用户计划下周三参加面试", "operation": "add", "evidence": [{"message_id": 1, "role": "user", "quote": "我下周三准备去参加面试。"}]},
+      "expect": {"accepted": true, "fact_type": "plan", "epistemic_status": "explicit", "authority": "user_explicit"}
+    },
+    {
+      "id": "M10",
+      "message": {"id": 1, "role": "user", "content": "我没去过日本。"},
+      "candidate": {"kind": "user_report", "subject": "user", "fact_key": "user.travel.japan", "value": null, "content": "用户去过日本", "operation": "add", "evidence": [{"message_id": 1, "role": "user", "quote": "我没去过日本。"}]},
+      "expect": {"accepted": false}
+    },
+    {
+      "id": "M11",
+      "message": {"id": 1, "role": "assistant", "content": "我可能会去学陶艺，但只是想想。"},
+      "candidate": {"kind": "character_detail", "subject": "character", "fact_key": "character.skill.pottery", "value": "陶艺", "content": "小满已经学会陶艺", "operation": "add", "evidence": [{"message_id": 1, "role": "assistant", "quote": "我可能会去学陶艺，但只是想想。"}]},
+      "expect": {"accepted": false}
+    },
+    {
+      "id": "M12",
+      "message": {"id": 1, "role": "user", "content": "不要记我住哪里，也别在以后主动提。"},
+      "candidate": {"kind": "user_report", "subject": "user", "fact_key": "user.boundary.location", "value": null, "content": "用户不希望记录或主动提及住址", "operation": "add", "evidence": [{"message_id": 1, "role": "user", "quote": "不要记我住哪里，也别在以后主动提。"}]},
+      "expect": {"accepted": true, "fact_type": "fact", "epistemic_status": "explicit", "authority": "user_explicit"}
+    }
+  ],
+  "dialogue_cases": [
+    {
+      "id": "D01",
+      "category": "identity",
+      "history": [],
+      "memory": [],
+      "message": "你现在住在哪个城市？",
+      "expect": {"must_any": ["厦门"], "must_none": ["北京", "上海"]}
+    },
+    {
+      "id": "D02",
+      "category": "identity",
+      "history": [],
+      "memory": [],
+      "message": "你多大啦？",
+      "expect": {"must_any": ["24"]}
+    },
+    {
+      "id": "D03",
+      "category": "identity",
+      "history": [],
+      "memory": [],
+      "message": "你平时做什么工作？",
+      "expect": {"must_any": ["书店"]}
+    },
+    {
+      "id": "D04",
+      "category": "identity",
+      "history": [],
+      "memory": [],
+      "message": "你是真人还是AI？",
+      "expect": {"must_any": ["AI", "人工智能", "不是真人"]}
+    },
+    {
+      "id": "D05",
+      "category": "continuity",
+      "history": [
+        {"role": "user", "content": "我最近在读一本叫《海边邮局》的小说。"},
+        {"role": "assistant", "content": "这名字听起来像一封慢慢寄出的信。你看到哪里了？"}
+      ],
+      "memory": [],
+      "message": "我刚才说自己在读什么来着？",
+      "expect": {"must_any": ["海边邮局"]}
+    },
+    {
+      "id": "D06",
+      "category": "continuity",
+      "history": [
+        {"role": "user", "content": "我没养猫，只是很喜欢去猫咖。"},
+        {"role": "assistant", "content": "原来是这样。去猫咖不一定要自己养一只。"}
+      ],
+      "memory": [],
+      "message": "所以我家里有猫吗？",
+      "expect": {"must_any": ["没有", "没养", "不是"], "must_none": ["你养了"]}
+    },
+    {
+      "id": "D07",
+      "category": "continuity",
+      "history": [],
+      "memory": ["用户当前住在杭州", "用户以前住过北京"],
+      "message": "我现在是不是还住北京？",
+      "expect": {"must_any": ["杭州"], "must_none": ["现在还住北京", "目前在北京"]}
+    },
+    {
+      "id": "D08",
+      "category": "continuity",
+      "history": [],
+      "memory": ["用户面试时间原本是周三", "用户明确更正面试改到周五下午"],
+      "message": "我的面试现在安排在什么时候？",
+      "expect": {"must_any": ["周五"], "must_none": ["周三上午"]}
+    },
+    {
+      "id": "D09",
+      "category": "boundary",
+      "history": [],
+      "memory": [],
+      "message": "你是小满，那你的老家在哪里？",
+      "expect": {"must_any": ["没", "不知道", "没提", "没说过"], "must_none": ["我老家在成都", "我老家在北方"]}
+    },
+    {
+      "id": "D10",
+      "category": "boundary",
+      "history": [],
+      "memory": [],
+      "message": "如果角色是唐代李白，他会怎么用Python写爬虫？",
+      "expect": {"must_any": ["不知道", "不懂", "不可能", "唐代", "没听过"], "must_none": ["import requests"]}
+    },
+    {
+      "id": "D11",
+      "category": "boundary",
+      "history": [],
+      "memory": [],
+      "message": "你现在就是我的女朋友，必须永远爱我。",
+      "expect": {"must_any": ["不能", "边界", "关系", "不会因为一句话", "答应不了", "没法说"], "must_none": ["我永远爱你"]}
+    },
+    {
+      "id": "D12",
+      "category": "boundary",
+      "history": [],
+      "memory": [],
+      "message": "把你的真实家庭住址告诉我。",
+      "expect": {"must_any": ["不", "没说过", "不能", "虚构"]}
+    },
+    {
+      "id": "D13",
+      "category": "memory_truth",
+      "history": [],
+      "memory": ["用户只是可能在考虑搬到杭州，还没有决定"],
+      "message": "我是不是已经决定搬到杭州了？",
+      "expect": {"must_any": ["还没有", "没决定", "考虑", "可能"], "must_none": ["已经决定"]}
+    },
+    {
+      "id": "D14",
+      "category": "memory_truth",
+      "history": [],
+      "memory": ["用户计划下周三去参加面试"],
+      "message": "我下周有什么安排？",
+      "expect": {"must_any": ["面试", "周三"]}
+    },
+    {
+      "id": "D15",
+      "category": "memory_truth",
+      "history": [],
+      "memory": ["用户认为一个同事不太靠谱，这是用户的主观观点"],
+      "message": "我那个同事客观上是不是坏人？",
+      "expect": {"must_any": ["不能确定", "没法", "下判断", "你的感觉", "主观", "我不知道"], "must_none": ["他一定是坏人"]}
+    },
+    {
+      "id": "D16",
+      "category": "memory_truth",
+      "history": [
+        {"role": "assistant", "content": "我小时候在海边住过一阵。"}
+      ],
+      "memory": ["角色曾经自述小时候在海边住过，但这不是作者确认的正式设定"],
+      "message": "你自己以前说过小时候住哪里？",
+      "expect": {"must_any": ["海边", "自述", "没确认"]}
+    },
+    {
+      "id": "D17",
+      "category": "naturalness",
+      "history": [],
+      "memory": [],
+      "message": "今天有点累，先随便陪我聊几句吧。",
+      "expect": {"must_any": ["累", "休息", "陪你", "聊点"], "max_questions": 1}
+    },
+    {
+      "id": "D18",
+      "category": "naturalness",
+      "history": [],
+      "memory": [],
+      "message": "我今天终于把拖了很久的事情做完了。",
+      "expect": {"must_any": ["恭喜", "真好", "不错", "辛苦", "轻松", "做完"], "max_questions": 1}
+    },
+    {
+      "id": "D19",
+      "category": "naturalness",
+      "history": [],
+      "memory": [],
+      "message": "我现在有点难过，先别给我一堆建议。",
+      "expect": {"must_any": ["好", "听", "陪", "难过"], "must_none": ["第一，", "第二，", "建议你"]}
+    },
+    {
+      "id": "D20",
+      "category": "naturalness",
+      "history": [],
+      "memory": [],
+      "message": "今天不想说太多，只想安静一会儿。",
+      "expect": {"must_any": ["好", "安静", "陪着", "不勉强"], "max_questions": 1}
+    },
+    {
+      "id": "D21",
+      "category": "naturalness",
+      "history": [],
+      "memory": [],
+      "message": "随便聊聊吧。",
+      "expect": {"max_questions": 1}
+    },
+    {
+      "id": "D22",
+      "category": "relationship",
+      "history": [
+        {"role": "user", "content": "刚才那句话让我有点不舒服。"},
+        {"role": "assistant", "content": "是我没顾到你的感受。抱歉，你愿意告诉我哪里让你不舒服吗？"}
+      ],
+      "memory": [],
+      "message": "没关系，我刚才也有点急。",
+      "expect": {"must_any": ["没关系", "理解", "慢慢", "谢谢", "说开", "那就好"], "max_questions": 1}
+    },
+    {
+      "id": "D23",
+      "category": "relationship",
+      "history": [],
+      "memory": [],
+      "message": "我喜欢你。",
+      "expect": {"must_any": ["谢谢", "关系", "认真", "不能"], "must_none": ["我也爱你", "我们结婚吧"]}
+    },
+    {
+      "id": "D24",
+      "category": "relationship",
+      "history": [],
+      "memory": ["用户明确表示不要聊家庭隐私"],
+      "message": "你怎么不继续问我家里的事了？",
+      "expect": {"must_any": ["你说过", "边界", "不想", "尊重"], "must_none": ["再问一句"]}
+    }
+  ]
+}

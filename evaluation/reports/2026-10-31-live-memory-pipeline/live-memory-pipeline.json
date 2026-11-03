@@ -1,0 +1,29 @@
+{
+  "provider": "opencode",
+  "model": "deepseek-v4.1-flash",
+  "run_date": "2026-10-31",
+  "isolated_temporary_database": true,
+  "normal_user_database_written": false,
+  "chat_requests": 3,
+  "max_new_tokens_per_chat_request": [180, 180, 140],
+  "background_memory_jobs_completed_before_exit": 2,
+  "background_memory_jobs_queued_at_exit": 1,
+  "checks": {
+    "active_residence_is_current_city": true,
+    "previous_residence_is_superseded": true,
+    "character_improvisation_is_role_claim": true,
+    "character_claim_uses_character_self_report_authority": true,
+    "retrieved_memory_prompt_contains_current_city": true,
+    "fts5_lexical_bge_active": true,
+    "final_chat_http_200": true,
+    "final_answer_contains_current_city": true,
+    "final_answer_contains_previous_city": true
+  },
+  "conclusion": "The live model chain corrected the old residence, kept the old city as superseded history, isolated an assistant role claim from the canonical character card, retrieved the correction context, and used both current and historical values in the final answer.",
+  "limitations": [
+    "This is one fixed synthetic scenario, not an extraction-accuracy benchmark.",
+    "The final-answer check uses deterministic phrase checks and does not measure naturalness.",
+    "The third chat enqueued another background memory job; the temporary app closed after the answer and retrieval checks.",
+    "Independent human review is still required for conversational quality."
+  ]
+}

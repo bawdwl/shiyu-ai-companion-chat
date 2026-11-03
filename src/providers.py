@@ -200,7 +200,7 @@ class DeepSeekProvider:
         }
         if stream:
             payload["stream_options"] = {"include_usage": True}
-        for key in ("temperature", "top_p"):
+        for key in ("temperature", "top_p", "seed"):
             value = overrides.get(key)
             if value is not None:
                 payload[key] = value
@@ -387,7 +387,7 @@ class OpenCodeProvider(DeepSeekProvider):
         model: str = "deepseek-v4.1-flash",
         timeout_seconds: float = 120,
         transport: httpx.BaseTransport | None = None,
-        user_agent: str = "shiyu-chat/0.9.3",
+        user_agent: str = "shiyu-chat/0.12.0",
     ):
         super().__init__(
             api_key_provider,

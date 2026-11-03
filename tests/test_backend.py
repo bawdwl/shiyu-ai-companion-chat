@@ -143,6 +143,40 @@ class BackendTests(unittest.TestCase):
         r=self.client.post('/chat',json={'session_id':a,'message':'x','model_mode':'lora'})
         self.assertEqual(r.status_code,422)
 
+    def test_local_checkpoint_provider_selects_adapter_mode(self):
+        self.engine.available_model_modes=['base','half','full']
+        conversation=self.client.put(
+            '/characters/companion/conversation',
+            params={'provider':'local-half'},
+        )
+        self.assertEqual(conversation.status_code,200)
+        sid=conversation.json()['id']
+        response=self.send(sid,'比较半轮 LoRA')
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.json()['provider'],'local-half')
+        self.assertEqual(response.json()['model_mode'],'half')
+        self.assertEqual(self.engine.calls[-1][1],'half')
+        settings=self.client.get('/settings/providers').json()
+        self.assertTrue(settings['local-half']['available'])
+        self.assertTrue(settings['local-full']['available'])
+
+    def test_switching_local_provider_adds_anti_repeat_boundary(self):
+        self.engine.available_model_modes=['base','half','full']
+        base=self.client.put(
+            '/characters/companion/conversation',
+            params={'provider':'local-base'},
+        ).json()
+        self.assertEqual(self.send(base['id'],'第一轮').status_code,200)
+        half=self.client.put(
+            '/characters/companion/conversation',
+            params={'provider':'local-half'},
+        ).json()
+        self.assertEqual(half['id'],base['id'])
+        self.assertEqual(self.send(half['id'],'第二轮').status_code,200)
+        prompt=self.engine.calls[-1][0][0]['content']
+        self.assertIn('模型切换连续性',prompt)
+        self.assertIn('不要逐字或近似复述',prompt)
+
     def test_invalid_requests(self):
         sid=self.session()
         for message in ['', '  \n ', 'x'*4097, 123, None]:
