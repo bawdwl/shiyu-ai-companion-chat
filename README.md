@@ -27,21 +27,15 @@ PC 与 Android 当前是两套独立客户端，**不会自动同步聊天记录
 
 ## 系统结构
 
-```mermaid
-flowchart LR
-    Web[PC React 网页] --> API[FastAPI 服务]
-    API --> Cloud[OpenCode Go / DeepSeek]
-    API --> Local[本机 Qwen3 / LoRA]
-    API --> SQLite[(SQLite + FTS5)]
-    API --> Speech[Whisper / GPT-SoVITS / MeloTTS]
+![拾语 AI 虚拟角色陪伴系统架构](docs/images/shiyu-ai-companion-architecture-2026-11-04.png)
 
-    Android[Android Compose 客户端] --> Cloud
-    Android --> MNN[手机本地 MNN 模型]
-    Android --> Room[(Room + FTS4)]
-    Android --> MobileSpeech[sherpa-onnx ASR / Kokoro TTS]
-    Android --> Dream[Local Dream SD1.5 QNN]
-    Android --> ImageAPI[千问图片 API]
-```
+整体链路由多端交互、虚拟角色对话引擎、多模态交互和对话沉淀四部分组成：
+
+- 角色定位与设定由角色卡、世界书、知识边界和固定事实约束；
+- 长期记忆负责候选提取、去重、更正、检索和上下文预算；
+- 内部心情、信任、熟悉、温暖和关系阶段以自然语言进入提示词；
+- 对话生成支持云端模型、本地 Qwen3 LoRA 和 Android MNN；
+- 回答保存后继续沉淀记忆和状态，形成下一轮对话上下文。
 
 ## PC 端已实现
 
@@ -180,6 +174,18 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 LoRA 训练、Adapter、MNN Q8 导出与对照实验位于独立仓库：
 <https://github.com/bawdwl/qwen3-1.7b-lora>
+
+### 公开 MNN Q8 模型
+
+| 角色 | 检查点 | ModelScope |
+|---|---|---|
+| 宋知意 | 1.5 轮，Q8 block64 | <https://modelscope.cn/models/Alixs666/shiyu-qwen3-1.7b-song-zhiyi-mnn-q8> |
+| 许澄 | 第 1 轮，Q8 block64，实验版 | <https://modelscope.cn/models/Alixs666/shiyu-qwen3-1.7b-xu-cheng-mnn-q8> |
+| 裴既明 | 第 1 轮，Q8 block64，实验版 | <https://modelscope.cn/models/Alixs666/shiyu-qwen3-1.7b-pei-jiming-mnn-q8> |
+
+这些是 MNN 3.5.0 Q8 合并模型，不是 GPTQ。模型均包含对应角色提示词和文件哈希；
+可以直接下载模型目录，或按 MNN Chat 兼容包要求重新打包后导入 Android。实验版模型
+用于端侧工程和角色效果验证，不代表生产级安全通过。
 
 ## 数据、密钥与隐私
 

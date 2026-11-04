@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-11-04 — Architecture and public MNN model index
+
+### Changed
+
+- Replaced the simplified README Mermaid diagram with the full AI companion system
+  architecture image.
+- Clarified the production chain across character definition, long-term memory,
+  internal state, dialogue generation, multimodal interaction and conversation
+  consolidation.
+- Updated the maintenance guide from Android `0.9.4 / schema 10` to
+  `0.14.3 / versionCode 27 / Room schema 11`.
+- Added public ModelScope links for the Song Zhiyi, Xu Cheng and Pei Jiming MNN Q8
+  model packages.
+- Added generic LoRA merge-logit verification and MNN smoke-test scripts.
+
+### Verification
+
+- Pei Jiming Adapter and merged BF16 model matched next-token top-1 on 3/3 fixed
+  development cases.
+- Pei Jiming MNN 3.5.0 Q8 loaded successfully in the Windows CPU runtime; five fixed
+  prompts finished normally.
+- No prebuilt Android APK is included in this update.
+
 ## 2026-11-03 — Android `0.14.3` and repository refresh
 
 ### Added

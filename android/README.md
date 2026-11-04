@@ -34,6 +34,15 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 相关模型与 LoRA 实验：
 <https://github.com/bawdwl/qwen3-1.7b-lora>
 
+公开 MNN Q8 模型：
+
+- 宋知意：
+  <https://modelscope.cn/models/Alixs666/shiyu-qwen3-1.7b-song-zhiyi-mnn-q8>
+- 许澄（实验版）：
+  <https://modelscope.cn/models/Alixs666/shiyu-qwen3-1.7b-xu-cheng-mnn-q8>
+- 裴既明（实验版）：
+  <https://modelscope.cn/models/Alixs666/shiyu-qwen3-1.7b-pei-jiming-mnn-q8>
+
 ## 构建
 
 需要 JDK 17、Android SDK 35 和 Git LFS。
