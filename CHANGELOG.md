@@ -24,6 +24,10 @@
 - Android `0.16.1 / versionCode 30` rebuilds with the corrected voice labels.
 - Android `0.16.1` Release APK: 282,548,528 bytes, SHA-256
   `5B487796E5768CB80BD5E44BD395D0792067ADA75D0A6DFE23F187C7E3BE101A`.
+- Published the APK and checksum as GitHub Release assets while keeping APKs
+  outside Git history.
+- Removed obsolete Android 0.9.3 and 0.12.0 status documents and updated all
+  current download instructions to point at the `v0.16.1` Release.
 
 ## 2026-11-04 — Android `0.15.0` release hygiene and device-aware model install
 

@@ -144,7 +144,9 @@ PC 语音依赖独立的 Whisper、GPT-SoVITS 或 MeloTTS 模型和服务，不�
 
 当前 Android 源码为 `0.16.1 / versionCode 30`，只提供一个完整安装包
 `com.shiyu.chat`。语音输入、角色朗读、MNN 和图片生成入口都保留在同一版本中，
-不再维护精简版或应用内 TTS 语音包下载流程。仓库暂不发布预编译 APK，需要从源码构建。
+不再维护精简版或应用内 TTS 语音包下载流程。预编译 APK 从
+[GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.16.1)
+下载；APK 不提交到 Git 历史。
 
 构建后的 Debug 应用可在设置中填写 OpenCode Go 或 DeepSeek Key；公开 Release
 只显示 DeepSeek。手机与电脑不要求局域网连接，因为 Android 云端模式直接调用模型 API。
@@ -266,7 +268,7 @@ tests/                        回归测试
 evaluation/                   固定质量与记忆案例
 scripts/                      构建、部署、模型下载和检查脚本
 docs/                         架构、验收与复现文档
-release/                      Android 发布状态说明（暂不提供 APK）
+release/                      Android 发布说明与下载入口
 ```
 
 ## 进一步阅读
@@ -280,7 +282,6 @@ release/                      Android 发布状态说明（暂不提供 APK）
 - [Android 本地 MNN 双模式](docs/Android本地MNN双模式_2026-11-01.md)
 - [角色质量评测、Trace 与记忆语义](docs/角色质量评测Trace与记忆语义_2026-10-30.md)
 - [Windows 干净环境验收](docs/Windows干净环境验收_2026-10-31.md)
-- [完整验收与待决策](docs/0.12.0完整验收与待决策_2026-10-31.md)
 
 ## 许可证
 
