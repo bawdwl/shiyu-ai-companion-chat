@@ -1,6 +1,9 @@
 # 拾语 Android
 
-当前版本：`0.15.0 / versionCode 28`
+当前版本：`0.15.0 / versionCode 28`，提供两个独立安装包：
+
+- 完整版：`com.shiyu.chat`，内置 Kokoro 103 音色；
+- 精简版：`com.shiyu.chat.slim`，保留本地语音输入/转文字，角色朗读包可选安装。
 
 技术栈：Kotlin、Jetpack Compose、Room schema 11、WorkManager、OkHttp、
 Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
@@ -34,6 +37,8 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 下载 MeinaMix V12 或导入 Local Dream QNN ZIP。MNN 包需要包含 `config.json`、
 `llm.mnn`、`llm.mnn.weight` 和 `tokenizer.mtok`。同一时间只保留一个 MNN 和一个
 Dream 模型槽位，下载失败的临时文件会自动清理。
+精简版的 Kokoro 朗读包可从设置页下载官方包，也可导入 ZIP 或 TAR.BZ2；安装后与完整版
+使用同一套 103 音色界面。语音识别包始终随应用提供，不受是否安装朗读包影响。
 
 本地 MNN 模式只支持文字；需要图片理解时切换到云端模式。
 
@@ -54,7 +59,9 @@ Dream 模型槽位，下载失败的临时文件会自动清理。
 ```powershell
 $env:JAVA_HOME = "C:\path\to\jdk-17"
 $env:ANDROID_HOME = "C:\path\to\Android\Sdk"
-.\scripts\build_android.ps1
+.\gradlew.bat testFullDebugUnitTest testSlimDebugUnitTest `
+  assembleFullDebug assembleSlimDebug lintFullRelease lintSlimRelease `
+  assembleFullRelease assembleSlimRelease --no-daemon
 ```
 
 也可以使用 Android Studio 打开 `android/` 并运行 `app`。
@@ -62,13 +69,14 @@ $env:ANDROID_HOME = "C:\path\to\Android\Sdk"
 输出：
 
 ```text
-android/app/build/outputs/apk/debug/app-debug.apk
+android/app/build/outputs/apk/full/debug/app-full-debug.apk
+android/app/build/outputs/apk/slim/debug/app-slim-debug.apk
 ```
 
 ## 当前验证
 
-- JVM 单元测试：63 项通过。
-- `testDebugUnitTest` 与 `assembleDebug` 通过。
+- Full 与 Slim 各 64 项 JVM 单元测试通过。
+- 两个变体的 Release Lint、Debug 构建和 R8 Release 构建通过。
 - `0.15.0` 源码已通过 JVM 测试和 APK 构建。
 - 后续移动端仍会继续调整，因此 GitHub 仓库暂不提供预编译 APK。
 

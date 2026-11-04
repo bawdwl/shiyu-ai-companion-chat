@@ -14,6 +14,9 @@
 - Added four built-in roles: Li Bai, Song Zhiyi, Jiang Zhaochen and Pei Jiming.
 - Exposed all 103 voices shipped by Kokoro v1.1-zh in a searchable picker:
   100 Chinese voices plus Maple, Sol and Vale; each character keeps its own choice.
+- Split Android into Full and Slim builds. Full bundles Kokoro; Slim removes
+  Kokoro from the APK while retaining local speech recognition and offers an
+  official-package download or ZIP/TAR.BZ2 import after installation.
 - Added an explicit Qualcomm SoC/HTP compatibility table and tests for the
   packages actually published under `xororz/sd-qnn`.
 
@@ -29,9 +32,14 @@
 
 ### Verification
 
-- Android JVM: 64 passed.
-- `assembleDebug`, `lintRelease` and the R8-minified `assembleRelease` passed.
-- Debug APK: 328,329,096 bytes; unsigned release APK: 300,107,084 bytes.
+- Android JVM: 64 tests passed independently in both Full and Slim variants.
+- Both Release Lint runs and both R8-minified Release builds passed.
+- Full debug APK: 327,290,583 bytes. Local signed Full Release demo:
+  300,182,055 bytes, SHA-256
+  `C9A44DEAF10BD6D6AE674B554627EC79A27E54BD0AC8C11E409EE1CFB9DB387B`.
+- Slim debug APK: 178,312,498 bytes. Local signed Slim Release demo:
+  154,878,333 bytes, SHA-256
+  `662FD8AD8AB436BE553B95929F8496EEA1876AEA96B042ADDB0B5B3C0A7D07E4`.
 - APK inspection found no Qwen MNN, LoRA Adapter, MeinaMix, or other model weights.
 
 ## 2026-11-04 — Architecture and public MNN model index

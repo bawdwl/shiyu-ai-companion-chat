@@ -27,6 +27,20 @@ android {
         buildConfig = false
     }
 
+    flavorDimensions += "speechBundle"
+    productFlavors {
+        create("full") {
+            dimension = "speechBundle"
+            resValue("bool", "kokoro_bundled", "true")
+        }
+        create("slim") {
+            dimension = "speechBundle"
+            applicationIdSuffix = ".slim"
+            versionNameSuffix = "-slim"
+            resValue("bool", "kokoro_bundled", "false")
+        }
+    }
+
     signingConfigs {
         if (stableDebugKeystore.isFile) {
             create("stableDebug") {
@@ -106,6 +120,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.apache.commons:commons-compress:1.21")
 
     testImplementation("junit:junit:4.13.2")
 }

@@ -17,6 +17,7 @@ internal const val KOKORO_VOICE_COUNT = 103
 
 /** Blocking functions must be called from an IO worker. */
 class LocalVoice(private val context: Context) {
+    private val kokoroPack = KokoroPackManager(context)
     @Volatile var recording = false
     @Volatile private var activeTrack: AudioTrack? = null
     @Volatile private var playbackStopped = false
@@ -70,10 +71,20 @@ class LocalVoice(private val context: Context) {
     fun stopPlayback() { playbackStopped = true; activeTrack?.let { runCatching { it.pause(); it.flush(); it.stop() } } }
     fun preparePlayback() { playbackStopped = false }
 
+    fun isTtsReady(): Boolean = kokoroPack.isReady()
+
     fun speak(text: String, speaker: Int) {
         require(text.isNotBlank()) { "没有可播放的文字" }
-        val root = File(context.filesDir, "speech/kokoro")
-        copyAssets("speech/kokoro", root)
+        require(kokoroPack.isReady()) {
+            "角色朗读音色包尚未安装。请到设置 → 对话与模型中下载或导入。"
+        }
+        val root = if (kokoroPack.bundled) {
+            File(context.filesDir, "speech/kokoro").also {
+                copyAssets("speech/kokoro", it)
+            }
+        } else {
+            kokoroPack.modelDirectory()
+        }
         fun path(name: String) = File(root, name).absolutePath
         val engine = OfflineTts(config = OfflineTtsConfig(model = OfflineTtsModelConfig(
             kokoro = OfflineTtsKokoroModelConfig(model = path("model.int8.onnx"), voices = path("voices.bin"),

@@ -19,7 +19,7 @@
 | 内部状态 | 心情、熟悉、信任、温暖、关系阶段 | 同结构状态，供提示词使用，不默认显示数值 |
 | 图片理解 | 支持发送图片给视觉模型 | 云端模式支持；本地 MNN 模式仅支持文字 |
 | 语音输入 | Whisper，可选 | sherpa-onnx 本地 ASR |
-| 角色语音 | GPT-SoVITS / MeloTTS，可选 | Kokoro 本地 TTS，103 个音色 |
+| 角色语音 | GPT-SoVITS / MeloTTS，可选 | 完整版内置 Kokoro 103 音色；精简版按需安装 |
 | 图片生成 | 本地生图入口已关闭 | 内置 Local Dream SD1.5 QNN；也支持千问图片 API |
 | 数据存储 | SQLite、本机加密 Key | Room、Android Keystore |
 
@@ -73,7 +73,7 @@ PC 与 Android 当前是两套独立客户端，**不会自动同步聊天记录
 - 本地模式可下载或导入 MNN Chat 兼容模型 ZIP，在手机上完成文字推理。
 - 本地 MNN 模式保留最近 24 条原话；更早消息按批次压缩为简短事实，
   不调用云端记忆提取。
-- sherpa-onnx 本地语音识别和 Kokoro 本地语音合成；提供 100 个中文音色和 3 个英文女声，可在带搜索的音色面板中选择。
+- sherpa-onnx 本地语音识别和 Kokoro 本地语音合成；提供 100 个中文音色和 3 个英文女声，可在带搜索、试听的音色面板中选择。
 - 内置 Local Dream SD1.5/QNN 后端，可在应用内下载或导入兼容模型并生成角色头像。
 - 设置页分为“对话与模型”和“图片生成”，支持下载进度、SHA-256 校验、删除模型和清理缓存。
 - 内置李白、宋知意、江昭谌、裴既明四个角色；许澄和旧实验角色会在升级时删除。
@@ -141,26 +141,31 @@ PC 语音依赖独立的 Whisper、GPT-SoVITS 或 MeloTTS 模型和服务，不�
 
 ## 构建 Android
 
-当前 Android 源码为 `0.15.0 / versionCode 28`。项目仍在继续调整移动端体验，
-因此仓库暂不发布预编译 APK，需要从源码构建。
+当前 Android 源码为 `0.15.0 / versionCode 28`，分为两个独立 APK：
+
+- **完整版** `com.shiyu.chat`：内置 Kokoro 103 音色；
+- **精简版** `com.shiyu.chat.slim`：始终保留本地语音输入和转文字，角色朗读包可下载或导入。
+
+两个包可以同时安装。仓库暂不发布预编译 APK，需要从源码构建。
 
 构建后的 Debug 应用可在设置中填写 OpenCode Go 或 DeepSeek Key；公开 Release
 只显示 DeepSeek。手机与电脑不要求局域网连接，因为 Android 云端模式直接调用模型 API。
 
-### 从源码构建 Android
+### 从源码构建两个 Android APK
 
 需要 JDK 17、Android SDK 35 和 Git LFS。
 
 ```powershell
 $env:JAVA_HOME = "C:\path\to\jdk-17"
 $env:ANDROID_HOME = "C:\path\to\Android\Sdk"
-.\scripts\build_android.ps1
+.\gradlew.bat assembleFullDebug assembleSlimDebug
 ```
 
 输出：
 
 ```text
-android/app/build/outputs/apk/debug/app-debug.apk
+android/app/build/outputs/apk/full/debug/app-full-debug.apk
+android/app/build/outputs/apk/slim/debug/app-slim-debug.apk
 ```
 
 ## 手机本地模型与图片模型
@@ -233,7 +238,7 @@ cd android
 - PC Python：285 项通过。
 - API-only 干净环境：208 项通过，1 项按设计跳过。
 - PC 前端状态测试：40 项通过，React 生产构建通过。
-- Android JVM：63 项通过，`assembleDebug` 通过。
+- Android Full/Slim 各 64 项 JVM 测试通过；两个 Release Lint、Debug 与 R8 Release 构建通过。
 - 固定角色质量检查：基础条件 18/24，长期记忆条件 22/24。
 - 私有自然记忆固定夹具回放：事实、摘要、混合检索、混合状态均为 90/90；
   仅最近消息为 23/90。
@@ -274,6 +279,7 @@ release/                      Android 发布状态说明（暂不提供 APK）
 - [Android 本地 Dream 生图](docs/Android本地Dream生图嵌入_2026-11-02.md)
 - [Android 模型下载与 NPU 兼容](docs/Android模型下载与NPU兼容_2026-11-04.md)
 - [音色标签与自定义音色说明](docs/音色标签与自定义音色说明_2026-11-04.md)
+- [Android 完整版与精简版构建](docs/Android完整版与精简版构建_2026-11-04.md)
 - [Android 本地 MNN 双模式](docs/Android本地MNN双模式_2026-11-01.md)
 - [角色质量评测、Trace 与记忆语义](docs/角色质量评测Trace与记忆语义_2026-10-30.md)
 - [Windows 干净环境验收](docs/Windows干净环境验收_2026-10-31.md)

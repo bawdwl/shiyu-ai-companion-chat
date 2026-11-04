@@ -49,6 +49,12 @@ data class ShiyuUiState(
     val localModelBytes: Long = 0L,
     val localModelName: String = "Qwen3-1.7B MNN",
     val localModelBusy: Boolean = false,
+    val kokoroBundled: Boolean = false,
+    val kokoroReady: Boolean = false,
+    val kokoroBytes: Long = 0L,
+    val kokoroBusy: Boolean = false,
+    val kokoroProgress: Float = 0f,
+    val kokoroDownloadLabel: String? = null,
     val modelDownloadBusy: Boolean = false,
     val modelDownloadLabel: String? = null,
     val modelDownloadProgress: Float = 0f,
@@ -83,6 +89,9 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 localModelReady = repository.localModelReady(),
                 localModelBytes = repository.localModelBytes(),
                 localModelName = repository.localModelName(),
+                kokoroBundled = repository.kokoroBundled(),
+                kokoroReady = repository.kokoroReady(),
+                kokoroBytes = repository.kokoroBytes(),
                 deviceCompatibility = repository.deviceCompatibility(),
             )
             repository.characters.collect { characters ->
@@ -475,6 +484,96 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                         localModelBytes = repository.localModelBytes(),
                         localModelName = repository.localModelName(),
                         status = error.message ?: "本地 MNN 模型删除失败",
+                    )
+                }
+        }
+    }
+
+    fun downloadKokoroPack() {
+        if (_state.value.kokoroBundled || _state.value.kokoroBusy) return
+        _state.value = _state.value.copy(
+            kokoroBusy = true,
+            kokoroProgress = 0f,
+            kokoroDownloadLabel = "准备下载 Kokoro 音色包",
+            status = null,
+        )
+        viewModelScope.launch {
+            runCatching {
+                repository.downloadKokoroPack { label, progress ->
+                    _state.value = _state.value.copy(
+                        kokoroDownloadLabel = label,
+                        kokoroProgress = progress,
+                    )
+                }
+            }.onSuccess {
+                _state.value = _state.value.copy(
+                    kokoroBusy = false,
+                    kokoroDownloadLabel = null,
+                    kokoroProgress = 1f,
+                    kokoroReady = repository.kokoroReady(),
+                    kokoroBytes = repository.kokoroBytes(),
+                    status = "Kokoro 音色包已安装，可以试听并使用全部 103 个音色",
+                )
+            }.onFailure { error ->
+                _state.value = _state.value.copy(
+                    kokoroBusy = false,
+                    kokoroDownloadLabel = null,
+                    kokoroReady = repository.kokoroReady(),
+                    kokoroBytes = repository.kokoroBytes(),
+                    status = error.message ?: "Kokoro 音色包安装失败",
+                )
+            }
+        }
+    }
+
+    fun importKokoroPack(uri: Uri) {
+        if (_state.value.kokoroBundled || _state.value.kokoroBusy) return
+        _state.value = _state.value.copy(
+            kokoroBusy = true,
+            kokoroDownloadLabel = "正在导入 Kokoro 音色包",
+        )
+        viewModelScope.launch {
+            runCatching { repository.importKokoroPack(uri) }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        kokoroBusy = false,
+                        kokoroDownloadLabel = null,
+                        kokoroReady = repository.kokoroReady(),
+                        kokoroBytes = repository.kokoroBytes(),
+                        status = "Kokoro 音色包已安装",
+                    )
+                }
+                .onFailure { error ->
+                    _state.value = _state.value.copy(
+                        kokoroBusy = false,
+                        kokoroDownloadLabel = null,
+                        kokoroReady = repository.kokoroReady(),
+                        kokoroBytes = repository.kokoroBytes(),
+                        status = error.message ?: "Kokoro 音色包导入失败",
+                    )
+                }
+        }
+    }
+
+    fun deleteKokoroPack() {
+        if (_state.value.kokoroBundled || _state.value.kokoroBusy) return
+        _state.value = _state.value.copy(kokoroBusy = true)
+        viewModelScope.launch {
+            runCatching { repository.deleteKokoroPack() }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        kokoroBusy = false,
+                        kokoroReady = false,
+                        kokoroBytes = 0L,
+                        status = "Kokoro 音色包已删除，语音输入仍可继续使用",
+                    )
+                }
+                .onFailure { error ->
+                    _state.value = _state.value.copy(
+                        kokoroBusy = false,
+                        kokoroReady = repository.kokoroReady(),
+                        kokoroBytes = repository.kokoroBytes(),
+                        status = error.message ?: "Kokoro 音色包删除失败",
                     )
                 }
         }

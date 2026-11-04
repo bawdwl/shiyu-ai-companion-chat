@@ -27,4 +27,6 @@ third_party/local-dream/LICENSE -text -diff
 # Vendored espeak/jieba data intentionally preserves upstream whitespace.
 android/app/src/main/assets/speech/kokoro/dict/** -text -diff
 android/app/src/main/assets/speech/kokoro/espeak-ng-data/** -text -diff
+android/app/src/full/assets/speech/kokoro/dict/** -text -diff
+android/app/src/full/assets/speech/kokoro/espeak-ng-data/** -text -diff
 
