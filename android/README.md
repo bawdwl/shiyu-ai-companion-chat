@@ -15,7 +15,8 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 - 云端结构化长期记忆与持久后台任务。
 - 本地 MNN 模式使用最近 24 条原话，并对更早消息做滚动摘要。
 - 内部心情、熟悉、信任、温暖、关系阶段与用户边界。
-- sherpa-onnx 本地 ASR、Kokoro 本地 TTS 和多音色播放。
+- sherpa-onnx 本地 ASR、Kokoro 本地 TTS；开放模型全部 103 个音色
+  （100 个中文音色、Maple/Sol/Vale 三个英文女声），支持搜索和按角色保存选择。
 - 千问图片 API 与内置 Local Dream SD1.5/QNN 生图。
 - 设置中按设备自动选择并下载 MeinaMix V12，显示进度、校验大小与 SHA-256。
 - 内置李白、宋知意、江昭谌、裴既明；删除许澄与旧实验角色。

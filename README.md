@@ -19,7 +19,7 @@
 | 内部状态 | 心情、熟悉、信任、温暖、关系阶段 | 同结构状态，供提示词使用，不默认显示数值 |
 | 图片理解 | 支持发送图片给视觉模型 | 云端模式支持；本地 MNN 模式仅支持文字 |
 | 语音输入 | Whisper，可选 | sherpa-onnx 本地 ASR |
-| 角色语音 | GPT-SoVITS / MeloTTS，可选 | Kokoro 本地 TTS，多音色 |
+| 角色语音 | GPT-SoVITS / MeloTTS，可选 | Kokoro 本地 TTS，103 个音色 |
 | 图片生成 | 本地生图入口已关闭 | 内置 Local Dream SD1.5 QNN；也支持千问图片 API |
 | 数据存储 | SQLite、本机加密 Key | Room、Android Keystore |
 
@@ -73,7 +73,7 @@ PC 与 Android 当前是两套独立客户端，**不会自动同步聊天记录
 - 本地模式可下载或导入 MNN Chat 兼容模型 ZIP，在手机上完成文字推理。
 - 本地 MNN 模式保留最近 24 条原话；更早消息按批次压缩为简短事实，
   不调用云端记忆提取。
-- sherpa-onnx 本地语音识别和 Kokoro 本地语音合成。
+- sherpa-onnx 本地语音识别和 Kokoro 本地语音合成；提供 100 个中文音色和 3 个英文女声，可在带搜索的音色面板中选择。
 - 内置 Local Dream SD1.5/QNN 后端，可在应用内下载或导入兼容模型并生成角色头像。
 - 设置页分为“对话与模型”和“图片生成”，支持下载进度、SHA-256 校验、删除模型和清理缓存。
 - 内置李白、宋知意、江昭谌、裴既明四个角色；许澄和旧实验角色会在升级时删除。
@@ -273,6 +273,7 @@ release/                      Android 发布状态说明（暂不提供 APK）
 - [PC 记忆检索与内部状态](docs/PC记忆检索与内部状态_2026-10-30.md)
 - [Android 本地 Dream 生图](docs/Android本地Dream生图嵌入_2026-11-02.md)
 - [Android 模型下载与 NPU 兼容](docs/Android模型下载与NPU兼容_2026-11-04.md)
+- [音色标签与自定义音色说明](docs/音色标签与自定义音色说明_2026-11-04.md)
 - [Android 本地 MNN 双模式](docs/Android本地MNN双模式_2026-11-01.md)
 - [角色质量评测、Trace 与记忆语义](docs/角色质量评测Trace与记忆语义_2026-10-30.md)
 - [Windows 干净环境验收](docs/Windows干净环境验收_2026-10-31.md)

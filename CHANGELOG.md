@@ -12,6 +12,8 @@
   device-selected MeinaMix V12 QNN packages, including size/hash checks,
   progress, failure cleanup and delete controls.
 - Added four built-in roles: Li Bai, Song Zhiyi, Jiang Zhaochen and Pei Jiming.
+- Exposed all 103 voices shipped by Kokoro v1.1-zh in a searchable picker:
+  100 Chinese voices plus Maple, Sol and Vale; each character keeps its own choice.
 - Added an explicit Qualcomm SoC/HTP compatibility table and tests for the
   packages actually published under `xororz/sd-qnn`.
 
@@ -27,9 +29,9 @@
 
 ### Verification
 
-- Android JVM: 63 passed.
+- Android JVM: 64 passed.
 - `assembleDebug`, `lintRelease` and the R8-minified `assembleRelease` passed.
-- Debug APK: 327,160,338 bytes; unsigned release APK: 300,105,244 bytes.
+- Debug APK: 328,329,096 bytes; unsigned release APK: 300,107,084 bytes.
 - APK inspection found no Qwen MNN, LoRA Adapter, MeinaMix, or other model weights.
 
 ## 2026-11-04 — Architecture and public MNN model index

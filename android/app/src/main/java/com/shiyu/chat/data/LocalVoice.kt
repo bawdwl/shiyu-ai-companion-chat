@@ -13,6 +13,8 @@ import com.k2fsa.sherpa.onnx.OfflineTtsKokoroModelConfig
 import java.io.File
 import java.io.ByteArrayOutputStream
 
+internal const val KOKORO_VOICE_COUNT = 103
+
 /** Blocking functions must be called from an IO worker. */
 class LocalVoice(private val context: Context) {
     @Volatile var recording = false
@@ -22,11 +24,13 @@ class LocalVoice(private val context: Context) {
     private fun copyAssets(path: String, target: File) {
         val children = context.assets.list(path).orEmpty()
         if (children.isEmpty()) {
-            if (!target.isFile) {
+            val expectedSize = context.assets.open(path).use { it.available().toLong() }
+            if (!target.isFile || target.length() != expectedSize) {
                 target.parentFile?.mkdirs()
                 val tmp = File(target.parentFile, target.name + ".tmp")
                 try {
                     context.assets.open(path).use { source -> tmp.outputStream().use { source.copyTo(it) } }
+                    target.delete()
                     check(tmp.renameTo(target)) { "语音模型保存失败" }
                 } finally { tmp.delete() }
             }
@@ -79,7 +83,11 @@ class LocalVoice(private val context: Context) {
         try {
             for (part in splitVoiceText(text)) {
                 if (playbackStopped) break
-                val audio = engine.generate(part, sid = speaker.coerceIn(3, 102), speed = 1f)
+                val audio = engine.generate(
+                    part,
+                    sid = speaker.coerceIn(0, KOKORO_VOICE_COUNT - 1),
+                    speed = 1f,
+                )
                 if (playbackStopped) break
                 val pcm = ShortArray(audio.samples.size) { (audio.samples[it].coerceIn(-1f, 1f) * 32767).toInt().toShort() }
                 val min = AudioTrack.getMinBufferSize(audio.sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
@@ -134,4 +142,9 @@ internal fun splitVoiceText(text: String, limit: Int = 180): List<String> {
         start = end
     }
     return chunks
+}
+
+internal fun normalizeKokoroSpeakerId(saved: Int): Int = when (saved) {
+    in 0 until KOKORO_VOICE_COUNT -> saved
+    else -> 0
 }

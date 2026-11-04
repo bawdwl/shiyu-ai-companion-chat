@@ -50,6 +50,8 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
@@ -109,6 +111,8 @@ import com.shiyu.chat.data.MODEL_SOURCE_LOCAL_MNN
 import com.shiyu.chat.data.StructuredMemoryEntity
 import com.shiyu.chat.data.TurnTraceEntity
 import com.shiyu.chat.data.LocalVoice
+import com.shiyu.chat.data.KOKORO_VOICE_COUNT
+import com.shiyu.chat.data.normalizeKokoroSpeakerId
 import com.shiyu.chat.data.naturalMessageText
 import com.shiyu.chat.data.speechOnlyText
 import com.shiyu.chat.R
@@ -779,12 +783,14 @@ private fun ChatScreen(
     val voiceScope = rememberCoroutineScope()
     var voiceBusy by remember { mutableStateOf(false) }
     var playingId by remember { mutableStateOf<Long?>(null) }
+    var previewingVoice by remember { mutableStateOf<Int?>(null) }
     var recording by remember { mutableStateOf(false) }
     var voiceStatus by remember { mutableStateOf<String?>(null) }
     val voicePrefs = remember { voiceContext.getSharedPreferences("character_voices", android.content.Context.MODE_PRIVATE) }
     var speaker by remember(character.id) {
-        mutableIntStateOf(voicePrefs.getInt(character.id, 3))
+        mutableIntStateOf(normalizeKokoroSpeakerId(voicePrefs.getInt(character.id, 0)))
     }
+    var showVoicePicker by remember(character.id) { mutableStateOf(false) }
     var confirmDelete by remember(character.id) { mutableStateOf(false) }
     var draft by remember(character.id) { mutableStateOf("") }
     fun startRecording() {
@@ -899,12 +905,16 @@ private fun ChatScreen(
                                 onReset()
                             },
                         )
-                        listOf("女声 1" to 3, "女声 2" to 4, "男声 1" to 58, "男声 2" to 59).forEach { (label, id) ->
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text((if (speaker == id) "✓ " else "") + label) },
-                                onClick = { speaker = id; voicePrefs.edit().putInt(character.id, id).apply(); menu = false },
-                            )
-                        }
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("选择音色（${kokoroVoiceLabel(speaker)}）") },
+                            leadingIcon = {
+                                Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
+                            },
+                            onClick = {
+                                menu = false
+                                showVoicePicker = true
+                            },
+                        )
                         if (character.custom) {
                             androidx.compose.material3.DropdownMenuItem(
                                 text = { Text("删除角色") },
@@ -1106,6 +1116,54 @@ private fun ChatScreen(
             }
         }
     }
+    if (showVoicePicker) {
+        VoicePickerSheet(
+            current = speaker,
+            previewingVoice = previewingVoice,
+            busy = voiceBusy,
+            onPreview = { id ->
+                if (!voiceBusy) {
+                    voice.stopPlayback()
+                    voice.preparePlayback()
+                    previewingVoice = id
+                    voiceBusy = true
+                    voiceStatus = "正在试听 ${kokoroVoiceLabel(id)}…"
+                    voiceScope.launch {
+                        val sample = if (id >= 100) {
+                            "Hello. This is a preview of my voice for our conversation."
+                        } else {
+                            "你好，这是我在拾语里的声音。希望接下来的每一句话，都能让你觉得自然。"
+                        }
+                        runCatching {
+                            withContext(Dispatchers.IO) { voice.speak(sample, id) }
+                        }.onFailure {
+                            voiceStatus = it.message ?: "音色试听失败"
+                        }
+                        previewingVoice = null
+                        voiceBusy = false
+                        if (voiceStatus?.startsWith("正在试听") == true) voiceStatus = null
+                    }
+                }
+            },
+            onStopPreview = {
+                voice.stopPlayback()
+                previewingVoice = null
+                voiceBusy = false
+                voiceStatus = null
+            },
+            onDismiss = {
+                voice.stopPlayback()
+                previewingVoice = null
+                voiceBusy = false
+                showVoicePicker = false
+            },
+            onSelect = { selected ->
+                speaker = selected
+                voicePrefs.edit().putInt(character.id, selected).apply()
+                showVoicePicker = false
+            },
+        )
+    }
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
@@ -1118,6 +1176,137 @@ private fun ChatScreen(
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } },
         )
+    }
+}
+
+private fun kokoroVoiceLabel(id: Int): String = when (id) {
+    100 -> "Maple · 英文女声"
+    101 -> "Sol · 英文女声"
+    102 -> "Vale · 英文女声"
+    else -> "中文音色 ${(id + 1).toString().padStart(3, '0')}"
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VoicePickerSheet(
+    current: Int,
+    previewingVoice: Int?,
+    busy: Boolean,
+    onPreview: (Int) -> Unit,
+    onStopPreview: () -> Unit,
+    onDismiss: () -> Unit,
+    onSelect: (Int) -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    val voices = remember(query) {
+        (0 until KOKORO_VOICE_COUNT).filter { id ->
+            query.isBlank() || kokoroVoiceLabel(id).contains(query.trim(), ignoreCase = true) ||
+                id.toString() == query.trim()
+        }
+    }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFFFDFBFF),
+        shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.88f)
+                .navigationBarsPadding()
+                .padding(horizontal = 18.dp),
+        ) {
+            Text("选择角色音色", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Kokoro v1.1 中文模型自带 103 个音色：100 个中文音色和 3 个英文女声。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.sp,
+                lineHeight = 17.sp,
+                modifier = Modifier.padding(top = 5.dp, bottom = 12.dp),
+            )
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it.take(40) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                placeholder = { Text("搜索编号、中文音色或 Maple / Sol / Vale") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "共 ${voices.size} 个结果 · 当前 ${kokoroVoiceLabel(current)}",
+                color = InkMuted,
+                fontSize = 10.sp,
+            )
+            LazyColumn(
+                modifier = Modifier.weight(1f).padding(top = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
+                contentPadding = PaddingValues(bottom = 18.dp),
+            ) {
+                items(voices, key = { it }) { id ->
+                    val selected = id == current
+                    Surface(
+                        onClick = { onSelect(id) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (selected) Sage else Color.White,
+                        border = BorderStroke(
+                            1.dp,
+                            if (selected) Forest else Hairline,
+                        ),
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (id >= 100) Apricot else LilacMist,
+                                    ),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    if (id >= 100) "EN" else "${id + 1}",
+                                    color = DeepForest,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                            Spacer(Modifier.width(11.dp))
+                            Text(
+                                kokoroVoiceLabel(id),
+                                modifier = Modifier.weight(1f),
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                            )
+                            IconButton(
+                                onClick = {
+                                    if (previewingVoice == id) onStopPreview() else onPreview(id)
+                                },
+                                enabled = !busy || previewingVoice == id,
+                            ) {
+                                Icon(
+                                    if (previewingVoice == id) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                    contentDescription = if (previewingVoice == id) "停止试听" else "试听音色",
+                                    tint = Forest,
+                                )
+                            }
+                            if (selected) {
+                                Icon(
+                                    Icons.Default.AutoAwesome,
+                                    contentDescription = "当前音色",
+                                    tint = Forest,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
