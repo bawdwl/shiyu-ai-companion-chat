@@ -61,11 +61,10 @@ android {
         }
         getByName("release") {
             resValue("bool", "show_dev_providers", "false")
-            isMinifyEnabled = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
-            )
+            // MNN and sherpa-onnx expose JNI classes/methods by name. Keep the
+            // release bytecode stable so local ASR, TTS and MNN all use the
+            // exact symbols expected by their native libraries.
+            isMinifyEnabled = false
         }
     }
 

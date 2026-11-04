@@ -33,13 +33,15 @@
 ### Verification
 
 - Android JVM: 64 tests passed independently in both Full and Slim variants.
-- Both Release Lint runs and both R8-minified Release builds passed.
+- Both Release Lint runs and both non-minified Release builds passed.
+- Disabled R8 for native-JNI builds after release testing showed that method
+  shrinking broke sherpa-onnx `decodingMethod` lookup and the MNN bridge.
 - Full debug APK: 327,290,583 bytes. Local signed Full Release demo:
-  300,182,055 bytes, SHA-256
-  `C9A44DEAF10BD6D6AE674B554627EC79A27E54BD0AC8C11E409EE1CFB9DB387B`.
+  311,081,712 bytes, SHA-256
+  `D31190039386CDDF27052E1A58F8E5D4F9CBA37CCAA9D657FE07A5A7342BE32D`.
 - Slim debug APK: 178,312,498 bytes. Local signed Slim Release demo:
-  154,878,333 bytes, SHA-256
-  `662FD8AD8AB436BE553B95929F8496EEA1876AEA96B042ADDB0B5B3C0A7D07E4`.
+  165,782,086 bytes, SHA-256
+  `2CE4413E25D4361B9751256DF693D950248F65C08342DB6FF0A4216BFF36960E`.
 - APK inspection found no Qwen MNN, LoRA Adapter, MeinaMix, or other model weights.
 
 ## 2026-11-04 — Architecture and public MNN model index
