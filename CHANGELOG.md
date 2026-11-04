@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-11-04 — Android `0.15.0` release hygiene and device-aware model install
+
+### Added
+
+- Added the supplied purple streaming icon as the launcher icon and aligned the
+  Android visual system around lavender, plum and rose accents.
+- Added a public Android model route: Release defaults to DeepSeek and hides
+  OpenCode Go; Debug keeps OpenCode for author testing.
+- Added in-app downloads for the Song Zhiyi and Pei Jiming Q8 MNN models and
+  device-selected MeinaMix V12 QNN packages, including size/hash checks,
+  progress, failure cleanup and delete controls.
+- Added four built-in roles: Li Bai, Song Zhiyi, Jiang Zhaochen and Pei Jiming.
+- Added an explicit Qualcomm SoC/HTP compatibility table and tests for the
+  packages actually published under `xororz/sd-qnn`.
+
+### Changed
+
+- Split Android settings into “chat and models” and “image generation”.
+- Removed Xu Cheng and retired LoRA-character rows, references and public model
+  links from the current Android product path.
+- Removed an unused 57 MB TTS model tree and an unused British-English lexicon
+  from the APK asset payload.
+- Enabled release R8 code minification; model payload reduction comes from removing
+  unreferenced speech assets rather than deleting runtime resources.
+
+### Verification
+
+- Android JVM: 63 passed.
+- `assembleDebug`, `lintRelease` and the R8-minified `assembleRelease` passed.
+- Debug APK: 327,160,338 bytes; unsigned release APK: 300,105,244 bytes.
+- APK inspection found no Qwen MNN, LoRA Adapter, MeinaMix, or other model weights.
+
 ## 2026-11-04 — Architecture and public MNN model index
 
 ### Changed

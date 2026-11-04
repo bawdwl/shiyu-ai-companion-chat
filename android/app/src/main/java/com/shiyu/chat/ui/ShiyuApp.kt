@@ -76,6 +76,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -88,6 +89,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -109,6 +111,7 @@ import com.shiyu.chat.data.TurnTraceEntity
 import com.shiyu.chat.data.LocalVoice
 import com.shiyu.chat.data.naturalMessageText
 import com.shiyu.chat.data.speechOnlyText
+import com.shiyu.chat.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -118,16 +121,16 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
-private val DeepForest = Color(0xFF0E4933)
-private val Forest = Color(0xFF176346)
-private val Cream = Color(0xFFF7F4EC)
-private val Sage = Color(0xFFE3ECE2)
-private val WarmGold = Color(0xFFE8DFC7)
-private val CanvasMist = Color(0xFFF6F7F5)
-private val InkMuted = Color(0xFF69716B)
-private val Hairline = Color(0xFFE5E9E5)
-private val Apricot = Color(0xFFF0E1D8)
-private val LilacMist = Color(0xFFF0EDF7)
+private val DeepForest = Color(0xFF4E3A86)
+private val Forest = Color(0xFF7457C8)
+private val Cream = Color(0xFFFBF9FF)
+private val Sage = Color(0xFFEDE7FA)
+private val WarmGold = Color(0xFFFFE5EF)
+private val CanvasMist = Color(0xFFFBFAFE)
+private val InkMuted = Color(0xFF746F80)
+private val Hairline = Color(0xFFEAE4F2)
+private val Apricot = Color(0xFFF8E8EF)
+private val LilacMist = Color(0xFFF3EFFF)
 
 @Composable
 fun ShiyuApp(repository: ChatRepository) {
@@ -158,7 +161,7 @@ fun ShiyuApp(repository: ChatRepository) {
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        listOf(LilacMist, CanvasMist, Color(0xFFF8F7F3)),
+                        listOf(LilacMist, CanvasMist, Color(0xFFFFF4F8)),
                     ),
                 )
                 .padding(padding),
@@ -214,6 +217,9 @@ fun ShiyuApp(repository: ChatRepository) {
             onImportAvatarModel = vm::importAvatarModel,
             onDeleteAvatarModel = vm::deleteAvatarModel,
             onImportLocalModel = vm::importLocalModel,
+            onDeleteLocalModel = vm::deleteLocalModel,
+            onDownloadLocalModel = vm::downloadLocalModel,
+            onDownloadDreamModel = vm::downloadDreamModel,
         )
     }
     if (showCreate) {
@@ -427,14 +433,15 @@ private fun HomeHeader(onSettings: () -> Unit) {
                 Modifier
                     .size(46.dp)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(DeepForest, Color(0xFF3D7D60)),
-                        ),
-                    ),
+                    .background(Color.White),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("拾", color = Cream, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                Image(
+                    painter = painterResource(R.mipmap.ic_launcher),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
             }
             Spacer(Modifier.width(11.dp))
             Column {
@@ -478,7 +485,7 @@ private fun DiscoveryHero(
             .clip(RoundedCornerShape(20.dp))
             .background(
                 Brush.linearGradient(
-                    listOf(Color(0xFF143D2C), Color(0xFF2D684F), Color(0xFF527B67)),
+                    listOf(Color(0xFF4D3A86), Color(0xFF765BC8), Color(0xFFB76AA7)),
                 ),
             ),
     ) {
@@ -496,7 +503,7 @@ private fun DiscoveryHero(
         Column(Modifier.padding(22.dp)) {
             Text(
                 "A STORY THAT REMEMBERS",
-                color = Color(0xFFC4D5CB),
+                color = Color(0xFFE0D8F5),
                 letterSpacing = 1.5.sp,
                 fontSize = 8.sp,
                 fontWeight = FontWeight.Bold,
@@ -516,7 +523,7 @@ private fun DiscoveryHero(
                 } else {
                     "回到那个人还在等你的故事里，从上一句话继续。"
                 },
-                color = Color(0xFFD4E0D8),
+                color = Color(0xFFEDE7FA),
                 fontSize = 12.sp,
                 lineHeight = 19.sp,
             )
@@ -550,7 +557,7 @@ private fun DiscoveryHero(
             }
             if (onContinue != null) {
                 TextButton(onClick = onCreate, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                    Text("创建一个新角色", color = Color(0xFFE5EEE8), fontSize = 11.sp)
+                    Text("创建一个新角色", color = Color(0xFFFFFFFF), fontSize = 11.sp)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -622,10 +629,10 @@ private fun CharacterCard(
 ) {
     val hasAvatar = character.avatarPath?.let { File(it).isFile } == true
     val artworkColors = when (character.id.hashCode().mod(4)) {
-        0 -> listOf(Color(0xFFBCA895), Color(0xFF5E725E))
-        1 -> listOf(Color(0xFF9AAABD), Color(0xFF4A5E72))
-        2 -> listOf(Color(0xFFD6B5A9), Color(0xFF865F63))
-        else -> listOf(Color(0xFFA7B7A2), Color(0xFF3E6652))
+        0 -> listOf(Color(0xFFB9A8D9), Color(0xFF5E4A91))
+        1 -> listOf(Color(0xFFA6B7DC), Color(0xFF4F5E8D))
+        2 -> listOf(Color(0xFFE2B8CE), Color(0xFF8D5C78))
+        else -> listOf(Color(0xFFC8B6E8), Color(0xFF6C559E))
     }
     Surface(
         onClick = onClick,
@@ -663,7 +670,7 @@ private fun CharacterCard(
                             listOf(
                                 Color.Black.copy(alpha = 0.05f),
                                 Color.Transparent,
-                                Color(0xFF102019).copy(alpha = 0.88f),
+                                Color(0xFF241A39).copy(alpha = 0.9f),
                             ),
                         ),
                     ),
@@ -677,7 +684,7 @@ private fun CharacterCard(
                 Text(
                     character.tag.ifBlank { "原创角色" },
                     Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                    color = Color(0xFF435047),
+                    color = Color(0xFF4E3A86),
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -687,7 +694,7 @@ private fun CharacterCard(
             Surface(
                 modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
                 shape = RoundedCornerShape(8.dp),
-                color = Color(0xFF102019).copy(alpha = 0.58f),
+                color = Color(0xFF2E2344).copy(alpha = 0.62f),
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
             ) {
                 Text(
@@ -775,7 +782,9 @@ private fun ChatScreen(
     var recording by remember { mutableStateOf(false) }
     var voiceStatus by remember { mutableStateOf<String?>(null) }
     val voicePrefs = remember { voiceContext.getSharedPreferences("character_voices", android.content.Context.MODE_PRIVATE) }
-    var speaker by remember(character.id) { mutableStateOf(voicePrefs.getInt(character.id, if (character.name == "言川") 58 else 3)) }
+    var speaker by remember(character.id) {
+        mutableIntStateOf(voicePrefs.getInt(character.id, 3))
+    }
     var confirmDelete by remember(character.id) { mutableStateOf(false) }
     var draft by remember(character.id) { mutableStateOf("") }
     fun startRecording() {
@@ -812,7 +821,7 @@ private fun ChatScreen(
             .statusBarsPadding()
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFFF2F0F7), CanvasMist, Color(0xFFFAF9F6)),
+                    listOf(Color(0xFFF3EDFF), CanvasMist, Color(0xFFFFF5F8)),
                 ),
             ),
     ) {
@@ -1101,7 +1110,7 @@ private fun ChatScreen(
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             shape = RoundedCornerShape(22.dp),
-            containerColor = Color(0xFFFBFAF7),
+            containerColor = Color(0xFFFDFBFF),
             title = { Text("删除${character.name}？") },
             text = { Text("角色档案、聊天记录、记忆及应用生成的头像会被删除，无法恢复。你从手机相册选择的原始图片不会删除。") },
             confirmButton = {
@@ -1193,7 +1202,7 @@ private fun CharacterBadge(character: CharacterEntity, size: androidx.compose.ui
             .border(1.dp, Color.White.copy(alpha = 0.84f), CircleShape)
             .background(
                 Brush.linearGradient(
-                    listOf(Forest, Color(0xFF8A9C7F)),
+                    listOf(Forest, Color(0xFFC1639A)),
                 ),
             ),
         contentAlignment = Alignment.Center,
@@ -1288,6 +1297,9 @@ private fun SettingsDialog(
     onImportAvatarModel: (Uri) -> Unit,
     onDeleteAvatarModel: () -> Unit,
     onImportLocalModel: (Uri) -> Unit,
+    onDeleteLocalModel: () -> Unit,
+    onDownloadLocalModel: (String) -> Unit,
+    onDownloadDreamModel: () -> Unit,
 ) {
     var openCodeKey by remember { mutableStateOf("") }
     var deepSeekKey by remember { mutableStateOf("") }
@@ -1312,6 +1324,7 @@ private fun SettingsDialog(
     }
     var requestLimit by remember(state.limits) { mutableStateOf(state.limits.requestTokens.toString()) }
     var dailyLimit by remember(state.limits) { mutableStateOf(state.limits.dailyTokens.toString()) }
+    var settingsPage by remember { mutableIntStateOf(0) }
     val localAvatarPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
     ) { uri ->
@@ -1325,20 +1338,48 @@ private fun SettingsDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(22.dp),
-        containerColor = Color(0xFFFBFAF7),
+        containerColor = Color(0xFFFDFBFF),
         tonalElevation = 0.dp,
         title = { Text("应用设置") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Sage.copy(alpha = 0.65f))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Button(
+                        onClick = { settingsPage = 0 },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (settingsPage == 0) DeepForest else Color.Transparent,
+                            contentColor = if (settingsPage == 0) Color.White else DeepForest,
+                        ),
+                    ) { Text("对话与模型") }
+                    Button(
+                        onClick = { settingsPage = 1 },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (settingsPage == 1) DeepForest else Color.Transparent,
+                            contentColor = if (settingsPage == 1) Color.White else DeepForest,
+                        ),
+                    ) { Text("图片生成") }
+                }
+                if (settingsPage == 0) {
                 Text("当前聊天 Provider", fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (state.cloudProvider == "opencode") {
-                        FilledTonalButton(onClick = { onProviderChange("opencode") }) {
-                            Text("OpenCode Go")
-                        }
-                    } else {
-                        OutlinedButton(onClick = { onProviderChange("opencode") }) {
-                            Text("OpenCode Go")
+                    if (state.showDevProviders) {
+                        if (state.cloudProvider == "opencode") {
+                            FilledTonalButton(onClick = { onProviderChange("opencode") }) {
+                                Text("OpenCode Go")
+                            }
+                        } else {
+                            OutlinedButton(onClick = { onProviderChange("opencode") }) {
+                                Text("OpenCode Go")
+                            }
                         }
                     }
                     if (state.cloudProvider == "deepseek") {
@@ -1351,20 +1392,22 @@ private fun SettingsDialog(
                         }
                     }
                 }
-                HorizontalDivider()
-                Text("OpenCode Go API", fontWeight = FontWeight.SemiBold)
-                OutlinedTextField(
-                    value = openCodeKey,
-                    onValueChange = { openCodeKey = it },
-                    label = { Text(if (state.openCodeConfigured) "替换 Key（留空不变）" else "OpenCode Go API Key") },
-                    visualTransformation = PasswordVisualTransformation(),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text("模型：deepseek-v4.1-flash · 支持文字、图片和流式输出", fontSize = 10.sp)
-                if (state.openCodeConfigured) {
-                    TextButton(onClick = onRemoveOpenCodeKey) {
-                        Text("删除 OpenCode Go Key", color = MaterialTheme.colorScheme.error)
+                if (state.showDevProviders) {
+                    HorizontalDivider()
+                    Text("OpenCode Go API（仅开发调试）", fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(
+                        value = openCodeKey,
+                        onValueChange = { openCodeKey = it },
+                        label = { Text(if (state.openCodeConfigured) "替换 Key（留空不变）" else "OpenCode Go API Key") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text("模型：deepseek-v4.1-flash · Debug 构建可见，Release 构建隐藏", fontSize = 10.sp)
+                    if (state.openCodeConfigured) {
+                        TextButton(onClick = onRemoveOpenCodeKey) {
+                            Text("删除 OpenCode Go Key", color = MaterialTheme.colorScheme.error)
+                        }
                     }
                 }
                 HorizontalDivider()
@@ -1384,7 +1427,7 @@ private fun SettingsDialog(
                     }
                 }
                 HorizontalDivider()
-                Text("手机本地 Qwen3-1.7B（宋知意 LoRA）", fontWeight = FontWeight.SemiBold)
+                Text("手机本地 Qwen3-1.7B · ${state.localModelName}", fontWeight = FontWeight.SemiBold)
                 Text(
                     if (state.localModelReady) {
                         "模型已安装，约 ${
@@ -1402,7 +1445,7 @@ private fun SettingsDialog(
                 )
                 OutlinedButton(
                     onClick = { localChatModelPicker.launch("*/*") },
-                    enabled = !state.localModelBusy,
+                    enabled = !state.localModelBusy && !state.modelDownloadBusy,
                 ) {
                     if (state.localModelBusy) {
                         CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -1414,6 +1457,43 @@ private fun SettingsDialog(
                             state.localModelReady -> "重新导入 MNN 模型"
                             else -> "导入本地 MNN 模型"
                         },
+                    )
+                }
+                if (state.localModelReady) {
+                    TextButton(
+                        onClick = onDeleteLocalModel,
+                        enabled = !state.localModelBusy && !state.modelDownloadBusy && !state.busy,
+                    ) {
+                        Text("删除本地 MNN 模型", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                state.deviceCompatibility?.let { device ->
+                    Text(
+                        "${device.socLabel} · RAM ${String.format(Locale.CHINA, "%.1f", device.totalRamGb)} GB · " +
+                            "MNN ${if (device.mnnTextModelSupported) "可用" else "需 ARM64/至少 6 GB"}; " +
+                            if (device.dreamNpuSupported) "Dream ${device.htpArchitecture}" else "Dream 不可用",
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (device.mnnTextModelSupported) {
+                        Text("按需下载并安装，不放入 APK；同一时间保留一个端侧聊天模型。", fontSize = 9.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = { onDownloadLocalModel("song-zhiyi") },
+                                enabled = !state.modelDownloadBusy && !state.localModelBusy,
+                            ) { Text("下载宋知意 Q8") }
+                            OutlinedButton(
+                                onClick = { onDownloadLocalModel("pei-jiming") },
+                                enabled = !state.modelDownloadBusy && !state.localModelBusy,
+                            ) { Text("下载裴既明 Q8") }
+                        }
+                    }
+                }
+                if (state.modelDownloadBusy) {
+                    Text(state.modelDownloadLabel.orEmpty(), fontSize = 9.sp)
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { state.modelDownloadProgress },
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
                 HorizontalDivider()
@@ -1434,6 +1514,8 @@ private fun SettingsDialog(
                     )
                 }
                 Text("今日已使用 ${state.todayUsage} tokens", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                }
+                if (settingsPage == 1) {
                 HorizontalDivider()
                 Text("Dream 本地生图 · ${state.avatarModelName}", fontWeight = FontWeight.SemiBold)
                 Text(
@@ -1453,7 +1535,7 @@ private fun SettingsDialog(
                 )
                 OutlinedButton(
                     onClick = { localAvatarPicker.launch("*/*") },
-                    enabled = !state.avatarBusy,
+                    enabled = !state.avatarBusy && !state.modelDownloadBusy,
                 ) {
                     if (state.avatarBusy) {
                         CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -1467,10 +1549,33 @@ private fun SettingsDialog(
                         },
                     )
                 }
+                state.deviceCompatibility?.let { device ->
+                    Text(
+                        "${device.socLabel} · ${device.htpArchitecture ?: "Hexagon 未知"} · ${device.dreamPackageLabel}",
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(device.note, fontSize = 9.sp)
+                    if (device.dreamNpuSupported) {
+                        Button(
+                            onClick = onDownloadDreamModel,
+                            enabled = !state.modelDownloadBusy && !state.avatarBusy,
+                        ) {
+                            Text("下载并安装兼容 MeinaMix V12")
+                        }
+                    }
+                }
+                if (state.modelDownloadBusy) {
+                    Text(state.modelDownloadLabel.orEmpty(), fontSize = 9.sp)
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { state.modelDownloadProgress },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 if (state.avatarModelReady) {
                     TextButton(
                         onClick = onDeleteAvatarModel,
-                        enabled = !state.avatarBusy,
+                        enabled = !state.avatarBusy && !state.modelDownloadBusy,
                     ) {
                         Text("删除本地生图模型", color = MaterialTheme.colorScheme.error)
                     }
@@ -1562,6 +1667,7 @@ private fun SettingsDialog(
                 )
                 Text("Qwen-Image 2.0 按图片计费；额度和实际费用以千问 AI 平台控制台为准。", fontSize = 10.sp)
                 if (state.imageApiConfigured) TextButton(onClick = onRemoveImageKey) { Text("删除千问 AI 平台 Key", color = MaterialTheme.colorScheme.error) }
+                }
             }
         },
         confirmButton = {
@@ -1598,7 +1704,7 @@ private fun CreateCharacterDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(22.dp),
-        containerColor = Color(0xFFFBFAF7),
+        containerColor = Color(0xFFFDFBFF),
         tonalElevation = 0.dp,
         title = { Text("创建角色", fontSize = 24.sp) },
         text = {
@@ -1689,7 +1795,7 @@ private fun EditCharacterDialog(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFFFBFAF7),
+        containerColor = Color(0xFFFDFBFF),
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
         LazyColumn(
@@ -1753,9 +1859,9 @@ private fun EditCharacterDialog(
                         Text(
                             when {
                                 modelSource == MODEL_SOURCE_API ->
-                                    "使用设置中选定的 OpenCode Go 或 DeepSeek，支持图片和云端记忆整理。"
+                                    "使用设置中选定的云端 API，支持图片和云端记忆整理。"
                                 localModelReady ->
-                                    "文字由这台手机上的宋知意 LoRA MNN 模型生成；不发送到电脑或云端。当前本地模型暂不支持图片。"
+                                    "文字由这台手机上已安装的 MNN LoRA 模型生成；不发送到电脑或云端。当前本地模型暂不支持图片。"
                                 else ->
                                     "尚未安装本地 MNN 模型。请先在应用设置中导入模型；未安装时本地聊天会给出提示。"
                             },
@@ -1787,7 +1893,7 @@ private fun EditCharacterDialog(
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(
                                     Brush.linearGradient(
-                                        listOf(Color(0xFFDDE9E1), Color(0xFF7A8E80)),
+                                        listOf(Color(0xFFEDE7FA), Color(0xFF8B72C9)),
                                     ),
                                 ),
                             contentAlignment = Alignment.Center,
@@ -1916,7 +2022,7 @@ private fun TraceSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFFFBFAF7),
+        containerColor = Color(0xFFFDFBFF),
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
         Column(
@@ -2004,7 +2110,7 @@ private fun MemorySheet(
     var editedText by remember { mutableStateOf("") }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFFFBFAF7),
+        containerColor = Color(0xFFFDFBFF),
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
     ) {
         Column(

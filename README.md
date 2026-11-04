@@ -11,8 +11,8 @@
 
 | 能力 | PC 网页端 | Android 客户端 |
 |---|---|---|
-| 云端对话 | OpenCode Go、DeepSeek | OpenCode Go、DeepSeek |
-| 本地模型 | Qwen3-1.7B Base / LoRA 实验入口 | 导入 MNN Chat 兼容模型 ZIP |
+| 云端对话 | OpenCode Go、DeepSeek | 公开 Release 使用 DeepSeek；OpenCode Go 仅 Debug 调试可见 |
+| 本地模型 | Qwen3-1.7B Base / LoRA 实验入口 | 应用内下载 Q8 MNN，或导入 MNN Chat 兼容 ZIP |
 | 角色系统 | 创建、编辑、删除角色；角色卡、世界书、知识边界 | 相同角色结构；每个角色独立选择云端或本地模型 |
 | 上下文 | SSE 流式回答、停止生成、错误提示 | 原生流式回答、停止生成、本地历史 |
 | 长期记忆 | 自动提取、审核、更正、主题遗忘、版本恢复 | 自动结构化记忆；本地 MNN 使用滚动摘要 |
@@ -69,12 +69,14 @@ PC 与 Android 当前是两套独立客户端，**不会自动同步聊天记录
 
 - Kotlin + Jetpack Compose，Room schema 11，WorkManager，OkHttp 和 Android Keystore。
 - 自定义角色、角色卡、世界书、知识边界、固定事实和唯一持续对话。
-- 云端模式支持 OpenCode Go、DeepSeek、图片输入和后台结构化记忆。
-- 本地模式可导入 MNN Chat 兼容模型 ZIP，在手机上完成文字推理。
+- 公开 Release 默认 DeepSeek；OpenCode Go 只在 Debug 构建显示，避免公开版保留作者测试入口。
+- 本地模式可下载或导入 MNN Chat 兼容模型 ZIP，在手机上完成文字推理。
 - 本地 MNN 模式保留最近 24 条原话；更早消息按批次压缩为简短事实，
   不调用云端记忆提取。
 - sherpa-onnx 本地语音识别和 Kokoro 本地语音合成。
-- 内置 Local Dream SD1.5/QNN 后端，可在应用内导入兼容模型并生成角色头像。
+- 内置 Local Dream SD1.5/QNN 后端，可在应用内下载或导入兼容模型并生成角色头像。
+- 设置页分为“对话与模型”和“图片生成”，支持下载进度、SHA-256 校验、删除模型和清理缓存。
+- 内置李白、宋知意、江昭谌、裴既明四个角色；许澄和旧实验角色会在升级时删除。
 - 可切换千问图片 API；角色外貌提示词会包含明确的主体性别和视觉描述。
 - 删除角色时清理所属消息、记忆、Trace、图片、模型状态和本地摘要。
 
@@ -139,11 +141,11 @@ PC 语音依赖独立的 Whisper、GPT-SoVITS 或 MeloTTS 模型和服务，不�
 
 ## 构建 Android
 
-当前 Android 源码为 `0.14.3 / versionCode 27`。项目仍在继续调整移动端体验，
+当前 Android 源码为 `0.15.0 / versionCode 28`。项目仍在继续调整移动端体验，
 因此仓库暂不发布预编译 APK，需要从源码构建。
 
-构建后的应用可在设置中填写 OpenCode Go 或 DeepSeek Key。手机与电脑不要求局域网
-连接，因为 Android 云端模式直接调用模型 API。
+构建后的 Debug 应用可在设置中填写 OpenCode Go 或 DeepSeek Key；公开 Release
+只显示 DeepSeek。手机与电脑不要求局域网连接，因为 Android 云端模式直接调用模型 API。
 
 ### 从源码构建 Android
 
@@ -163,7 +165,8 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 ## 手机本地模型与图片模型
 
-构建出的应用不包含 Qwen MNN 权重或 SD1.5 QNN 模型。它们在应用设置中单独导入：
+构建出的应用不包含 Qwen MNN 权重或 SD1.5 QNN 模型。可在设置页按需下载，
+也可导入本地 ZIP。MNN 与 Dream 模型共用独立存储槽位，重新安装或删除时会清理旧目录：
 
 - MNN 模型 ZIP 至少应包含 `config.json`、`llm.mnn`、`llm.mnn.weight`
   和 `tokenizer.mtok`。
@@ -171,6 +174,20 @@ android/app/build/outputs/apk/debug/app-debug.apk
   自己的许可。
 - 本地 MNN 当前只处理文字；图片输入需要切换到云端模式。
 - Local Dream 组件采用 CC BY-NC 4.0，当前项目只能作为非商业 Demo 使用。
+
+MeinaMix V12 在 `xororz/sd-qnn` 中只发布三种 QNN 包：
+
+| 包 | 文件大小 | SHA-256 |
+|---|---:|---|
+| `_min` | 1,156,786,441 bytes | `7ed33339b305f0df97fd746790962808c38e56bb98e560d55d8eb239fa6c4dc8` |
+| `_8gen1` | 1,032,314,916 bytes | `10d9f52607146c85428d3f66919a8a86ccf8f680c21b51ef2a39c6c0ff1b2695` |
+| `_8gen2` | 1,031,765,133 bytes | `90463ac0db6eb7424bb6c7a048c811bde2996b2321eaf58b64d02d626c333098` |
+
+Local Dream 的 SD1.5 后端要求 Qualcomm Hexagon V68 或更新架构。拾语会识别
+SM8350/888、SM8450 与 SM8475/8 Gen 1、SM8550 系列/8 Gen 2、SM8650/8 Gen 3、
+SM8750/8 Elite、SM8850 等已知平台。8 Gen 3、8 Elite 和新平台没有单独 MeinaMix
+包，Local Dream 当前复用 `_8gen2`；未知高通平台和非高通设备不会强行安装 QNN 包。
+这是当前内置的 Qualcomm NPU 路径限制，不代表其他平台永远不能本地生图。
 
 LoRA 训练、Adapter、MNN Q8 导出与对照实验位于独立仓库：
 <https://github.com/bawdwl/qwen3-1.7b-lora>
@@ -180,7 +197,6 @@ LoRA 训练、Adapter、MNN Q8 导出与对照实验位于独立仓库：
 | 角色 | 检查点 | ModelScope |
 |---|---|---|
 | 宋知意 | 1.5 轮，Q8 block64 | <https://modelscope.cn/models/Alixs666/shiyu-qwen3-1.7b-song-zhiyi-mnn-q8> |
-| 许澄 | 第 1 轮，Q8 block64，实验版 | <https://modelscope.cn/models/Alixs666/shiyu-qwen3-1.7b-xu-cheng-mnn-q8> |
 | 裴既明 | 第 1 轮，Q8 block64，实验版 | <https://modelscope.cn/models/Alixs666/shiyu-qwen3-1.7b-pei-jiming-mnn-q8> |
 
 这些是 MNN 3.5.0 Q8 合并模型，不是 GPTQ。模型均包含对应角色提示词和文件哈希；
@@ -217,7 +233,7 @@ cd android
 - PC Python：285 项通过。
 - API-only 干净环境：208 项通过，1 项按设计跳过。
 - PC 前端状态测试：40 项通过，React 生产构建通过。
-- Android JVM：60 项通过，`assembleDebug` 通过。
+- Android JVM：63 项通过，`assembleDebug` 通过。
 - 固定角色质量检查：基础条件 18/24，长期记忆条件 22/24。
 - 私有自然记忆固定夹具回放：事实、摘要、混合检索、混合状态均为 90/90；
   仅最近消息为 23/90。
@@ -256,6 +272,7 @@ release/                      Android 发布状态说明（暂不提供 APK）
 - [PC / Android 使用与复现](docs/使用与复现.md)
 - [PC 记忆检索与内部状态](docs/PC记忆检索与内部状态_2026-10-30.md)
 - [Android 本地 Dream 生图](docs/Android本地Dream生图嵌入_2026-11-02.md)
+- [Android 模型下载与 NPU 兼容](docs/Android模型下载与NPU兼容_2026-11-04.md)
 - [Android 本地 MNN 双模式](docs/Android本地MNN双模式_2026-11-01.md)
 - [角色质量评测、Trace 与记忆语义](docs/角色质量评测Trace与记忆语义_2026-10-30.md)
 - [Windows 干净环境验收](docs/Windows干净环境验收_2026-10-31.md)

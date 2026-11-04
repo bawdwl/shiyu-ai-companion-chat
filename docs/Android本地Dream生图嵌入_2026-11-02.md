@@ -1,14 +1,14 @@
 # Android 本地 Dream 生图嵌入
 
 日期：2026-11-02
-Android：`0.14.3 / versionCode 27`
+Android：`0.15.0 / versionCode 28`
 
 ## 产品结构
 
 拾语 Android 现有两条彼此独立的模型路由：
 
-1. 角色聊天：云端 OpenCode Go / DeepSeek，或用户导入的 Qwen3-1.7B MNN。
-2. 角色头像：千问图片 API，或用户导入的 Dream/SD1.5 QNN，默认参数面向 MeinaMix V12。
+1. 角色聊天：公开 Release 使用 DeepSeek；Debug 还可见 OpenCode Go，或使用应用内下载/导入的 Qwen3-1.7B MNN。
+2. 角色头像：千问图片 API，或应用内下载/导入的 Dream/SD1.5 QNN，默认参数面向 MeinaMix V12。
 
 生成头像时不再启动 MediaPipe。旧版 `files/avatar-models` 会在应用启动后的后台清理任务中删除。
 
@@ -17,7 +17,7 @@ Android：`0.14.3 / versionCode 27`
 应用内置 Local Dream v2.8.1 的 SD1.5 NPU 后端：
 
 - `libstable_diffusion_core.so`
-- Qualcomm QNN HTP V75 运行库
+- Qualcomm QNN HTP V68/V69/V73/V75/V79/V81 运行库
 - 安全检查器
 - Local Dream CC BY-NC 4.0 许可文本
 
@@ -72,15 +72,17 @@ SD1.5 的 CLIP 文本编码器固定为 77 Token，不能简单通过调大应�
 - `custom-lora-xucheng-v1`
 - `custom-lora-haruhi-v1`
 
-保留并自动补齐的微调角色只有宋知意 `custom-lora-song-zhiyi-v1`。这里修复了旧实现中凉宫春日角色虽然进入待删除列表、但 SQL 删除白名单没有包含其 ID 的问题。
+保留并自动补齐的微调角色只把宋知意 `custom-lora-song-zhiyi-v1` 作为迁移来源；
+产品目录同时内置李白、江昭谌和裴既明。这里修复了旧实现中凉宫春日角色虽然进入
+待删除列表、但 SQL 删除白名单没有包含其 ID 的问题。
 
 ## 验证状态
 
 - Kotlin 编译通过；
-- 60 项 Android JVM 单元测试通过；
+- 63 项 Android JVM 单元测试通过；
 - `assembleDebug` 通过；
 - APK 只包含 `arm64-v8a`；
-- APK 中已确认包含 Dream 原生后端、QNN V75 运行库和安全检查器，且不再包含 MediaPipe。
+- APK 中已确认包含 Dream 原生后端、QNN V68–V81 运行库和安全检查器，且不再包含 MediaPipe。
 - APK 产物：`android/app/build/outputs/apk/debug/app-debug.apk`
 - Android Lint 因当前离线环境缺少 `com.android.tools.lint:lint-gradle:31.7.3`，未能启动；这是工具缓存缺口，编译、测试和打包不受影响。
 

@@ -15,8 +15,8 @@ android {
         applicationId = "com.shiyu.chat"
         minSdk = 26
         targetSdk = 35
-        versionCode = 27
-        versionName = "0.14.3"
+        versionCode = 28
+        versionName = "0.15.0"
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -40,9 +40,18 @@ android {
 
     buildTypes {
         getByName("debug") {
+            resValue("bool", "show_dev_providers", "true")
             if (stableDebugKeystore.isFile) {
                 signingConfig = signingConfigs.getByName("stableDebug")
             }
+        }
+        getByName("release") {
+            resValue("bool", "show_dev_providers", "false")
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 
@@ -60,6 +69,13 @@ android {
             // extracted to nativeLibraryDir so Android can execute it.
             useLegacyPackaging = true
         }
+    }
+
+    lint {
+        // MNN, sherpa-onnx and Local Dream only ship arm64 native libraries.
+        disable += "ChromeOsAbiSupport"
+        // The supplied brand mark is intentionally a full-bleed rounded-square icon.
+        disable += "IconLauncherShape"
     }
 }
 

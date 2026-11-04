@@ -22,8 +22,8 @@ web/react-dist/.vite/
 
 outputs/
 archive/
-data/
-models/
+/data/
+/models/
 *.safetensors
 *.ckpt
 *.bin

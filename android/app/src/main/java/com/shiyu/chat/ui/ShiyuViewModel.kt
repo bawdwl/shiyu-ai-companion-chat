@@ -6,11 +6,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.shiyu.chat.data.CharacterEntity
 import com.shiyu.chat.data.ChatRepository
+import com.shiyu.chat.data.DeviceModelCompatibility
 import com.shiyu.chat.data.Limits
 import com.shiyu.chat.data.MemoryEntity
 import com.shiyu.chat.data.MessageEntity
 import com.shiyu.chat.data.MODEL_SOURCE_LOCAL_MNN
 import com.shiyu.chat.data.DreamGenerationSettings
+import com.shiyu.chat.data.MnnDownloadCatalog
 import com.shiyu.chat.data.StructuredMemoryEntity
 import com.shiyu.chat.data.TurnTraceEntity
 import kotlinx.coroutines.CancellationException
@@ -27,7 +29,8 @@ data class ShiyuUiState(
     val memories: List<MemoryEntity> = emptyList(),
     val structuredMemories: List<StructuredMemoryEntity> = emptyList(),
     val turnTraces: List<TurnTraceEntity> = emptyList(),
-    val cloudProvider: String = "opencode",
+    val cloudProvider: String = "deepseek",
+    val showDevProviders: Boolean = false,
     val apiConfigured: Boolean = false,
     val openCodeConfigured: Boolean = false,
     val deepSeekConfigured: Boolean = false,
@@ -44,7 +47,12 @@ data class ShiyuUiState(
     val dreamGenerationSettings: DreamGenerationSettings = DreamGenerationSettings(),
     val localModelReady: Boolean = false,
     val localModelBytes: Long = 0L,
+    val localModelName: String = "Qwen3-1.7B MNN",
     val localModelBusy: Boolean = false,
+    val modelDownloadBusy: Boolean = false,
+    val modelDownloadLabel: String? = null,
+    val modelDownloadProgress: Float = 0f,
+    val deviceCompatibility: DeviceModelCompatibility? = null,
     val status: String? = null,
 )
 
@@ -57,10 +65,11 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
     init {
         viewModelScope.launch {
             repository.ensureDefaults()
-            repository.ensureSongZhiyiCharacter()
+            repository.ensureBuiltInCharacters()
             val provider = repository.cloudProvider()
             _state.value = _state.value.copy(
                 cloudProvider = provider,
+                showDevProviders = repository.showDevProviders,
                 apiConfigured = !repository.activeApiKey().isNullOrBlank(),
                 openCodeConfigured = !repository.openCodeApiKey().isNullOrBlank(),
                 deepSeekConfigured = !repository.apiKey().isNullOrBlank(),
@@ -73,6 +82,8 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 dreamGenerationSettings = repository.dreamGenerationSettings(),
                 localModelReady = repository.localModelReady(),
                 localModelBytes = repository.localModelBytes(),
+                localModelName = repository.localModelName(),
+                deviceCompatibility = repository.deviceCompatibility(),
             )
             repository.characters.collect { characters ->
                 val selected = _state.value.selected?.let { current ->
@@ -349,6 +360,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
     }
 
     fun importAvatarModel(uri: Uri) {
+        if (_state.value.modelDownloadBusy || _state.value.avatarBusy) return
         _state.value = _state.value.copy(avatarBusy = true, status = "正在导入本地生图模型…")
         viewModelScope.launch {
             runCatching { repository.importAvatarModel(uri) }
@@ -385,6 +397,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
     }
 
     fun deleteAvatarModel() {
+        if (_state.value.modelDownloadBusy || _state.value.avatarBusy) return
         _state.value = _state.value.copy(avatarBusy = true, status = "正在删除本地生图模型…")
         viewModelScope.launch {
             runCatching { repository.deleteAvatarModel() }
@@ -410,7 +423,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
     }
 
     fun importLocalModel(uri: Uri) {
-        if (_state.value.localModelBusy) return
+        if (_state.value.localModelBusy || _state.value.modelDownloadBusy) return
         _state.value = _state.value.copy(
             localModelBusy = true,
             status = "正在导入手机本地 MNN 模型，约需数分钟…",
@@ -422,6 +435,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                         localModelBusy = false,
                         localModelReady = repository.localModelReady(),
                         localModelBytes = repository.localModelBytes(),
+                        localModelName = repository.localModelName(),
                         status = "手机本地宋知意 LoRA 模型已导入",
                     )
                 }
@@ -430,7 +444,138 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                         localModelBusy = false,
                         localModelReady = repository.localModelReady(),
                         localModelBytes = repository.localModelBytes(),
+                        localModelName = repository.localModelName(),
                         status = error.message ?: "本地 MNN 模型导入失败",
+                    )
+                }
+        }
+    }
+
+    fun deleteLocalModel() {
+        if (_state.value.localModelBusy || _state.value.modelDownloadBusy || _state.value.busy) return
+        _state.value = _state.value.copy(
+            localModelBusy = true,
+            status = "正在删除本地 MNN 模型…",
+        )
+        viewModelScope.launch {
+            runCatching { repository.deleteLocalModel() }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        localModelBusy = false,
+                        localModelReady = false,
+                        localModelBytes = 0L,
+                        localModelName = "Qwen3-1.7B MNN",
+                        status = "本地 MNN 模型已删除",
+                    )
+                }
+                .onFailure { error ->
+                    _state.value = _state.value.copy(
+                        localModelBusy = false,
+                        localModelReady = repository.localModelReady(),
+                        localModelBytes = repository.localModelBytes(),
+                        localModelName = repository.localModelName(),
+                        status = error.message ?: "本地 MNN 模型删除失败",
+                    )
+                }
+        }
+    }
+
+    fun downloadLocalModel(offerId: String) {
+        if (_state.value.modelDownloadBusy || _state.value.localModelBusy ||
+            _state.value.avatarBusy
+        ) return
+        val offer = MnnDownloadCatalog.byId(offerId) ?: return
+        if (_state.value.deviceCompatibility?.mnnTextModelSupported != true) {
+            _state.value = _state.value.copy(
+                status = "当前设备需 ARM64 且至少 6 GB 内存才能安装 MNN 模型",
+            )
+            return
+        }
+        _state.value = _state.value.copy(
+            modelDownloadBusy = true,
+            modelDownloadLabel = "准备下载 ${offer.displayName}",
+            modelDownloadProgress = 0f,
+            status = null,
+        )
+        viewModelScope.launch {
+            runCatching {
+                repository.downloadAndInstallMnn(offer) { label, progress ->
+                    _state.value = _state.value.copy(
+                        modelDownloadLabel = label,
+                        modelDownloadProgress = progress,
+                    )
+                }
+            }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        modelDownloadBusy = false,
+                        modelDownloadLabel = null,
+                        modelDownloadProgress = 1f,
+                        localModelReady = repository.localModelReady(),
+                        localModelBytes = repository.localModelBytes(),
+                        localModelName = repository.localModelName(),
+                        status = "${offer.displayName} 已下载并安装",
+                    )
+                }
+                .onFailure { error ->
+                    _state.value = _state.value.copy(
+                        modelDownloadBusy = false,
+                        modelDownloadLabel = null,
+                        localModelReady = repository.localModelReady(),
+                        localModelBytes = repository.localModelBytes(),
+                        localModelName = repository.localModelName(),
+                        status = error.message ?: "模型下载安装失败",
+                    )
+                }
+        }
+    }
+
+    fun downloadDreamModel() {
+        if (_state.value.modelDownloadBusy || _state.value.avatarBusy ||
+            _state.value.localModelBusy
+        ) return
+        val compatibility = _state.value.deviceCompatibility
+            ?: repository.deviceCompatibility()
+        if (!compatibility.dreamNpuSupported) {
+            _state.value = _state.value.copy(
+                status = "当前设备无法确认 Qualcomm Hexagon V68+，请使用千问图片 API",
+            )
+            return
+        }
+        _state.value = _state.value.copy(
+            modelDownloadBusy = true,
+            modelDownloadLabel = "准备下载 ${compatibility.dreamPackageLabel}",
+            modelDownloadProgress = 0f,
+            status = null,
+        )
+        viewModelScope.launch {
+            runCatching {
+                repository.downloadAndInstallDream(compatibility) { label, progress ->
+                    _state.value = _state.value.copy(
+                        modelDownloadLabel = label,
+                        modelDownloadProgress = progress,
+                    )
+                }
+            }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        modelDownloadBusy = false,
+                        modelDownloadLabel = null,
+                        modelDownloadProgress = 1f,
+                        avatarModelReady = repository.avatarModelReady(),
+                        avatarModelBytes = repository.avatarModelBytes(),
+                        avatarModelName = repository.avatarModelName(),
+                        status = "MeinaMix V12 已下载并安装",
+                    )
+                }
+                .onFailure { error ->
+                    _state.value = _state.value.copy(
+                        modelDownloadBusy = false,
+                        modelDownloadLabel = null,
+                        avatarModelReady = repository.avatarModelReady(),
+                        avatarModelBytes = repository.avatarModelBytes(),
+                        avatarModelName = repository.avatarModelName(),
+                        status = error.message ?: "本地生图模型下载安装失败",
                     )
                 }
         }
