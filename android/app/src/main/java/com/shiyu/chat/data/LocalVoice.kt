@@ -9,18 +9,22 @@ import android.media.MediaRecorder
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
-import com.k2fsa.sherpa.onnx.OfflineTtsKokoroModelConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
 import java.io.File
 import java.io.ByteArrayOutputStream
 
-internal const val KOKORO_VOICE_COUNT = 103
+internal const val TTS_VOICE_COUNT = 5
+internal val TTS_SELECTABLE_SPEAKER_IDS = listOf(0, 1, 2, 3)
 
 /** Blocking functions must be called from an IO worker. */
 class LocalVoice(private val context: Context) {
-    private val kokoroPack = KokoroPackManager(context)
     @Volatile var recording = false
     @Volatile private var activeTrack: AudioTrack? = null
     @Volatile private var playbackStopped = false
+
+    init {
+        File(context.filesDir, "speech/kokoro").deleteRecursively()
+    }
 
     private fun copyAssets(path: String, target: File) {
         val children = context.assets.list(path).orEmpty()
@@ -71,32 +75,29 @@ class LocalVoice(private val context: Context) {
     fun stopPlayback() { playbackStopped = true; activeTrack?.let { runCatching { it.pause(); it.flush(); it.stop() } } }
     fun preparePlayback() { playbackStopped = false }
 
-    fun isTtsReady(): Boolean = kokoroPack.isReady()
+    fun isTtsReady(): Boolean = true
 
     fun speak(text: String, speaker: Int) {
         require(text.isNotBlank()) { "没有可播放的文字" }
-        require(kokoroPack.isReady()) {
-            "角色朗读音色包尚未安装。请到设置 → 对话与模型中下载或导入。"
-        }
-        val root = if (kokoroPack.bundled) {
-            File(context.filesDir, "speech/kokoro").also {
-                copyAssets("speech/kokoro", it)
-            }
-        } else {
-            kokoroPack.modelDirectory()
+        val root = File(context.filesDir, "speech/vits-zh-ll").also {
+            copyAssets("speech/vits-zh-ll", it)
         }
         fun path(name: String) = File(root, name).absolutePath
         val engine = OfflineTts(config = OfflineTtsConfig(model = OfflineTtsModelConfig(
-            kokoro = OfflineTtsKokoroModelConfig(model = path("model.int8.onnx"), voices = path("voices.bin"),
-                tokens = path("tokens.txt"), dataDir = path("espeak-ng-data"), dictDir = path("dict"),
-                lexicon = listOf(path("lexicon-us-en.txt"), path("lexicon-zh.txt")).joinToString(",")), numThreads = 2),
-            ruleFsts = listOf(path("date-zh.fst"), path("number-zh.fst"), path("phone-zh.fst")).joinToString(",")))
+            vits = OfflineTtsVitsModelConfig(
+                model = path("model.onnx"),
+                lexicon = path("lexicon.txt"),
+                tokens = path("tokens.txt"),
+                dictDir = path("dict"),
+            ),
+            numThreads = 2,
+        ), ruleFsts = listOf(path("date.fst"), path("number.fst"), path("phone.fst")).joinToString(",")))
         try {
             for (part in splitVoiceText(text)) {
                 if (playbackStopped) break
                 val audio = engine.generate(
                     part,
-                    sid = speaker.coerceIn(0, KOKORO_VOICE_COUNT - 1),
+                    sid = speaker.coerceIn(0, TTS_VOICE_COUNT - 1),
                     speed = 1f,
                 )
                 if (playbackStopped) break
@@ -155,7 +156,8 @@ internal fun splitVoiceText(text: String, limit: Int = 180): List<String> {
     return chunks
 }
 
-internal fun normalizeKokoroSpeakerId(saved: Int): Int = when (saved) {
-    in 0 until KOKORO_VOICE_COUNT -> saved
+internal fun normalizeTtsSpeakerId(saved: Int): Int = when (saved) {
+    in TTS_SELECTABLE_SPEAKER_IDS -> saved
+    4 -> 1
     else -> 0
 }

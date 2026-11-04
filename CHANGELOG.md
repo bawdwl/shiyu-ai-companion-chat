@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-11-04 — Android `0.16.1`, single build and VITS zh-ll TTS
+
+### Changed
+
+- Collapsed Android distribution back to one complete `com.shiyu.chat` package.
+- Removed the Slim product flavor, in-app TTS pack download/import controls and
+  the associated background state. Bundled speech assets now live under `main`.
+- Pinned Android builds to the installed Build Tools 35.0.0.
+- Added an offline TTS audition set comparing the current Kokoro voice with
+  MeloTTS, Piper Huayan, VITS zh-ll, Fanchen-C, Eula and Theresa candidates.
+- Replaced the bundled Kokoro TTS with `sherpa-onnx-vits-zh-ll`. Five model
+  speaker IDs contain four audibly distinct choices: female 1, male 1,
+  female 2 and male 2. `bazong` duplicates `gunian` and is hidden.
+
+### Verification
+
+- Android JVM tests: 64 passed.
+- Debug build and Release build passed.
+- Release Lint: no issues found.
+- MeloTTS synthesized the same test sentence in 2.21 s on the local CPU run,
+  compared with about 8.7–9.8 s for the tested Kokoro speakers.
+- Android `0.16.1 / versionCode 30` rebuilds with the corrected voice labels.
+- Android `0.16.1` Release APK: 282,548,528 bytes, SHA-256
+  `5B487796E5768CB80BD5E44BD395D0792067ADA75D0A6DFE23F187C7E3BE101A`.
+
 ## 2026-11-04 — Android `0.15.0` release hygiene and device-aware model install
 
 ### Added

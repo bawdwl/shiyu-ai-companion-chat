@@ -6,13 +6,15 @@ import org.junit.Test
 
 class VoiceChunksTest {
     @Test
-    fun preservesPublishedKokoroSpeakerIdsAndBounds() {
-        assertEquals(3, normalizeKokoroSpeakerId(3))
-        assertEquals(4, normalizeKokoroSpeakerId(4))
-        assertEquals(58, normalizeKokoroSpeakerId(58))
-        assertEquals(59, normalizeKokoroSpeakerId(59))
-        assertEquals(102, normalizeKokoroSpeakerId(102))
-        assertEquals(0, normalizeKokoroSpeakerId(103))
+    fun migratesOldVoiceSelectionsIntoFourUniqueVoices() {
+        assertEquals(0, normalizeTtsSpeakerId(0))
+        assertEquals(1, normalizeTtsSpeakerId(1))
+        assertEquals(2, normalizeTtsSpeakerId(2))
+        assertEquals(3, normalizeTtsSpeakerId(3))
+        assertEquals(1, normalizeTtsSpeakerId(4))
+        assertEquals(0, normalizeTtsSpeakerId(58))
+        assertEquals(0, normalizeTtsSpeakerId(102))
+        assertEquals(0, normalizeTtsSpeakerId(-1))
     }
 
     @Test fun preservesLongContentAndPrefersSentenceBoundaries() {

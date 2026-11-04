@@ -1,9 +1,8 @@
 # 拾语 Android
 
-当前版本：`0.15.0 / versionCode 28`，提供两个独立安装包：
+当前版本：`0.16.1 / versionCode 30`，只提供一个完整安装包：
 
-- 完整版：`com.shiyu.chat`，内置 Kokoro 103 音色；
-- 精简版：`com.shiyu.chat.slim`，保留本地语音输入/转文字，角色朗读包可选安装。
+- `com.shiyu.chat`：内置本地语音识别、角色朗读、MNN 和图片生成入口。
 
 技术栈：Kotlin、Jetpack Compose、Room schema 11、WorkManager、OkHttp、
 Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
@@ -18,8 +17,8 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 - 云端结构化长期记忆与持久后台任务。
 - 本地 MNN 模式使用最近 24 条原话，并对更早消息做滚动摘要。
 - 内部心情、熟悉、信任、温暖、关系阶段与用户边界。
-- sherpa-onnx 本地 ASR、Kokoro 本地 TTS；开放模型全部 103 个音色
-  （100 个中文音色、Maple/Sol/Vale 三个英文女声），支持搜索和按角色保存选择。
+- sherpa-onnx 本地 ASR、VITS zh-ll 本地 TTS；模型含 5 个 speaker，
+  去重后提供女声 1、男声 1、女声 2、男声 2 四个选项，支持试听和按角色保存。
 - 千问图片 API 与内置 Local Dream SD1.5/QNN 生图。
 - 设置中按设备自动选择并下载 MeinaMix V12，显示进度、校验大小与 SHA-256。
 - 内置李白、宋知意、江昭谌、裴既明；删除许澄与旧实验角色。
@@ -37,8 +36,7 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 下载 MeinaMix V12 或导入 Local Dream QNN ZIP。MNN 包需要包含 `config.json`、
 `llm.mnn`、`llm.mnn.weight` 和 `tokenizer.mtok`。同一时间只保留一个 MNN 和一个
 Dream 模型槽位，下载失败的临时文件会自动清理。
-精简版的 Kokoro 朗读包可从设置页下载官方包，也可导入 ZIP 或 TAR.BZ2；安装后与完整版
-使用同一套 103 音色界面。语音识别包始终随应用提供，不受是否安装朗读包影响。
+语音识别和角色朗读资源均随完整安装包提供，不再维护单独下载或导入语音包的版本。
 
 本地 MNN 模式只支持文字；需要图片理解时切换到云端模式。
 
@@ -59,9 +57,7 @@ Dream 模型槽位，下载失败的临时文件会自动清理。
 ```powershell
 $env:JAVA_HOME = "C:\path\to\jdk-17"
 $env:ANDROID_HOME = "C:\path\to\Android\Sdk"
-.\gradlew.bat testFullDebugUnitTest testSlimDebugUnitTest `
-  assembleFullDebug assembleSlimDebug lintFullRelease lintSlimRelease `
-  assembleFullRelease assembleSlimRelease --no-daemon
+.\gradlew.bat testDebugUnitTest assembleDebug lintRelease assembleRelease --no-daemon
 ```
 
 也可以使用 Android Studio 打开 `android/` 并运行 `app`。
@@ -69,15 +65,14 @@ $env:ANDROID_HOME = "C:\path\to\Android\Sdk"
 输出：
 
 ```text
-android/app/build/outputs/apk/full/debug/app-full-debug.apk
-android/app/build/outputs/apk/slim/debug/app-slim-debug.apk
+android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ## 当前验证
 
-- Full 与 Slim 各 64 项 JVM 单元测试通过。
-- 两个变体的 Release Lint、Debug 构建和 R8 Release 构建通过。
-- `0.15.0` 源码已通过 JVM 测试和 APK 构建。
+- 64 项 JVM 单元测试通过。
+- Release Lint、Debug 构建和关闭 R8 的 Release 构建通过。
+- `0.16.1` 源码已通过 64 项 JVM 测试、Release Lint 和 APK 构建。
 - 后续移动端仍会继续调整，因此 GitHub 仓库暂不提供预编译 APK。
 
 ## 已知限制

@@ -45,7 +45,6 @@ class ChatRepository(
     private val cloudAvatarGenerator = CloudAvatarGenerator(context)
     private val mnnModelManager = MnnModelManager(context)
     private val localMnnClient = LocalMnnChatClient(mnnModelManager)
-    private val kokoroPackManager = KokoroPackManager(context)
     private val managedModelDownloader = ManagedModelDownloader(context)
     private val memoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val memoryMutex = Mutex()
@@ -251,20 +250,6 @@ class ChatRepository(
     fun localModelBytes(): Long = mnnModelManager.installedBytes()
 
     fun localModelName(): String = mnnModelManager.modelName()
-
-    fun kokoroBundled(): Boolean = kokoroPackManager.bundled
-
-    fun kokoroReady(): Boolean = kokoroPackManager.isReady()
-
-    fun kokoroBytes(): Long = kokoroPackManager.installedBytes()
-
-    suspend fun downloadKokoroPack(
-        onProgress: (label: String, progress: Float) -> Unit,
-    ): File = kokoroPackManager.downloadAndInstall(onProgress)
-
-    suspend fun importKokoroPack(uri: Uri): File = kokoroPackManager.importUri(uri)
-
-    suspend fun deleteKokoroPack() = kokoroPackManager.deleteInstalled()
 
     suspend fun importLocalModel(uri: Uri): File {
         localMnnClient.release()

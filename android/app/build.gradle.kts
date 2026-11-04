@@ -10,13 +10,14 @@ val stableDebugKeystore = rootProject.file("../outputs/android-toolchain/shiyu-d
 android {
     namespace = "com.shiyu.chat"
     compileSdk = 35
+    buildToolsVersion = "35.0.0"
 
     defaultConfig {
         applicationId = "com.shiyu.chat"
         minSdk = 26
         targetSdk = 35
-        versionCode = 28
-        versionName = "0.15.0"
+        versionCode = 30
+        versionName = "0.16.1"
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -25,20 +26,6 @@ android {
     buildFeatures {
         compose = true
         buildConfig = false
-    }
-
-    flavorDimensions += "speechBundle"
-    productFlavors {
-        create("full") {
-            dimension = "speechBundle"
-            resValue("bool", "kokoro_bundled", "true")
-        }
-        create("slim") {
-            dimension = "speechBundle"
-            applicationIdSuffix = ".slim"
-            versionNameSuffix = "-slim"
-            resValue("bool", "kokoro_bundled", "false")
-        }
     }
 
     signingConfigs {
@@ -119,8 +106,6 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.apache.commons:commons-compress:1.21")
-
     testImplementation("junit:junit:4.13.2")
 }
 

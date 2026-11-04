@@ -111,8 +111,8 @@ import com.shiyu.chat.data.MODEL_SOURCE_LOCAL_MNN
 import com.shiyu.chat.data.StructuredMemoryEntity
 import com.shiyu.chat.data.TurnTraceEntity
 import com.shiyu.chat.data.LocalVoice
-import com.shiyu.chat.data.KOKORO_VOICE_COUNT
-import com.shiyu.chat.data.normalizeKokoroSpeakerId
+import com.shiyu.chat.data.TTS_SELECTABLE_SPEAKER_IDS
+import com.shiyu.chat.data.normalizeTtsSpeakerId
 import com.shiyu.chat.data.naturalMessageText
 import com.shiyu.chat.data.speechOnlyText
 import com.shiyu.chat.R
@@ -222,9 +222,6 @@ fun ShiyuApp(repository: ChatRepository) {
             onDeleteAvatarModel = vm::deleteAvatarModel,
             onImportLocalModel = vm::importLocalModel,
             onDeleteLocalModel = vm::deleteLocalModel,
-            onDownloadKokoroPack = vm::downloadKokoroPack,
-            onImportKokoroPack = vm::importKokoroPack,
-            onDeleteKokoroPack = vm::deleteKokoroPack,
             onDownloadLocalModel = vm::downloadLocalModel,
             onDownloadDreamModel = vm::downloadDreamModel,
         )
@@ -791,7 +788,7 @@ private fun ChatScreen(
     var voiceStatus by remember { mutableStateOf<String?>(null) }
     val voicePrefs = remember { voiceContext.getSharedPreferences("character_voices", android.content.Context.MODE_PRIVATE) }
     var speaker by remember(character.id) {
-        mutableIntStateOf(normalizeKokoroSpeakerId(voicePrefs.getInt(character.id, 0)))
+        mutableIntStateOf(normalizeTtsSpeakerId(voicePrefs.getInt(character.id, 0)))
     }
     var showVoicePicker by remember(character.id) { mutableStateOf(false) }
     var confirmDelete by remember(character.id) { mutableStateOf(false) }
@@ -909,7 +906,7 @@ private fun ChatScreen(
                             },
                         )
                         androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("选择音色（${kokoroVoiceLabel(speaker)}）") },
+                            text = { Text("选择音色（${ttsVoiceLabel(speaker)}）") },
                             leadingIcon = {
                                 Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
                             },
@@ -1124,20 +1121,15 @@ private fun ChatScreen(
             current = speaker,
             previewingVoice = previewingVoice,
             busy = voiceBusy,
-            ttsReady = state.kokoroReady,
             onPreview = { id ->
                 if (!voiceBusy) {
                     voice.stopPlayback()
                     voice.preparePlayback()
                     previewingVoice = id
                     voiceBusy = true
-                    voiceStatus = "正在试听 ${kokoroVoiceLabel(id)}…"
+                    voiceStatus = "正在试听 ${ttsVoiceLabel(id)}…"
                     voiceScope.launch {
-                        val sample = if (id >= 100) {
-                            "Hello. This is a preview of my voice for our conversation."
-                        } else {
-                            "你好，这是我在拾语里的声音。希望接下来的每一句话，都能让你觉得自然。"
-                        }
+                        val sample = "你好，这是我在拾语里的声音。希望接下来的每一句话，都能让你觉得自然。"
                         runCatching {
                             withContext(Dispatchers.IO) { voice.speak(sample, id) }
                         }.onFailure {
@@ -1183,11 +1175,12 @@ private fun ChatScreen(
     }
 }
 
-private fun kokoroVoiceLabel(id: Int): String = when (id) {
-    100 -> "Maple · 英文女声"
-    101 -> "Sol · 英文女声"
-    102 -> "Vale · 英文女声"
-    else -> "中文音色 ${(id + 1).toString().padStart(3, '0')}"
+private fun ttsVoiceLabel(id: Int): String = when (id) {
+    0 -> "女声 1"
+    1, 4 -> "男声 1"
+    2 -> "女声 2"
+    3 -> "男声 2"
+    else -> "声部 ${id + 1}"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1196,7 +1189,6 @@ private fun VoicePickerSheet(
     current: Int,
     previewingVoice: Int?,
     busy: Boolean,
-    ttsReady: Boolean,
     onPreview: (Int) -> Unit,
     onStopPreview: () -> Unit,
     onDismiss: () -> Unit,
@@ -1204,8 +1196,8 @@ private fun VoicePickerSheet(
 ) {
     var query by remember { mutableStateOf("") }
     val voices = remember(query) {
-        (0 until KOKORO_VOICE_COUNT).filter { id ->
-            query.isBlank() || kokoroVoiceLabel(id).contains(query.trim(), ignoreCase = true) ||
+        TTS_SELECTABLE_SPEAKER_IDS.filter { id ->
+            query.isBlank() || ttsVoiceLabel(id).contains(query.trim(), ignoreCase = true) ||
                 id.toString() == query.trim()
         }
     }
@@ -1223,33 +1215,24 @@ private fun VoicePickerSheet(
         ) {
             Text("选择角色音色", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
             Text(
-                "Kokoro v1.1 中文模型自带 103 个音色：100 个中文音色和 3 个英文女声。",
+                "VITS 中文模型提供 4 个不同的可用声部：女声 1、男声 1、女声 2、男声 2。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
                 lineHeight = 17.sp,
                 modifier = Modifier.padding(top = 5.dp, bottom = 12.dp),
             )
-            if (!ttsReady) {
-                Text(
-                    "当前精简版尚未安装角色朗读包。语音输入仍可正常转文字；如需试听和朗读，请返回设置页安装。",
-                    color = MaterialTheme.colorScheme.error,
-                    fontSize = 10.sp,
-                    lineHeight = 16.sp,
-                    modifier = Modifier.padding(bottom = 10.dp),
-                )
-            }
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it.take(40) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp),
-                placeholder = { Text("搜索编号、中文音色或 Maple / Sol / Vale") },
+                placeholder = { Text("搜索编号、女声或男声") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             )
             Spacer(Modifier.height(10.dp))
             Text(
-                "共 ${voices.size} 个结果 · 当前 ${kokoroVoiceLabel(current)}",
+                "共 ${voices.size} 个结果 · 当前 ${ttsVoiceLabel(current)}",
                 color = InkMuted,
                 fontSize = 10.sp,
             )
@@ -1279,12 +1262,12 @@ private fun VoicePickerSheet(
                                     .size(34.dp)
                                     .clip(CircleShape)
                                     .background(
-                                        if (id >= 100) Apricot else LilacMist,
+                                        if (id == 1 || id == 3) Apricot else LilacMist,
                                     ),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
-                                    if (id >= 100) "EN" else "${id + 1}",
+                                    "${id + 1}",
                                     color = DeepForest,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
@@ -1292,7 +1275,7 @@ private fun VoicePickerSheet(
                             }
                             Spacer(Modifier.width(11.dp))
                             Text(
-                                kokoroVoiceLabel(id),
+                                ttsVoiceLabel(id),
                                 modifier = Modifier.weight(1f),
                                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                             )
@@ -1300,7 +1283,7 @@ private fun VoicePickerSheet(
                                 onClick = {
                                     if (previewingVoice == id) onStopPreview() else onPreview(id)
                                 },
-                                enabled = ttsReady && (!busy || previewingVoice == id),
+                                enabled = !busy || previewingVoice == id,
                             ) {
                                 Icon(
                                     if (previewingVoice == id) Icons.Default.Stop else Icons.Default.PlayArrow,
@@ -1501,9 +1484,6 @@ private fun SettingsDialog(
     onDeleteAvatarModel: () -> Unit,
     onImportLocalModel: (Uri) -> Unit,
     onDeleteLocalModel: () -> Unit,
-    onDownloadKokoroPack: () -> Unit,
-    onImportKokoroPack: (Uri) -> Unit,
-    onDeleteKokoroPack: () -> Unit,
     onDownloadLocalModel: (String) -> Unit,
     onDownloadDreamModel: () -> Unit,
 ) {
@@ -1540,11 +1520,6 @@ private fun SettingsDialog(
         ActivityResultContracts.GetContent(),
     ) { uri ->
         uri?.let(onImportLocalModel)
-    }
-    val kokoroPackPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent(),
-    ) { uri ->
-        uri?.let(onImportKokoroPack)
     }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1708,54 +1683,12 @@ private fun SettingsDialog(
                     )
                 }
                 HorizontalDivider()
-                Text("角色朗读 · Kokoro 103 音色", fontWeight = FontWeight.SemiBold)
+                Text("角色朗读", fontWeight = FontWeight.SemiBold)
                 Text(
-                    when {
-                        state.kokoroBundled ->
-                            "当前是完整版，Kokoro 103 个音色已内置，无需下载。"
-                        state.kokoroReady ->
-                            "已安装 Kokoro 音色包，约 ${String.format(
-                                Locale.CHINA,
-                                "%.1f",
-                                state.kokoroBytes / 1024.0 / 1024.0,
-                            )} MiB。"
-                        else ->
-                            "当前是精简版。语音输入和本地转文字始终可用；角色朗读包下载约 140 MB，安装后约 200 MB。"
-                    },
+                    "语音模型已随应用完整安装，不需要再下载精简音色包。",
                     fontSize = 10.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (!state.kokoroBundled) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = onDownloadKokoroPack,
-                            enabled = !state.kokoroBusy && !state.modelDownloadBusy,
-                        ) {
-                            Text(if (state.kokoroReady) "重新下载音色包" else "下载并安装音色包")
-                        }
-                        OutlinedButton(
-                            onClick = { kokoroPackPicker.launch("*/*") },
-                            enabled = !state.kokoroBusy && !state.modelDownloadBusy,
-                        ) {
-                            Text("从文件导入")
-                        }
-                    }
-                    if (state.kokoroBusy) {
-                        Text(state.kokoroDownloadLabel.orEmpty(), fontSize = 9.sp)
-                        androidx.compose.material3.LinearProgressIndicator(
-                            progress = { state.kokoroProgress },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                    if (state.kokoroReady) {
-                        TextButton(
-                            onClick = onDeleteKokoroPack,
-                            enabled = !state.kokoroBusy && !state.modelDownloadBusy,
-                        ) {
-                            Text("删除已安装音色包", color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                }
                 HorizontalDivider()
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(

@@ -46,6 +46,8 @@ voice-profiles/
 *.wav
 *.mp3
 *.sqlite
+release/apk-*/*.apk
+release/apk-*/*.idsig
 
 *.pem
 *.jks
@@ -53,10 +55,4 @@ voice-profiles/
 
 *.log
 logs/
-
-# Personal recordings, imported chat data and local provider material.
-recordings/
-voice-profiles/
-*.wav
-*.mp3
 
