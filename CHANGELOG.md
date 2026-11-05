@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-11-05 — Android `0.17.0` role library and avatar workflow
+
+### Added
+
+- Added Xiao Chengyuan and Gu Qinghe to the five-role built-in catalog.
+- Bundled the selected default artwork for Li Bai, Song Zhiyi, Pei Jiming,
+  Xiao Chengyuan and Gu Qinghe.
+- Added gallery image import for every character avatar, with orientation
+  correction, square crop and WebP compression.
+- Added persistent tombstones so deleted built-in characters stay deleted after
+  app restarts.
+
+### Changed
+
+- Retired Jiang Zhaochen and legacy duplicate/test characters.
+- Replaced the old Li Bai identity with the phone-generated Li Bai record and
+  its Qwen avatar.
+- Moved the Qwen Image API key to the top of the image-generation settings page.
+- Kept OpenCode Go visible in Release builds for testing.
+- Lowered the chat background artwork opacity to `0.06`.
+- Updated the shared Dream positive-prompt template to the 77-token template
+  currently used on the phone.
+- Added role-specific, token-bounded appearance prompts for all five roles.
+
+### Verification
+
+- JVM unit tests: 64 passed.
+- Debug and Release builds passed; Release Lint reported no issues.
+- Android `0.17.0` Release APK: 283,040,467 bytes, SHA-256
+  `0F6F28E2876329DBA0F1B5E9701E3475F83BD46F1992D65024514C38F51B600B`.
+- Device migration preserves the existing five conversations and replaces the
+  Xiao/Gu avatars with the supplied Qwen images.
+
 ## 2026-11-04 — Android `0.16.1`, single build and VITS zh-ll TTS
 
 ### Changed

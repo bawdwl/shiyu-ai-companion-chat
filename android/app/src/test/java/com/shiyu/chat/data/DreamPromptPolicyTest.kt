@@ -73,7 +73,7 @@ class DreamPromptPolicyTest {
     @Test
     fun infers_male_subject_and_removes_female_conflict() {
         val male = character(
-            description = "江昭谌，26岁，身高193cm，沪圈顶级财阀继承人。他对各类示好一概漠视。",
+            description = "陆沉，26岁，身高193cm，沪圈企业继承人。他对各类示好一概漠视。",
             appearance = "他人高肩宽，短发，穿深色正装。",
         )
         val subject = inferVisualSubject(male)
@@ -90,12 +90,13 @@ class DreamPromptPolicyTest {
     @Test
     fun dream_template_preserves_male_subject_tags() {
         val male = character(
-            description = "江昭谌是男性角色，26岁。",
+            description = "陆沉是男性角色，26岁。",
             appearance = "短发，冷黑色眼睛，深色正装。",
         )
 
         val prompt = DreamGenerationSettings().buildPrompt(male)
 
-        assertTrue(prompt.startsWith("masterpiece, best quality, 1boy, male, solo"))
+        assertTrue(prompt.startsWith("masterpiece, best quality, anime portrait"))
+        assertTrue(prompt.contains("centered composition, 1boy, male, solo"))
     }
 }

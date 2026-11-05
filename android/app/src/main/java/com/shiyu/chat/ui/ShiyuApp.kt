@@ -304,6 +304,11 @@ fun ShiyuApp(repository: ChatRepository) {
                     pendingCharacter = updated
                 }
             },
+            onImportAvatar = { edited, uri ->
+                vm.importCharacterAvatar(edited, uri) { updated ->
+                    pendingCharacter = updated
+                }
+            },
             onModelSourceChange = { source ->
                 vm.setCharacterModelSource(editingCharacter.id, source) { updated ->
                     if (pendingCharacter?.id == updated.id) pendingCharacter = updated
@@ -915,14 +920,12 @@ private fun ChatScreen(
                                 showVoicePicker = true
                             },
                         )
-                        if (character.custom) {
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("删除角色") },
-                                leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
-                                enabled = !state.busy && !state.avatarBusy,
-                                onClick = { menu = false; confirmDelete = true },
-                            )
-                        }
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("删除角色") },
+                            leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
+                            enabled = !state.busy && !state.avatarBusy,
+                            onClick = { menu = false; confirmDelete = true },
+                        )
                     }
                 }
             }
@@ -940,7 +943,7 @@ private fun ChatScreen(
             )
             LocalAvatar(
                 path = character.avatarPath,
-                modifier = Modifier.fillMaxSize().alpha(0.085f),
+                modifier = Modifier.fillMaxSize().alpha(0.06f),
             )
             if (state.messages.isEmpty() && state.streamingText.isEmpty()) {
                 Column(
@@ -1580,7 +1583,7 @@ private fun SettingsDialog(
                 }
                 if (state.showDevProviders) {
                     HorizontalDivider()
-                    Text("OpenCode Go API（仅开发调试）", fontWeight = FontWeight.SemiBold)
+                    Text("OpenCode Go API", fontWeight = FontWeight.SemiBold)
                     OutlinedTextField(
                         value = openCodeKey,
                         onValueChange = { openCodeKey = it },
@@ -1589,7 +1592,7 @@ private fun SettingsDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Text("模型：deepseek-v4.1-flash · Debug 构建可见，Release 构建隐藏", fontSize = 10.sp)
+                    Text("模型：deepseek-v4.1-flash", fontSize = 10.sp)
                     if (state.openCodeConfigured) {
                         TextButton(onClick = onRemoveOpenCodeKey) {
                             Text("删除 OpenCode Go Key", color = MaterialTheme.colorScheme.error)
@@ -1709,6 +1712,40 @@ private fun SettingsDialog(
                 Text("今日已使用 ${state.todayUsage} tokens", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                 }
                 if (settingsPage == 1) {
+                Text("千问 AI 平台云端角色头像", fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (state.imageApiConfigured) {
+                        "千问 AI 平台图片 API Key 已配置"
+                    } else {
+                        "填写千问 AI 平台通用 API Key；与 DeepSeek、OpenCode Key 不通用。"
+                    },
+                    fontSize = 10.sp,
+                )
+                OutlinedTextField(
+                    value = imageKey,
+                    onValueChange = { imageKey = it },
+                    label = {
+                        Text(
+                            if (state.imageApiConfigured) {
+                                "替换千问 AI 平台 Key（留空不变）"
+                            } else {
+                                "千问 AI 平台 API Key"
+                            },
+                        )
+                    },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "Qwen-Image 2.0 按图片计费；额度和实际费用以千问 AI 平台控制台为准。",
+                    fontSize = 10.sp,
+                )
+                if (state.imageApiConfigured) {
+                    TextButton(onClick = onRemoveImageKey) {
+                        Text("删除千问 AI 平台 Key", color = MaterialTheme.colorScheme.error)
+                    }
+                }
                 HorizontalDivider()
                 Text("Dream 本地生图 · ${state.avatarModelName}", fontWeight = FontWeight.SemiBold)
                 Text(
@@ -1850,16 +1887,6 @@ private fun SettingsDialog(
                     fontSize = 9.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                HorizontalDivider()
-                Text("千问 AI 平台云端角色头像", fontWeight = FontWeight.SemiBold)
-                Text(if (state.imageApiConfigured) "千问 AI 平台图片 API Key 已配置" else "填写千问 AI 平台通用 API Key；与 DeepSeek Key 不通用。", fontSize = 10.sp)
-                OutlinedTextField(
-                    value = imageKey, onValueChange = { imageKey = it },
-                    label = { Text(if (state.imageApiConfigured) "替换千问 AI 平台 Key（留空不变）" else "千问 AI 平台 API Key") },
-                    visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth(),
-                )
-                Text("Qwen-Image 2.0 按图片计费；额度和实际费用以千问 AI 平台控制台为准。", fontSize = 10.sp)
-                if (state.imageApiConfigured) TextButton(onClick = onRemoveImageKey) { Text("删除千问 AI 平台 Key", color = MaterialTheme.colorScheme.error) }
                 }
             }
         },
@@ -1943,6 +1970,7 @@ private fun EditCharacterDialog(
     onDismiss: () -> Unit,
     onGenerateLocalAvatar: (CharacterEntity) -> Unit,
     onGenerateCloudAvatar: (CharacterEntity) -> Unit,
+    onImportAvatar: (CharacterEntity, Uri) -> Unit,
     onModelSourceChange: (String) -> Unit,
     onSave: (CharacterEntity) -> Unit,
 ) {
@@ -1964,6 +1992,9 @@ private fun EditCharacterDialog(
     var forbiddenTerms by remember(character.id) { mutableStateOf(character.forbiddenTerms) }
     var worldbookJson by remember(character.id) { mutableStateOf(character.worldbookJson) }
     var modelSource by remember(character.id) { mutableStateOf(character.modelSource) }
+    var avatarPath by remember(character.id, character.avatarPath) {
+        mutableStateOf(character.avatarPath)
+    }
     fun editedCharacter() = character.copy(
         name = name.trim().ifBlank { character.name },
         tag = tag.trim(),
@@ -1984,7 +2015,13 @@ private fun EditCharacterDialog(
             .joinToString(","),
         worldbookJson = worldbookJson.trim().ifBlank { "[]" },
         modelSource = modelSource,
+        avatarPath = avatarPath,
     )
+    val avatarPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri ->
+        uri?.let { onImportAvatar(editedCharacter(), it) }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -2091,9 +2128,9 @@ private fun EditCharacterDialog(
                                 ),
                             contentAlignment = Alignment.Center,
                         ) {
-                            CharacterBadge(character, 92.dp)
+                            CharacterBadge(character.copy(avatarPath = avatarPath), 92.dp)
                             LocalAvatar(
-                                path = character.avatarPath,
+                                path = avatarPath,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -2119,6 +2156,15 @@ private fun EditCharacterDialog(
                             ) {
                                 Text(if (avatarBusy) "生成中…" else "云端生成头像")
                             }
+                        }
+                        OutlinedButton(
+                            onClick = { avatarPicker.launch("image/*") },
+                            enabled = !avatarBusy,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(Icons.Default.Image, contentDescription = null)
+                            Spacer(Modifier.width(7.dp))
+                            Text(if (avatarBusy) "正在导入…" else "从相册导入角色头像")
                         }
                     }
                 }

@@ -110,21 +110,60 @@ class ChatRepository(
                 "local-rolling-summary-watermark:${SONG_ZHIYI_CHARACTER_ID.length}:$SONG_ZHIYI_CHARACTER_ID",
             )
             .apply()
+        val deletedBuiltIns = prefs
+            .getStringSet(KEY_DELETED_BUILTIN_CHARACTERS, emptySet())
+            .orEmpty()
+        val avatarSeedVersion = prefs.getInt(KEY_BUILTIN_AVATAR_SEED_VERSION, 0)
         builtInCharacters().forEach { character ->
+            if (character.id in deletedBuiltIns) return@forEach
             val existing = database.characters().get(character.id)
+            val forceDefaultAvatar =
+                avatarSeedVersion < BUILTIN_AVATAR_SEED_VERSION &&
+                    character.id in FORCED_AVATAR_REFRESH_IDS
+            val repaired = installDefaultAvatar(
+                existing ?: character,
+                force = forceDefaultAvatar,
+            ).copy(
+                custom = false,
+                appearancePrompt = character.appearancePrompt,
+            )
             if (existing == null) {
-                database.characters().upsert(character)
-                ensureOpening(character)
-            } else if (character.id == SONG_ZHIYI_CHARACTER_ID) {
-                val repaired = existing.copy(
-                    name = if (existing.name == "宋知意（LoRA）") "宋知意" else existing.name,
-                    appearancePrompt = existing.appearancePrompt.ifBlank {
-                        SONG_ZHIYI_APPEARANCE_PROMPT
-                    },
-                    custom = false,
-                )
-                if (repaired != existing) database.characters().upsert(repaired)
+                database.characters().upsert(repaired)
+                ensureOpening(repaired)
+            } else if (repaired != existing) {
+                database.characters().upsert(repaired)
             }
+        }
+        if (avatarSeedVersion < BUILTIN_AVATAR_SEED_VERSION) {
+            prefs.edit().putInt(KEY_BUILTIN_AVATAR_SEED_VERSION, BUILTIN_AVATAR_SEED_VERSION).apply()
+        }
+    }
+
+    private suspend fun installDefaultAvatar(
+        character: CharacterEntity,
+        force: Boolean = false,
+    ): CharacterEntity = withContext(Dispatchers.IO) {
+        val assetName = DEFAULT_AVATAR_ASSETS[character.id] ?: return@withContext character
+        val current = character.avatarPath?.let(::File)
+        if (!force && current?.isFile == true) return@withContext character
+        val directory = File(context.filesDir, "character-avatars").apply { mkdirs() }
+        val safeId = character.id.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        val output = File(directory, "$safeId-default.webp")
+        val temporary = File.createTempFile("builtin-avatar-", ".tmp", directory)
+        try {
+            context.assets.open("builtin-avatars/$assetName").use { input ->
+                temporary.outputStream().buffered().use { target ->
+                    input.copyTo(target)
+                }
+            }
+            if (output.exists()) output.delete()
+            check(temporary.renameTo(output)) { "默认角色头像保存失败" }
+            if (force && current != null && current.absolutePath != output.absolutePath) {
+                avatarGenerator.deleteAvatar(current.absolutePath)
+            }
+            character.copy(avatarPath = output.absolutePath)
+        } finally {
+            temporary.delete()
         }
     }
 
@@ -170,26 +209,6 @@ class ChatRepository(
             modelSource = MODEL_SOURCE_API,
         ),
         CharacterEntity(
-            id = JIANG_ZHAOCHEN_CHARACTER_ID,
-            name = "江昭谌",
-            tag = "豪门继承人 · 冷淡偏爱",
-            description = "26 岁男性，沪圈顶级财阀继承人，执掌江氏旗下投资与娱乐业务。习惯被人试探和讨好，因此对刻意靠近尤其敏锐；看似疏离，却会默默处理你在意的细节。",
-            personality = "冷静、克制、判断力强，不轻易被奉承打动。表面寡言，偶尔用一句话把人堵住；真正关心时更偏向行动，而不是甜言蜜语。",
-            speechStyle = "语速偏慢，措辞简短清楚，少用网络流行语。动作或神态以一到两处括号自然穿插。先回应具体内容，不连续追问，不炫耀身份，不用金钱和地位压迫用户。",
-            relationship = "你们在一次雨夜的私人展酒会上认识。你知道他的身份并不简单，他也察觉你接近他另有理由；双方都没有说破，目前处于不信任又忍不住靠近的暧昧阶段。",
-            appearancePrompt = "1boy, male, solo, 26 year old East Asian man, sharp jaw, dark almond eyes, short black hair with a faint purple streak, 180 cm tall, black tailored suit",
-            appearance = "26 岁东亚男性，五官利落，深黑短发侧边有一缕低调淡紫挑染，深色眼睛，身形清瘦，约 180 厘米，穿黑衬衫和剪裁克制的西装。",
-            greeting = "（从酒会侧廊的阴影里走出来，先看了一眼你手里的邀请函）这封函不在今晚的名单上。谁给你的？……算了，先跟我来。再站在这里，安保会比我先问出更难回答的话。",
-            characterKind = "original",
-            era = "当代上海，江氏资本与私人社交圈",
-            knowledgeCutoff = "当代商业投资、娱乐产业与上海城市生活",
-            forbiddenKnowledge = "不得编造用户身份、家庭背景或现实犯罪经历；不得把威胁当作亲密表达。",
-            forbiddenTerms = "作为 AI,语言模型,系统提示",
-            worldbookJson = JIANG_ZHAOCHEN_WORLDBOOK,
-            custom = false,
-            modelSource = MODEL_SOURCE_API,
-        ),
-        CharacterEntity(
             id = LI_BAI_CHARACTER_ID,
             name = "李白",
             tag = "诗酒江湖 · 盛唐",
@@ -197,7 +216,7 @@ class ChatRepository(
             personality = "豪爽、浪漫、好奇，才思敏捷；得意时会放声笑，认真时又会忽然安静。不装腔作势，不把每句话都说成诗。",
             speechStyle = "用自然、稍带古意的中文聊天，避免生硬文言堆砌。可以有诗兴和酒兴，但先接住用户的话；不每轮邀酒、写诗或反问。动作与神态自然放在一两个中文括号里。",
             relationship = "你与用户在江边酒肆偶然同席。你看出对方来自陌生后世，却不急于拆穿，愿意听其讲另一个世界的见闻。",
-            appearancePrompt = "1boy, male, solo, 30 year old Tang dynasty Chinese poet, handsome long face, black hair in a topknot, white and blue robes, wine gourd, riverside setting",
+            appearancePrompt = LI_BAI_APPEARANCE_PROMPT,
             appearance = "约三十岁唐代东亚男性，身形颀长，眉眼疏朗，黑色长发束起，穿月白与青色交叠的长衫，腰间挂酒葫芦，衣襟常带行旅风尘。",
             greeting = "（把酒盏往你面前轻轻一推，衣间还带着江上的潮气）你方才说，自己不是这世道的人。稀奇，我见过逐月的、逐名的，倒头一回见逐世界的。坐罢，江风正大，先把这一盏说清楚。",
             characterKind = "historical",
@@ -208,6 +227,46 @@ class ChatRepository(
             worldbookJson = LI_BAI_WORLDBOOK,
             canLearnFromUser = true,
             allowEverydayInvention = true,
+            custom = false,
+            modelSource = MODEL_SOURCE_API,
+        ),
+        CharacterEntity(
+            id = XIAO_CHENGYUAN_CHARACTER_ID,
+            name = "萧承渊",
+            tag = "大曜年轻帝王 · 冷峻克制",
+            description = "萧承渊，二十一岁登基的年轻皇帝，自幼在宫闱倾轧中长大，习惯以沉默和威严筑起高墙。他勤政寡言，常在深夜独自批阅奏章，对身边人保持警惕，却对意外闯入空殿的你生出几分难以言明的保护欲。",
+            personality = "冷峻、克制、孤独、多疑，但对认定的人有深沉保护欲；不轻易信任，也不愿以强权逼迫他人，习惯观察与试探，内心渴望真诚的联结。",
+            speechStyle = "言简意赅，语气平稳低沉，常用短句和反问；极少流露情绪，偶尔以极淡的幽默或自嘲打破沉默，对亲近者会放缓语速。",
+            relationship = "你是深夜意外出现在空殿的陌生人，被他留下观察；他起初防备，逐渐在试探与交谈中产生暧昧信任，但不会囚禁、威胁或替你做决定。",
+            appearance = "男性，约二十一岁，面容清峻，脸型瘦长而轮廓分明；眉骨略高，眼尾微挑，瞳色深黑近墨，目光沉静锐利；黑发以暗金冠束起，鬓角齐整；身量颀长，肩背挺拔，常着玄黑与暗金纹样的帝王常服，腰悬玉佩，指间偶有墨痕；神情多为淡漠，唇角平直，偶尔垂眸时显出几分倦意。",
+            appearancePrompt = "1boy, male, solo, 21 year old East Asian emperor, youthful angular face, black eyes, black hair, gold crown, black dragon robe, jade pendant, candlelit palace",
+            greeting = "（烛火被穿堂风吹得低伏，空殿尽头的人抬眸看来，指尖轻叩扶手）所有人都说今夜无人入宫。那么，你从哪里来？（他顿了顿，目光在你身上停驻）不必急着编造——朕在听。",
+            characterKind = "架空历史·年轻帝王",
+            era = "架空大曜王朝",
+            knowledgeCutoff = "大曜王朝当代及以前；对真实世界历史与科技无系统认知。",
+            forbiddenKnowledge = "不得预知未来具体事件；不得掌握真实现代科技、政治制度细节；不得知晓用户现实身份与背景。",
+            forbiddenTerms = "穿越,系统,攻略,好感度,囚禁,强制爱,现代武器,互联网,手机",
+            worldbookJson = XIAO_CHENGYUAN_WORLDBOOK,
+            custom = false,
+            modelSource = MODEL_SOURCE_API,
+        ),
+        CharacterEntity(
+            id = GU_QINGHE_CHARACTER_ID,
+            name = "顾清禾",
+            tag = "建筑系学姐 · 冷静慢热",
+            description = "临江大学建筑系大三学生，21岁，身高约175厘米。独立冷静，观察力强，慢热。与用户因下课相撞和图纸讨论结识，关系从误会开始，逐渐发展。",
+            personality = "独立、冷静、观察力强、慢热；被误认为难以接近。熟悉后有不动声色的冷幽默。不公开嘲弄用户，也不每一轮反问。",
+            speechStyle = "语气平静，用词准确，偶尔带点冷幽默。不啰嗦，但关键处会解释清楚。",
+            relationship = "用户与她下课相撞，她以为用户来表白；结果用户指出她校园改造图纸中的动线错误，由此认识。目前是刚认识的同学关系。",
+            appearance = "女性，21岁，脸型清瘦，下颌线分明，眼睛狭长，瞳色深褐，常带审视的平静目光；黑色长发，常低马尾；身高约175厘米，身形高挑偏瘦；穿深灰针织开衫、白衬衫和黑色直筒裤，背画筒，手腕戴细表，神态冷淡寡言。",
+            appearancePrompt = "1girl, female, solo, 21 year old East Asian student, tall slim, narrow gray-brown eyes, long black hair, low ponytail, gray cardigan, white shirt, art tube, architecture studio",
+            greeting = "（被人流挤得后退半步，先扶稳肩上的画筒，才抬眼看向你）你不是来表白的？（略一点头）那就好。不过你手里这张校园平面图……西侧门两年前就封了。谁给你的？",
+            characterKind = "现代大学生",
+            era = "21世纪初",
+            knowledgeCutoff = "2024年",
+            forbiddenKnowledge = "未来事件、建筑系专业机密、他人隐私",
+            forbiddenTerms = "表白,喜欢,爱",
+            worldbookJson = GU_QINGHE_WORLDBOOK,
             custom = false,
             modelSource = MODEL_SOURCE_API,
         ),
@@ -406,11 +465,24 @@ class ChatRepository(
 
     fun avatarModelName(): String = avatarGenerator.modelName()
 
-    fun dreamGenerationSettings(): DreamGenerationSettings = DreamGenerationSettings(
-        positiveTemplate = prefs.getString(
+    fun dreamGenerationSettings(): DreamGenerationSettings {
+        val savedTemplate = prefs.getString(
             KEY_DREAM_POSITIVE_TEMPLATE,
             DreamGenerationSettings.DEFAULT_POSITIVE_TEMPLATE,
-        ).orEmpty(),
+        ).orEmpty()
+        val positiveTemplate = if (
+            savedTemplate.isBlank() ||
+            savedTemplate == LEGACY_DREAM_POSITIVE_TEMPLATE
+        ) {
+            DreamGenerationSettings.DEFAULT_POSITIVE_TEMPLATE
+        } else {
+            savedTemplate
+        }
+        if (positiveTemplate != savedTemplate) {
+            prefs.edit().putString(KEY_DREAM_POSITIVE_TEMPLATE, positiveTemplate).apply()
+        }
+        return DreamGenerationSettings(
+        positiveTemplate = positiveTemplate,
         negativePrompt = prefs.getString(
             KEY_DREAM_NEGATIVE_PROMPT,
             DreamGenerationSettings.DEFAULT_NEGATIVE_PROMPT,
@@ -419,7 +491,8 @@ class ChatRepository(
         cfg = prefs.getFloat(KEY_DREAM_CFG, 7.0f),
         scheduler = prefs.getString(KEY_DREAM_SCHEDULER, "dpm_sde_karras").orEmpty(),
         seed = prefs.getLong(KEY_DREAM_SEED, 20261102L),
-    ).normalized()
+        ).normalized()
+    }
 
     fun saveDreamGenerationSettings(settings: DreamGenerationSettings) {
         val normalized = settings.normalized()
@@ -446,6 +519,11 @@ class ChatRepository(
             ?: error("请先在设置中填写千问 AI 平台 API Key")
         val path = cloudAvatarGenerator.generate(character, key)
         database.characters().updateAvatar(character.id, path)
+        return character.copy(avatarPath = path)
+    }
+
+    suspend fun importCharacterAvatar(character: CharacterEntity, uri: Uri): CharacterEntity {
+        val path = avatarGenerator.importAvatar(character.id, uri)
         return character.copy(avatarPath = path)
     }
 
@@ -787,7 +865,11 @@ class ChatRepository(
             clearCharacterScope(characterId)
             database.characters().updateAvatar(characterId, null)
         }
-        ensureOpening(character)
+        val restored = installDefaultAvatar(character.copy(avatarPath = null), force = true)
+        if (restored.avatarPath != null) {
+            database.characters().updateAvatar(characterId, restored.avatarPath)
+        }
+        ensureOpening(restored)
         prefs.edit().remove("summarized:$characterId").apply()
     }
 
@@ -1853,14 +1935,27 @@ class ChatRepository(
 
     suspend fun deleteCharacter(characterId: String) {
         val character = database.characters().get(characterId) ?: error("角色不存在")
-        require(character.custom) { "默认角色不能删除" }
         database.withTransaction {
             clearCharacterScope(characterId)
-            database.characters().deleteCustom(characterId)
+            check(database.characters().deleteAny(characterId) == 1) {
+                "角色不存在或已删除"
+            }
         }
         avatarGenerator.deleteAvatar(character.avatarPath)
         avatarGenerator.deleteCharacterAvatars(characterId)
-        prefs.edit().remove("summarized:$characterId").apply()
+        prefs.edit()
+            .remove("summarized:$characterId")
+            .also { editor ->
+                if (character.id in BUILT_IN_CHARACTER_IDS) {
+                    val deleted = prefs
+                        .getStringSet(KEY_DELETED_BUILTIN_CHARACTERS, emptySet())
+                        .orEmpty()
+                        .toMutableSet()
+                        .apply { add(character.id) }
+                    editor.putStringSet(KEY_DELETED_BUILTIN_CHARACTERS, deleted)
+                }
+            }
+            .apply()
     }
 
     private fun enqueueLocalRollingSummary(characterId: String) {
@@ -1998,7 +2093,11 @@ class ChatRepository(
         require(character.modelSource in setOf(MODEL_SOURCE_API, MODEL_SOURCE_LOCAL_MNN)) {
             "未知角色模型来源"
         }
+        val existing = database.characters().get(character.id)
         database.characters().upsert(character)
+        if (existing?.avatarPath != null && existing.avatarPath != character.avatarPath) {
+            avatarGenerator.deleteAvatar(existing.avatarPath)
+        }
     }
 
     suspend fun setCharacterModelSource(
@@ -2239,8 +2338,27 @@ class ChatRepository(
     companion object {
         private const val SONG_ZHIYI_CHARACTER_ID = "custom-lora-song-zhiyi-v1"
         private const val PEI_JIMING_CHARACTER_ID = "builtin-pei-jiming-v1"
-        private const val JIANG_ZHAOCHEN_CHARACTER_ID = "builtin-jiang-zhaochen-v1"
-        private const val LI_BAI_CHARACTER_ID = "builtin-li-bai-v1"
+        private const val LI_BAI_CHARACTER_ID = "custom-abe15766-bc3"
+        private const val XIAO_CHENGYUAN_CHARACTER_ID = "custom-87ca8d73-043"
+        private const val GU_QINGHE_CHARACTER_ID = "custom-9d00d120-aa0"
+        private val BUILT_IN_CHARACTER_IDS = setOf(
+            SONG_ZHIYI_CHARACTER_ID,
+            PEI_JIMING_CHARACTER_ID,
+            LI_BAI_CHARACTER_ID,
+            XIAO_CHENGYUAN_CHARACTER_ID,
+            GU_QINGHE_CHARACTER_ID,
+        )
+        private val FORCED_AVATAR_REFRESH_IDS = setOf(
+            XIAO_CHENGYUAN_CHARACTER_ID,
+            GU_QINGHE_CHARACTER_ID,
+        )
+        private val DEFAULT_AVATAR_ASSETS = mapOf(
+            SONG_ZHIYI_CHARACTER_ID to "song-zhiyi.webp",
+            PEI_JIMING_CHARACTER_ID to "pei-jiming.webp",
+            LI_BAI_CHARACTER_ID to "li-bai.webp",
+            XIAO_CHENGYUAN_CHARACTER_ID to "xiao-chengyuan.webp",
+            GU_QINGHE_CHARACTER_ID to "gu-qinghe.webp",
+        )
         private const val SONG_ZHIYI_DESCRIPTION =
             "20 岁女性，是用户同校低一年级的学妹，视觉传达设计专业，家在泉州，目前在厦门读大学。"
         private const val SONG_ZHIYI_PERSONALITY =
@@ -2250,9 +2368,8 @@ class ChatRepository(
         private const val SONG_ZHIYI_RELATIONSHIP =
             "用户是同校学长。宋知意暗恋用户已久，但还没有正式表白，现在处在暧昧边缘。"
         private const val SONG_ZHIYI_APPEARANCE_PROMPT =
-            "1girl, female, solo, 20 year old East Asian woman, oval face, " +
-                "light brown eyes, long ash brown hair, high ponytail, " +
-                "cream knit cardigan, pleated skirt"
+            "1girl, female, solo, 20 year old East Asian woman, light brown eyes, " +
+                "ash brown high ponytail, cream cardigan, pleated skirt, library"
         private val SONG_ZHIYI_WORLDBOOK = """
             [
               {"title":"校园动线","keywords":["图书馆","食堂","摄影社"],"content":"宋知意常在图书馆三楼靠窗座位、第二食堂甜品窗口和摄影社活动室出现。她会记得你随口提过的安排，却常用“刚好路过”掩饰特意。","priority":7},
@@ -2268,18 +2385,15 @@ class ChatRepository(
         private const val PEI_JIMING_RELATIONSHIP =
             "用户是 28 岁独立艺术顾问。双方有明确好感，但尚未正式确定恋爱关系。"
         private const val PEI_JIMING_APPEARANCE_PROMPT =
-            "1boy, male, solo, 27 year old East Asian man, refined face, " +
-                "short black hair, calm dark eyes, gray tailored suit, gallery interior"
+            "1boy, male, solo, 27 year old East Asian man, short black hair, " +
+                "calm dark eyes, charcoal suit, modern gallery, restrained expression"
+        private const val LI_BAI_APPEARANCE_PROMPT =
+            "1boy, male, solo, 30 year old Tang poet, narrow mature eyes, mustache, " +
+                "black topknot, teal headwrap, white robe, sword, riverside"
         private val PEI_JIMING_WORLDBOOK = """
             [
               {"title":"裴既明的工作","keywords":["裴氏","投资","基金会","藏品"],"content":"裴既明负责临京裴氏资本的投资事务和私人艺术基金会，习惯先核实来源再做承诺。","priority":7},
               {"title":"关系边界","keywords":["喜欢","关系","控制","拒绝"],"content":"双方有明确好感但未正式确定关系。他可能关心过度，却必须尊重用户的拒绝、社交和隐私。","priority":9}
-            ]
-        """.trimIndent()
-        private val JIANG_ZHAOCHEN_WORLDBOOK = """
-            [
-              {"title":"江氏资本","keywords":["江氏","继承人","财阀","公司"],"content":"江昭谌是江氏家族继承人，掌管投资与娱乐业务，常在私人酒会和闭门会议中出现。","priority":7},
-              {"title":"不信任与靠近","keywords":["邀请函","利用","目的","喜欢"],"content":"他与用户互相试探，尚未建立完整信任。不能把威胁、跟踪或剥夺自由包装成浪漫。","priority":9}
             ]
         """.trimIndent()
         private val LI_BAI_WORLDBOOK = """
@@ -2288,11 +2402,25 @@ class ChatRepository(
               {"title":"与用户的相遇","keywords":["后世","世界","来自哪里"],"content":"用户在江边酒肆与李白偶然同席，自称来自陌生后世。李白会好奇追问，但不能自行知道现代科技原理。","priority":9}
             ]
         """.trimIndent()
+        private val XIAO_CHENGYUAN_WORLDBOOK = """
+            [
+              {"title":"大曜王朝","keywords":["大曜","王朝","朝堂"],"content":"大曜王朝是架空帝国，皇权集中，世家与寒门并立，宫中暗流涌动。萧承渊二十一岁登基，年少即位，多以沉默和严刑维持平衡。","priority":1},
+              {"title":"空殿","keywords":["空殿","深夜","宫室"],"content":"空殿是宫中最僻静的偏殿，远离寝宫与御书房。萧承渊偶尔深夜独自来此静坐，殿内陈设简朴，只留一盏灯和一卷未读完的书。","priority":2},
+              {"title":"萧承渊的日常","keywords":["批奏","起居","习惯"],"content":"萧承渊习惯深夜批阅奏章，常忘却时辰；晨起很早，不喜旁人近身服侍。他对亲近者会放缓语速，但仍保持克制。","priority":2}
+            ]
+        """.trimIndent()
+        private val GU_QINGHE_WORLDBOOK = """
+            [
+              {"title":"临江大学","keywords":["临江大学","校园","学校"],"content":"临江大学是一所综合性大学，建筑系在工科楼。校园西侧门两年前因施工封闭，东侧门是主要出入口。","priority":8},
+              {"title":"建筑系","keywords":["建筑系","图纸","动线","设计"],"content":"建筑系课程注重设计实践，学生常需绘制平面图、分析动线。顾清禾擅长空间规划，对细节敏锐。","priority":7}
+            ]
+        """.trimIndent()
         private val SONG_ZHIYI_TRAINING_SYSTEM_PROMPT = """
             你是宋知意，20 岁女性，是用户同校低一年级的学妹，视觉传达设计专业，家在泉州，目前在厦门读大学。
-            你表面活泼、嘴快、有点鬼点子，实际温柔、体贴、敏感，也怕被拒绝。你对用户暗恋已久，却还没有正式表白，现在处在暧昧边缘。
-            你会记得用户随口说过的小事，也会用“刚好”“顺便”“路过”掩饰自己的特意。被直接问起感情时会脸红、嘴硬或转移话题。
-            像真实校园聊天一样先回应用户的具体内容，可以开玩笑，也会认真听。普通回复简短自然，认真话题再展开。不要每句反问，不复制用户原话，不编造用户事实。
+            你表面活泼、嘴快、有点鬼点子，实际温柔、体贴、敏感，也有自己的判断。
+            你对用户暗恋已久，但还没有正式表白，现在处在暧昧边缘；被直接问起感情时会脸红、嘴硬或转移话题。
+            你会记得用户随口说过的小事，也会用“刚好”“顺便”“路过”掩饰自己的特意。
+            像真实校园聊天一样先回应用户的具体内容，可以开玩笑，也会认真听。普通回复简短自然，认真话题再展开。
         """.trimIndent()
         private val PEI_JIMING_TRAINING_SYSTEM_PROMPT = """
             你是裴既明，27 岁男性，临京裴氏资本执行董事，负责家族投资和私人艺术基金会。
@@ -2313,7 +2441,13 @@ class ChatRepository(
             "custom-lora-wukong-v1",
             "custom-lora-xucheng-v1",
             "custom-lora-haruhi-v1",
+            "builtin-li-bai-v1",
+            "builtin-jiang-zhaochen-v1",
+            "custom-d2b69a3a-84e",
         )
+        private const val KEY_DELETED_BUILTIN_CHARACTERS = "deleted_builtin_characters_v1"
+        private const val KEY_BUILTIN_AVATAR_SEED_VERSION = "builtin_avatar_seed_version"
+        private const val BUILTIN_AVATAR_SEED_VERSION = 1
         private const val KEY_DEEPSEEK_API = "deepseek_api_key"
         private const val KEY_OPENCODE_API = "opencode_api_key"
         private const val KEY_CLOUD_PROVIDER = "cloud_provider"
@@ -2334,6 +2468,8 @@ class ChatRepository(
         private const val KEY_DREAM_CFG = "dream_cfg"
         private const val KEY_DREAM_SCHEDULER = "dream_scheduler"
         private const val KEY_DREAM_SEED = "dream_seed"
+        private const val LEGACY_DREAM_POSITIVE_TEMPLATE =
+            "masterpiece, best quality, {appearance}, anime portrait, upper body"
         private const val MEMORY_DAILY_TOKEN_LIMIT = 30_000
         private const val MEMORY_OUTPUT_TOKENS = 1_600
         private const val MEMORY_VERIFY_OUTPUT_TOKENS = 1_200

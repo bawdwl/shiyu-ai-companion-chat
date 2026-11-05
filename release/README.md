@@ -3,7 +3,7 @@
 The current prebuilt APK is distributed as a GitHub Release asset and is not
 stored in Git:
 
-- [Shiyu Android 0.16.1](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.16.1)
+- [Shiyu Android 0.17.0](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.17.0)
 
 Release requirements:
 
@@ -11,8 +11,8 @@ Release requirements:
 - ARM64 device
 - API keys are configured by each user inside the app
 
-The `v0.16.1` APK is `282,548,528` bytes with SHA-256
-`5B487796E5768CB80BD5E44BD395D0792067ADA75D0A6DFE23F187C7E3BE101A`.
+The `v0.17.0` APK is `283,040,467` bytes with SHA-256
+`0F6F28E2876329DBA0F1B5E9701E3475F83BD46F1992D65024514C38F51B600B`.
 
 Build from source:
 

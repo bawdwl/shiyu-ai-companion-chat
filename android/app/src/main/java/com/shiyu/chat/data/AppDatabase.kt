@@ -31,14 +31,10 @@ interface CharacterDao {
     @Query("DELETE FROM characters WHERE id=:id AND custom=1")
     suspend fun deleteCustom(id: String)
 
-    @Query(
-        """DELETE FROM characters WHERE id=:id
-           AND id IN (
-             'assistant','companion','study','interview',
-             'custom-lora-wukong-v1','custom-lora-xucheng-v1',
-             'custom-lora-haruhi-v1'
-           )""",
-    )
+    @Query("DELETE FROM characters WHERE id=:id")
+    suspend fun deleteAny(id: String): Int
+
+    @Query("DELETE FROM characters WHERE id=:id")
     suspend fun deleteRetiredBuiltin(id: String): Int
 }
 

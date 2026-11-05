@@ -292,7 +292,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
 
     fun deleteCharacter() {
         val character = _state.value.selected ?: return
-        if (!character.custom || _state.value.busy || _state.value.avatarBusy) return
+        if (_state.value.busy || _state.value.avatarBusy) return
         _state.value = _state.value.copy(busy = true)
         viewModelScope.launch {
             try {
@@ -328,6 +328,31 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
             repository.saveCharacter(character)
             _state.value = _state.value.copy(status = "角色已保存")
             onSaved?.invoke()
+        }
+    }
+
+    fun importCharacterAvatar(
+        character: CharacterEntity,
+        uri: Uri,
+        onImported: (CharacterEntity) -> Unit,
+    ) {
+        if (_state.value.avatarBusy) return
+        _state.value = _state.value.copy(avatarBusy = true, status = "正在导入角色头像…")
+        viewModelScope.launch {
+            runCatching { repository.importCharacterAvatar(character, uri) }
+                .onSuccess { updated ->
+                    _state.value = _state.value.copy(
+                        avatarBusy = false,
+                        status = "头像已导入，保存角色后生效",
+                    )
+                    onImported(updated)
+                }
+                .onFailure { error ->
+                    _state.value = _state.value.copy(
+                        avatarBusy = false,
+                        status = error.message ?: "角色头像导入失败",
+                    )
+                }
         }
     }
 

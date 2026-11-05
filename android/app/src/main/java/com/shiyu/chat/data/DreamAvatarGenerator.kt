@@ -2,8 +2,12 @@ package com.shiyu.chat.data
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 import android.provider.OpenableColumns
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -61,6 +65,98 @@ class DreamAvatarGenerator(private val context: Context) {
         ?: DEFAULT_MODEL_NAME
 
     fun modelRootDirectory(): File = modelDirectory
+
+    suspend fun importAvatar(characterId: String, uri: Uri): String = withContext(Dispatchers.IO) {
+        val mime = context.contentResolver.getType(uri)
+        require(mime == null || mime.startsWith("image/")) { "请选择图片文件" }
+        val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+            val output = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                require(output.size() + count <= MAX_IMPORTED_AVATAR_BYTES) {
+                    "头像图片不能超过 20 MiB"
+                }
+                output.write(buffer, 0, count)
+            }
+            output.toByteArray()
+        } ?: error("无法读取头像图片")
+        require(bytes.isNotEmpty()) { "头像图片为空" }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        require(bounds.outWidth in 1..8192 && bounds.outHeight in 1..8192) {
+            "头像图片尺寸无效"
+        }
+        var sample = 1
+        while (maxOf(bounds.outWidth / sample, bounds.outHeight / sample) > 2048) sample *= 2
+        val decoded = BitmapFactory.decodeByteArray(
+            bytes,
+            0,
+            bytes.size,
+            BitmapFactory.Options().apply { inSampleSize = sample },
+        ) ?: error("头像图片解析失败")
+        val orientation = runCatching {
+            ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL,
+            )
+        }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+        val matrix = Matrix()
+        when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> { matrix.postRotate(90f); matrix.postScale(-1f, 1f) }
+            ExifInterface.ORIENTATION_TRANSVERSE -> { matrix.postRotate(270f); matrix.postScale(-1f, 1f) }
+        }
+        val oriented = if (matrix.isIdentity) {
+            decoded
+        } else {
+            Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true).also {
+                if (it !== decoded) decoded.recycle()
+            }
+        }
+        val side = minOf(oriented.width, oriented.height)
+        val cropped = Bitmap.createBitmap(
+            oriented,
+            (oriented.width - side) / 2,
+            (oriented.height - side) / 2,
+            side,
+            side,
+        )
+        val outputBitmap = if (side > 1024) {
+            Bitmap.createScaledBitmap(cropped, 1024, 1024, true).also {
+                if (it !== cropped) cropped.recycle()
+                if (it !== oriented) oriented.recycle()
+            }
+        } else {
+            if (cropped !== oriented) oriented.recycle()
+            cropped
+        }
+        avatarDirectory.mkdirs()
+        val safeId = characterId.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        val output = File(avatarDirectory, "$safeId-user.webp")
+        val temporary = File.createTempFile("user-avatar-", ".tmp", avatarDirectory)
+        try {
+            val format = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                Bitmap.CompressFormat.WEBP_LOSSY
+            } else {
+                Bitmap.CompressFormat.WEBP
+            }
+            temporary.outputStream().buffered().use { stream ->
+                check(outputBitmap.compress(format, 92, stream)) { "头像图片保存失败" }
+            }
+            if (output.exists()) output.delete()
+            check(temporary.renameTo(output)) { "头像图片保存失败" }
+            output.absolutePath
+        } finally {
+            temporary.delete()
+            outputBitmap.recycle()
+        }
+    }
 
     suspend fun importModel(uri: Uri) = withContext(Dispatchers.IO) {
         importModelInternal(resolveDisplayName(uri)) {
@@ -233,6 +329,8 @@ class DreamAvatarGenerator(private val context: Context) {
             "$safeId-translated.webp",
             "$safeId-cloud.webp",
             "$safeId-cloud.jpg",
+            "$safeId-user.webp",
+            "$safeId-default.webp",
         ).forEach { deleteAvatar(File(avatarDirectory, it).absolutePath) }
     }
 
@@ -342,6 +440,7 @@ class DreamAvatarGenerator(private val context: Context) {
         private const val BASE_URL = "http://127.0.0.1:${DreamBackendService.PORT}"
         private const val MAX_EXTRACTED_BYTES = 3L * 1024 * 1024 * 1024
         private const val STALE_FILE_MS = 24L * 60 * 60 * 1000
+        private const val MAX_IMPORTED_AVATAR_BYTES = 20L * 1024 * 1024
         private const val BACKEND_READY_ATTEMPTS = 120
         private const val BACKEND_READY_DELAY_MS = 750L
         private const val CLIP_TOKEN_LIMIT = 77

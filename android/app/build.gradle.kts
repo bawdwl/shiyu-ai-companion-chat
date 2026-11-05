@@ -16,8 +16,8 @@ android {
         applicationId = "com.shiyu.chat"
         minSdk = 26
         targetSdk = 35
-        versionCode = 30
-        versionName = "0.16.1"
+        versionCode = 31
+        versionName = "0.17.0"
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -47,7 +47,7 @@ android {
             }
         }
         getByName("release") {
-            resValue("bool", "show_dev_providers", "false")
+            resValue("bool", "show_dev_providers", "true")
             // MNN and sherpa-onnx expose JNI classes/methods by name. Keep the
             // release bytecode stable so local ASR, TTS and MNN all use the
             // exact symbols expected by their native libraries.

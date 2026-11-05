@@ -56,7 +56,9 @@ data class DreamGenerationSettings(
         )
 
         const val DEFAULT_POSITIVE_TEMPLATE =
-            "masterpiece, best quality, {appearance}, anime portrait, upper body"
+            "masterpiece, best quality, anime portrait, detailed expressive eyes, " +
+                "soft lighting, clean lineart, upper body, facing viewer, " +
+                "centered composition, {appearance}"
 
         const val DEFAULT_NEGATIVE_PROMPT =
             "lowres, bad anatomy, bad hands, missing fingers, extra fingers, " +

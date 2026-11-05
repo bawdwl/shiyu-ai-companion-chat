@@ -32,7 +32,8 @@ class AvatarPromptPolicyTest {
             ),
         )
 
-        assertTrue(prompt.startsWith("masterpiece, best quality, 1girl, female, solo"))
+        assertTrue(prompt.startsWith("masterpiece, best quality, anime portrait"))
+        assertTrue(prompt.contains("centered composition, 1girl, female, solo"))
         assertTrue(prompt.contains("long black hair"))
         assertFalse(prompt.contains("黑色长发"))
     }

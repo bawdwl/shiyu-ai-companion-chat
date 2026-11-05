@@ -11,7 +11,7 @@
 
 | 能力 | PC 网页端 | Android 客户端 |
 |---|---|---|
-| 云端对话 | OpenCode Go、DeepSeek | 公开 Release 使用 DeepSeek；OpenCode Go 仅 Debug 调试可见 |
+| 云端对话 | OpenCode Go、DeepSeek | Debug 与 Release 均可配置 |
 | 本地模型 | Qwen3-1.7B Base / LoRA 实验入口 | 应用内下载 Q8 MNN，或导入 MNN Chat 兼容 ZIP |
 | 角色系统 | 创建、编辑、删除角色；角色卡、世界书、知识边界 | 相同角色结构；每个角色独立选择云端或本地模型 |
 | 上下文 | SSE 流式回答、停止生成、错误提示 | 原生流式回答、停止生成、本地历史 |
@@ -69,7 +69,7 @@ PC 与 Android 当前是两套独立客户端，**不会自动同步聊天记录
 
 - Kotlin + Jetpack Compose，Room schema 11，WorkManager，OkHttp 和 Android Keystore。
 - 自定义角色、角色卡、世界书、知识边界、固定事实和唯一持续对话。
-- 公开 Release 默认 DeepSeek；OpenCode Go 只在 Debug 构建显示，避免公开版保留作者测试入口。
+- 默认 DeepSeek；OpenCode Go 在 Debug 和 Release 中都可配置用于测试。
 - 本地模式可下载或导入 MNN Chat 兼容模型 ZIP，在手机上完成文字推理。
 - 本地 MNN 模式保留最近 24 条原话；更早消息按批次压缩为简短事实，
   不调用云端记忆提取。
@@ -77,7 +77,7 @@ PC 与 Android 当前是两套独立客户端，**不会自动同步聊天记录
   去重后提供 4 个可试听声部（2 个女声、2 个男声），并按角色保存选择。
 - 内置 Local Dream SD1.5/QNN 后端，可在应用内下载或导入兼容模型并生成角色头像。
 - 设置页分为“对话与模型”和“图片生成”，支持下载进度、SHA-256 校验、删除模型和清理缓存。
-- 内置李白、宋知意、江昭谌、裴既明四个角色；许澄和旧实验角色会在升级时删除。
+- 内置李白、宋知意、裴既明、萧承渊和顾清禾五个角色；江昭谌与旧实验角色会在升级时删除。
 - 可切换千问图片 API；角色外貌提示词会包含明确的主体性别和视觉描述。
 - 删除角色时清理所属消息、记忆、Trace、图片、模型状态和本地摘要。
 
@@ -142,14 +142,14 @@ PC 语音依赖独立的 Whisper、GPT-SoVITS 或 MeloTTS 模型和服务，不�
 
 ## 构建 Android
 
-当前 Android 源码为 `0.16.1 / versionCode 30`，只提供一个完整安装包
+当前 Android 源码为 `0.17.0 / versionCode 31`，只提供一个完整安装包
 `com.shiyu.chat`。语音输入、角色朗读、MNN 和图片生成入口都保留在同一版本中，
 不再维护精简版或应用内 TTS 语音包下载流程。预编译 APK 从
-[GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.16.1)
+[GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.17.0)
 下载；APK 不提交到 Git 历史。
 
-构建后的 Debug 应用可在设置中填写 OpenCode Go 或 DeepSeek Key；公开 Release
-只显示 DeepSeek。手机与电脑不要求局域网连接，因为 Android 云端模式直接调用模型 API。
+Debug 与 Release 都可在设置中填写 OpenCode Go 或 DeepSeek Key。手机与电脑不要求
+局域网连接，因为 Android 云端模式直接调用模型 API。
 
 ### 从源码构建 Android APK
 
