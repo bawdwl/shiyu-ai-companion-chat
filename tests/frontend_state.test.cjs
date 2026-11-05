@@ -586,7 +586,7 @@ test('chat auto-scroll is confined to the message viewport', () => {
   assert.match(source, /container\.scrollTo\s*\(/);
 });
 
-test('web character creation does not call local image generation', () => {
+test('web image generation uses the configured local model only', () => {
   const app = fs.readFileSync(
     path.join(__dirname, '..', 'frontend', 'src', 'App.tsx'),
     'utf8',
@@ -595,7 +595,10 @@ test('web character creation does not call local image generation', () => {
     path.join(__dirname, '..', 'frontend', 'src', 'api.ts'),
     'utf8',
   );
-  assert.doesNotMatch(app, /generateCharacterAvatar/);
-  assert.doesNotMatch(app, /SD1\.5/);
-  assert.doesNotMatch(api, /generateCharacterAvatar/);
+  assert.match(app, /generateCharacterAvatar/);
+  assert.match(app, /本地生成立绘/);
+  assert.match(app, /图片不会发送给任何云端图片 API/);
+  assert.match(api, /generateCharacterAvatar/);
+  assert.match(api, /\/avatar\/generate/);
+  assert.doesNotMatch(api, /qwen-image|dashscope|bailian/i);
 });

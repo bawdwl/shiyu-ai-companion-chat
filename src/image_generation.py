@@ -100,33 +100,52 @@ class StableDiffusionAvatarGenerator:
         self._lock = Lock()
 
     def available(self) -> bool:
-        return (self.model_path / "model_index.json").is_file()
+        return (
+            (self.model_path / "model_index.json").is_file()
+            or (
+                self.model_path.is_file()
+                and self.model_path.suffix.lower() in {".safetensors", ".ckpt"}
+            )
+        )
 
     def _load(self):
         if self._pipeline is not None:
             return self._pipeline
         if not self.available():
             raise ImageGenerationUnavailable(
-                "本地 SD1.5 模型尚未准备，请运行 scripts/setup_image_runtime.ps1"
+                "本地图片模型尚未准备，请在设置中选择模型目录或文件"
             )
         try:
             import torch
             from diffusers import StableDiffusionPipeline
         except ImportError as exc:
             raise ImageGenerationUnavailable(
-                "本地图片运行库尚未安装，请运行 scripts/setup_image_runtime.ps1"
+                "本地图片运行库尚未安装，请运行 scripts/setup_local_image_runtime.ps1"
             ) from exc
-        if not torch.cuda.is_available():
-            raise ImageGenerationUnavailable("本地 SD1.5 需要可用的 CUDA 显卡")
-        pipe = StableDiffusionPipeline.from_pretrained(
-            self.model_path,
-            torch_dtype=torch.float16,
-            variant="fp16",
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        dtype = torch.float16 if device == "cuda" else torch.float32
+        common = dict(
+            torch_dtype=dtype,
             safety_checker=None,
             requires_safety_checker=False,
-            local_files_only=True,
         )
-        pipe = pipe.to("cuda")
+        if self.model_path.is_file():
+            pipe = StableDiffusionPipeline.from_single_file(
+                str(self.model_path),
+                local_files_only=True,
+                **common,
+            )
+        else:
+            # Request the fp16 variant only when the directory actually has it.
+            unet = self.model_path / "unet"
+            variant = {"variant": "fp16"} if any(unet.glob("*.fp16.*")) else {}
+            pipe = StableDiffusionPipeline.from_pretrained(
+                self.model_path,
+                local_files_only=True,
+                **variant,
+                **common,
+            )
+        pipe = pipe.to(device)
         if hasattr(pipe, "enable_attention_slicing"):
             pipe.enable_attention_slicing()
         if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_slicing"):
@@ -137,11 +156,13 @@ class StableDiffusionAvatarGenerator:
 
     @staticmethod
     def build_avatar_prompt(card: dict) -> str:
-        del card
+        configured = str(card.get("appearance_prompt") or "").strip()
+        if configured and not _CJK_TEXT.search(configured):
+            return configured
         # Chinese card prose is useful to the chat model but not to SD1.5's
-        # English CLIP encoder. The configured cloud model supplies a compact
-        # English prompt when available; this deterministic fallback keeps the
-        # local path usable without sending character data to another service.
+        # English CLIP encoder. The character-creation model stores a compact
+        # English prompt; this fallback keeps local generation usable without
+        # sending character data to an image service.
         return _DEFAULT_AVATAR_PROMPT
 
     @staticmethod
@@ -168,7 +189,9 @@ class StableDiffusionAvatarGenerator:
             try:
                 import torch
                 pipe = self._load()
-                generator = torch.Generator(device="cuda").manual_seed(seed)
+                generator = torch.Generator(
+                    device="cuda" if torch.cuda.is_available() else "cpu"
+                ).manual_seed(seed)
                 image = pipe(
                     prompt=prompt,
                     negative_prompt=_DEFAULT_NEGATIVE_PROMPT,
@@ -194,7 +217,11 @@ class StableDiffusionAvatarGenerator:
             "guidance_scale": 7.0,
             "negative_prompt": _DEFAULT_NEGATIVE_PROMPT,
             "scheduler": "pndm",
-            "model": "stable-diffusion-v1-5-fp16",
+            "model": (
+                self.model_path.name
+                if self.model_path.is_file()
+                else self.model_path.name
+            ),
         }
 
     def unload(self):

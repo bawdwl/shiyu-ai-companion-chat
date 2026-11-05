@@ -79,6 +79,21 @@ class DeepSeekBackendTests(unittest.TestCase):
         self.client.__exit__(None, None, None)
         self.temp.cleanup()
 
+    def test_provider_connection_test_uses_the_configured_engine(self):
+        saved = self.client.put(
+            "/settings/deepseek-key",
+            json={"api_key": "sk-test-connection"},
+        )
+        self.assertEqual(saved.status_code, 200, saved.text)
+        tested = self.client.post(
+            "/settings/providers/test",
+            json={"provider": "deepseek"},
+        )
+        self.assertEqual(tested.status_code, 200, tested.text)
+        self.assertTrue(tested.json()["connected"])
+        self.assertEqual(tested.json()["provider"], "deepseek")
+        self.assertEqual(self.requests[-1]["messages"][0]["content"], "只回复：连接成功")
+
     def test_key_configuration_and_health(self):
         before = self.client.get("/health")
         self.assertEqual(before.status_code, 503)
@@ -249,7 +264,7 @@ class DeepSeekBackendTests(unittest.TestCase):
         self.assertNotIn("现代编程语言", streamed.text)
         self.assertIn("knowledge_guard", streamed.text)
 
-    def test_web_character_avatar_generation_is_removed(self):
+    def test_web_character_avatar_upload_is_available(self):
         card = {
             "id": "custom-avatar-test",
             "name": "头像测试",
@@ -263,12 +278,17 @@ class DeepSeekBackendTests(unittest.TestCase):
         }
         saved = self.client.post("/characters", json={"card": card})
         self.assertEqual(saved.status_code, 201, saved.text)
-        generated = self.client.post("/characters/custom-avatar-test/avatar")
-        self.assertEqual(generated.status_code, 405)
-        self.assertEqual(
-            self.client.get("/characters/custom-avatar-test/avatar").status_code,
-            404,
+        image = BytesIO()
+        Image.new("RGB", (96, 96), "#315f4a").save(image, format="PNG")
+        uploaded = self.client.post(
+            "/characters/custom-avatar-test/avatar",
+            content=image.getvalue(),
+            headers={"Content-Type": "image/png"},
         )
+        self.assertEqual(uploaded.status_code, 201, uploaded.text)
+        avatar = self.client.get("/characters/custom-avatar-test/avatar")
+        self.assertEqual(avatar.status_code, 200)
+        self.assertEqual(avatar.headers["content-type"], "image/webp")
 
 
 class OpenCodeBackendTests(unittest.TestCase):

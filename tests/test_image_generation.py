@@ -48,6 +48,20 @@ class ImageGenerationPromptTests(unittest.TestCase):
         self.assertNotRegex(prompt, r"[\u3400-\u9fff]")
         self.assertIn("polished semi-realistic anime portrait", prompt)
 
+    def test_character_english_appearance_prompt_is_used_locally(self):
+        prompt = StableDiffusionAvatarGenerator.build_avatar_prompt(
+            {
+                "name": "宋知意",
+                "appearance_prompt": (
+                    "1girl, female, solo, 20 year old East Asian woman, "
+                    "light brown eyes, long ash brown hair, cream cardigan"
+                ),
+            }
+        )
+
+        self.assertTrue(prompt.startswith("1girl, female, solo"))
+        self.assertIn("cream cardigan", prompt)
+
     def test_negative_prompt_rejects_photographic_and_flat_rendering(self):
         negative = self._negative_prompt()
 

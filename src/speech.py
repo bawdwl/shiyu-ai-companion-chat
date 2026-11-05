@@ -97,15 +97,88 @@ class GPTSoVITSSpeech:
             return validate_wav(response.content)
 
 
+def pcm16_to_wav(content, sample_rate):
+    if not content or len(content) > 40 * 1024 * 1024 or len(content) % 2:
+        raise ValueError('语音服务返回空音频、尺寸过大或不是16位PCM')
+    if not 8000 <= int(sample_rate) <= 192000:
+        raise ValueError('CosyVoice 采样率无效')
+    output = io.BytesIO()
+    with wave.open(output, 'wb') as audio:
+        audio.setnchannels(1)
+        audio.setsampwidth(2)
+        audio.setframerate(int(sample_rate))
+        audio.writeframes(content)
+    return validate_wav(output.getvalue())
+
+
+class CosyVoice2Speech:
+    """Local zero-shot TTS through the official CosyVoice FastAPI server."""
+
+    label = 'CosyVoice 2（本地零样本音色）'
+    supports_voice_profiles = True
+
+    def __init__(self, url, sample_rate=24000):
+        target = urlparse(url)
+        if target.scheme != 'http' or target.hostname not in (
+            '127.0.0.1',
+            'localhost',
+            '::1',
+        ):
+            raise ValueError('当前只接入本机 CosyVoice 服务')
+        self.url = url.rstrip('/')
+        self.sample_rate = int(sample_rate)
+
+    def synthesize(self, text):
+        raise ValueError('CosyVoice 2 需要角色参考音频和逐字稿')
+
+    def synthesize_for_profile(self, text, profile):
+        audio_path = profile.get('reference_audio_path')
+        prompt_text = profile.get('reference_text', '').strip()
+        voice_style = profile.get('voice_style', '').strip()
+        if not audio_path or not Path(audio_path).is_file():
+            raise ValueError('该角色的 CosyVoice 音色档案缺少参考音频。')
+        if not prompt_text and not voice_style:
+            raise ValueError('该角色的 CosyVoice 音色档案缺少逐字稿或声音描述。')
+        endpoint = (
+            '/inference_instruct2'
+            if voice_style
+            else '/inference_zero_shot'
+        )
+        fields = {'tts_text': speech_text(text)}
+        if voice_style:
+            fields['instruct_text'] = voice_style
+        else:
+            fields['prompt_text'] = prompt_text
+        with Path(audio_path).open('rb') as reference:
+            with httpx.Client(timeout=180) as client:
+                response = client.post(
+                    self.url + endpoint,
+                    data=fields,
+                    files={
+                        'prompt_wav': (
+                            Path(audio_path).name,
+                            reference,
+                            'audio/wav',
+                        )
+                    },
+                )
+        response.raise_for_status()
+        content = response.content
+        if content[:4] == b'RIFF':
+            return validate_wav(content)
+        return pcm16_to_wav(content, self.sample_rate)
+
+
 class ProfiledSpeech:
-    """按角色音色合成；没有 GPT-SoVITS 音色档案时沿用 MeloTTS。"""
-    label = '按角色音色（GPT-SoVITS；未配置时 MeloTTS）'
+    """Prefer CosyVoice 2, then GPT-SoVITS, then MeloTTS."""
+    label = '按角色音色（CosyVoice 2 / GPT-SoVITS；未配置时 MeloTTS）'
     supports_voice_profiles = True
     fallback_missing_profile = True
 
-    def __init__(self, fallback, profile_provider):
+    def __init__(self, fallback, profile_provider, legacy_provider=None):
         self.fallback = fallback
         self.profile_provider = profile_provider
+        self.legacy_provider = legacy_provider
 
     def synthesize(self, text):
         return self.fallback.synthesize(text)
@@ -114,5 +187,16 @@ class ProfiledSpeech:
         audio = profile.get('reference_audio_path') if profile else None
         prompt = profile.get('reference_text', '').strip() if profile else ''
         if audio and Path(audio).is_file() and prompt:
-            return self.profile_provider.synthesize_for_profile(text, profile)
+            try:
+                return self.profile_provider.synthesize_for_profile(text, profile)
+            except (httpx.HTTPError, ValueError):
+                if self.legacy_provider is not None:
+                    try:
+                        return self.legacy_provider.synthesize_for_profile(
+                            text,
+                            profile,
+                        )
+                    except (httpx.HTTPError, ValueError):
+                        pass
+                return self.fallback.synthesize(text)
         return self.fallback.synthesize(text)

@@ -188,9 +188,11 @@ def check_reusable(health,provider='deepseek',profile=None,same_chat_memory=Fals
 
     expected_speech={'onnx':'本地中文语音（MeloTTS，CPU；非GPT-SoVITS）',
 
+                     'cosyvoice':'CosyVoice 2（本地零样本音色）',
+
                      'gpt-sovits':'GPT-SoVITS（独立本地服务）',
 
-                     'profiles':'按角色音色（GPT-SoVITS；未配置时 MeloTTS）',
+                     'profiles':'按角色音色（CosyVoice 2 / GPT-SoVITS；未配置时 MeloTTS）',
 
                      'off':None}.get(speech_provider)
 
@@ -304,6 +306,14 @@ def start_gpt_sovits(root,url):
         raise
 
 
+def local_service_ready(url):
+    try:
+        response=httpx.get(url.rstrip('/')+'/docs',timeout=1.5,trust_env=False)
+        return response.status_code==200
+    except (httpx.ConnectError,httpx.ConnectTimeout,httpx.ReadTimeout):
+        return False
+
+
 
 def main():
 
@@ -317,7 +327,7 @@ def main():
             'local-raw','local-brief','local-full-prompt',
             'local-wukong-brief','local-wukong-full-prompt',
         ],
-        default='local-wukong-brief',
+        default='opencode',
     )
 
     parser.add_argument('--model-profile',choices=['qwen3-0.6b','qwen3-1.7b'])
@@ -336,13 +346,37 @@ def main():
         help='临时关闭结构化长期记忆，便于排错或做对照实验')
     parser.add_argument('--memory-daily-token-limit',type=int,default=30000,
                         help='每个角色每天用于后台记忆分析的独立Token上限')
-    parser.add_argument('--speech-provider',choices=['onnx','gpt-sovits','profiles','off'])
+    parser.add_argument(
+        '--speech-provider',
+        choices=['onnx','cosyvoice','gpt-sovits','profiles','off'],
+    )
 
     parser.add_argument('--asr-provider',choices=['whisper','off'],default='whisper',
 
                         help='语音识别需另行准备模型；可用 off 关闭')
 
+    product_characters=parser.add_mutually_exclusive_group()
+    product_characters.add_argument(
+        '--seed-product-characters',
+        dest='seed_product_characters',
+        action='store_true',
+        default=True,
+        help='首次启动时写入五个 PC 演示角色（默认开启）',
+    )
+    product_characters.add_argument(
+        '--no-seed-product-characters',
+        dest='seed_product_characters',
+        action='store_false',
+        help='不写入演示角色',
+    )
+
     parser.add_argument('--tts-url',default='http://127.0.0.1:9881')
+    parser.add_argument('--cosyvoice-url',default='http://127.0.0.1:50000')
+    parser.add_argument('--cosyvoice-sample-rate',type=int,default=24000)
+    parser.add_argument(
+        '--image-model-dir',
+        default='outputs/models/meinamix-v12',
+    )
 
     args=parser.parse_args();root=Path(__file__).resolve().parent;url='http://127.0.0.1:8000/ui/'
 
@@ -352,7 +386,8 @@ def main():
 
         check_reusable(existing,args.provider,args.model_profile,args.same_chat_memory,
                        args.speech_provider,args.structured_memory,
-                       args.memory_daily_token_limit,require_local_models=True)
+                       args.memory_daily_token_limit,
+                       require_local_models=args.provider.startswith('local'))
 
         print('本机服务正在运行：'+str(existing.get('model_id'))+' '+url,flush=True)
 
@@ -369,14 +404,24 @@ def main():
         if (root/'outputs/models/qwen3-1.7b/source.json').exists()
         else 'qwen3-0.6b'
     )
-    command+=['--model-profile',profile,'--enable-local-models',
-              '--seed-evaluation-character']
+    command+=['--model-profile',profile]
+    if args.provider.startswith('local'):
+        command+=['--enable-local-models','--seed-evaluation-character']
+
+    if args.seed_product_characters:
+        command.append('--seed-product-characters')
 
     speech_provider=args.speech_provider or 'profiles'
 
     tts_process=None
 
-    if speech_provider in ('gpt-sovits','profiles'):
+    if (
+        speech_provider in ('gpt-sovits','profiles')
+        and not (
+            speech_provider=='profiles'
+            and local_service_ready(args.cosyvoice_url)
+        )
+    ):
 
         tts_process=start_gpt_sovits(root,args.tts_url)
 
@@ -388,12 +433,21 @@ def main():
 
         command+=['--tts-url',args.tts_url]
 
+    if speech_provider in ('cosyvoice','profiles'):
+        command+=['--cosyvoice-url',args.cosyvoice_url]
+        command+=['--cosyvoice-sample-rate',str(args.cosyvoice_sample_rate)]
+
+    command+=['--image-model-dir',args.image_model_dir]
+
     if args.same_chat_memory: command.append('--same-chat-memory')
     command.append('--structured-memory' if args.structured_memory
                    else '--no-structured-memory')
     command+=['--memory-daily-token-limit',str(args.memory_daily_token_limit)]
 
-    if args.provider not in LOCAL_PROMPT_TEST_PROVIDERS:
+    if (
+        args.provider.startswith('local')
+        and args.provider not in LOCAL_PROMPT_TEST_PROVIDERS
+    ):
         if profile=='qwen3-1.7b':
             half_adapter=root/'outputs/lora-general-roleplay-v1/checkpoint-75'
             full_adapter=root/'outputs/lora-general-roleplay-v1'
@@ -442,7 +496,7 @@ def main():
                     check_reusable(health,args.provider,profile,args.same_chat_memory,
                                    speech_provider,args.structured_memory,
                                    args.memory_daily_token_limit,
-                                   require_local_models=True)
+                                   require_local_models=args.provider.startswith('local'))
 
                     break
 
@@ -465,7 +519,6 @@ def main():
             if tts_process is not None and tts_process.poll() is None:
 
                 tts_process.terminate();tts_process.wait(timeout=15)
-
 
 
 if __name__=='__main__': main()

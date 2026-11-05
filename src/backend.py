@@ -42,7 +42,10 @@ from knowledge_guard import query_boundary_risk,replace_forbidden_mentions
 from characters import (CHARACTERS,DEFAULT_CHARACTER_IDS,ai_identity_reply,catalogue,character_profile_reply,conversation_messages,
                         is_explicit_ai_identity_question)
 from character_cards import (build_generation_messages,card_to_runtime,normalize_card,
-                             parse_generated_card,retrieve_worldbook,build_enrichment_messages,apply_enrichment)
+                             parse_generated_card,retrieve_worldbook,build_enrichment_messages,
+                             apply_enrichment,build_material_repair_messages,
+                             missing_generated_materials)
+from product_characters import PRODUCT_CHARACTER_TAGS, seed_product_characters
 from prompt_pipeline import assemble_prompt
 from chat_trace import make_turn_trace
 from roleplay_response import tts_text_from_content
@@ -109,13 +112,6 @@ LOCAL_PROMPT_TEST_CHARACTER_TAGS={
 }
 LOCAL_MODEL_EVALUATION_CARD_ID='custom-model-eval-zhiyao'
 LOCAL_REPEAT_GUARD_PROVIDERS={'local-wukong','local-xucheng','local-haruhi'}
-PRODUCT_CHARACTER_TAGS={
-    'custom-lora-wukong-v1':'LoRA 微调',
-    'custom-lora-xucheng-v1':'LoRA 微调',
-    'custom-lora-haruhi-v1':'LoRA 微调',
-}
-
-
 def is_local_provider(provider):
     return provider=='local' or provider in LOCAL_PROVIDER_MODES
 
@@ -418,6 +414,21 @@ class ProviderSettingsRequest(BaseModel):
     daily_token_limit: int=Field(default=200000,strict=True,ge=1000,le=100000000)
 
 
+class ProviderTestRequest(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    provider: Literal['deepseek','opencode']
+
+
+class LocalImageModelRequest(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    model_path: str=Field(strict=True,min_length=1,max_length=2048)
+
+
+class AvatarGenerationRequest(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    prompt: str | None=Field(default=None,strict=True,max_length=800)
+
+
 def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None,
                engine_factory=None,speech_factory=None,asr_factory=None,
                model_profile='qwen3-0.6b',same_chat_memory=False,lan_enabled=False,
@@ -426,7 +437,9 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
                structured_memory=False,structured_memory_db_path=None,
                auto_memory_worker_enabled=False,memory_daily_token_limit=30000,
                memory_job_ready_seconds=8.0,memory_embedding_model_path=None,
-               enable_local_models=False,seed_evaluation_character=False):
+               enable_local_models=False,seed_evaluation_character=False,
+               seed_product_character_cards=False,
+               image_generator_factory=None,image_model_path=None):
     local_models_enabled=bool(
         enable_local_models
         or is_local_provider(default_provider)
@@ -445,12 +458,32 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
     @asynccontextmanager
     async def lifespan(app):
         app.state.store=ChatStore(db_path)
+        if seed_product_character_cards:
+            seed_product_characters(app.state.store)
         if seed_evaluation_character:
             seed_local_model_evaluation_character(app.state.store)
         app.state.secret_store=LocalSecretStore(
             secret_path or (Path(db_path).resolve().parent/'secrets.json')
         )
         app.state.gate=Lock()
+        app.state.image_model_path=(
+            str(image_model_path)
+            if image_model_path
+            else app.state.store.get_setting(
+                'local_image_model_path',
+                os.environ.get(
+                    'SHIYU_SD_MODEL',
+                    str(
+                        Path(db_path).resolve().parent
+                        / 'models'
+                        / 'meinamix-v12'
+                    ),
+                ),
+            )
+        )
+        app.state.image_generator_factory=image_generator_factory
+        app.state.image_generator=None
+        app.state.image_generator_lock=Lock()
         app.state.engine=None
         app.state.default_provider=default_provider
         app.state.structured_memory=(
@@ -528,6 +561,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
                 await asyncio.to_thread(app.state.job.thread.join)
             app.state.memory_worker=None
         app.state.engine=None
+        app.state.image_generator=None
         app.state.deepseek_engine=None
         app.state.opencode_engine=None
         if app.state.structured_memory is not None:
@@ -539,7 +573,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
                 )
         app.state.structured_memory=None
 
-    app=FastAPI(title='Qwen3 IM Chat API',version='0.12.0',lifespan=lifespan)
+    app=FastAPI(title='Qwen3 IM Chat API',version='0.18.0',lifespan=lifespan)
 
     def is_loopback_client(request):
         host=request.client.host if request.client else ''
@@ -639,6 +673,10 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             target=react_dir/'icon.svg' if react_index.is_file() else web_dir/'icon.svg'
             return FileResponse(target,media_type='image/svg+xml')
 
+        @app.get('/ui/icon.png',include_in_schema=False)
+        def app_icon_png():
+            return FileResponse(web_dir/'brand-icon.png',media_type='image/png')
+
     @app.get('/license',include_in_schema=False)
     def project_license():
         return FileResponse(Path(__file__).resolve().parent.parent / 'LICENSE',media_type='text/plain',
@@ -666,7 +704,12 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             )
             rows.append(dict(id=card['id'],name=card['name'],tag=tag,color='peach',
                              description=description,greeting=card['greeting'],starters=[],
-                             profile=dict(line=card['tagline'],tags=[],scene='',about=description),
+                             profile=dict(
+                                 line=card['tagline'],
+                                 tags=[],
+                                 scene=card.get('scenario',''),
+                                 about=description,
+                             ),
                              custom=True,
                              model_settings=card['model_settings'],
                              avatar_url=(f"/characters/{card['id']}/avatar" if avatar else None)))
@@ -825,6 +868,43 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
                 raise HTTPException(503,'本地模型未就绪，请查看启动终端。')
             return app.state.engine
         raise HTTPException(422,'未知模型 Provider')
+
+    @app.post('/settings/providers/test')
+    def test_cloud_provider(body:ProviderTestRequest):
+        if not provider_key_configured(body.provider):
+            raise HTTPException(409,f'请先填写 {body.provider} API Key')
+        engine=provider_engine(body.provider)
+        if not app.state.gate.acquire(blocking=False):
+            raise HTTPException(409,'模型正在处理另一条消息，请稍后再测试。')
+        started=time.perf_counter()
+        try:
+            answer,metrics=engine.reply(
+                [{'role':'user','content':'只回复：连接成功'}],
+                max_new_tokens=16,
+                generation_overrides=provider_request_overrides(
+                    body.provider,
+                    f'connection-test-{uuid4()}',
+                ),
+            )
+            record_provider_usage(
+                body.provider,
+                None,
+                uuid4(),
+                metrics,
+            )
+            return {
+                'connected':True,
+                'provider':body.provider,
+                'model_id':metrics.get('model') or engine.model_id,
+                'answer':answer,
+                'seconds':round(time.perf_counter()-started,3),
+            }
+        except ProviderConfigurationError as exc:
+            raise HTTPException(409,str(exc)) from exc
+        except ProviderError as exc:
+            raise HTTPException(502,str(exc)) from exc
+        finally:
+            app.state.gate.release()
 
     def provider_name_for_session(current):
         return current.get('provider') or app.state.default_provider
@@ -1567,28 +1647,41 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             raise HTTPException(409,'模型正在生成回答，请稍后再创建角色。')
         try:
             generation_messages=build_generation_messages(body.inspiration)
-            check_token_limits(selected,generation_messages,900)
+            check_token_limits(selected,generation_messages,1800)
             session_id=f'character-generation-{uuid4()}'
+            generation_overrides=provider_request_overrides(selected,session_id)
+            if selected!='opencode':
+                generation_overrides['response_format']={'type':'json_object'}
             generated,generation_metrics=engine.reply(
                 generation_messages,
                 model_mode=local_mode_for_provider(selected,'base'),
-                max_new_tokens=900,
-                generation_overrides=provider_request_overrides(selected,session_id))
+                max_new_tokens=1800,
+                generation_overrides=generation_overrides)
             record_provider_usage(selected,None,uuid4(),generation_metrics)
             card=parse_generated_card(generated,body.inspiration)
-            try:
-                enrichment_messages=build_enrichment_messages(card)
-                check_token_limits(selected,enrichment_messages,1000)
-                enrichment,enrichment_metrics=engine.reply(
-                    enrichment_messages,
-                    model_mode=local_mode_for_provider(selected,'base'),
-                    max_new_tokens=1000,
-                    generation_overrides=provider_request_overrides(selected,session_id))
-                record_provider_usage(selected,None,uuid4(),enrichment_metrics)
-                card=apply_enrichment(card,enrichment)
-            except (ValueError,TypeError) as exc:
-                card['draft_notice']+=' 人物补充未通过格式检查，已保留第一步草稿，请手动补充。'
-                logger.warning('角色补充失败：%s',exc)
+            missing=missing_generated_materials(card)
+            if missing:
+                try:
+                    repair_messages=build_material_repair_messages(card,body.inspiration)
+                    check_token_limits(selected,repair_messages,1200)
+                    repair_overrides=provider_request_overrides(selected,session_id)
+                    if selected!='opencode':
+                        repair_overrides['response_format']={'type':'json_object'}
+                    repaired,repair_metrics=engine.reply(
+                        repair_messages,
+                        model_mode=local_mode_for_provider(selected,'base'),
+                        max_new_tokens=1200,
+                        generation_overrides=repair_overrides)
+                    record_provider_usage(selected,None,uuid4(),repair_metrics)
+                    card=apply_enrichment(card,repaired)
+                    card['draft_notice']+=' 已自动补齐缺失的外貌、生图提示词和世界书。'
+                except (ValueError,TypeError) as exc:
+                    logger.warning('角色必需资料补齐失败：%s',exc)
+                    card['draft_notice']+=(
+                        ' 仍有资料未自动补齐：'
+                        + '、'.join(missing)
+                        + '，请在保存前手动填写。'
+                    )
             return {'card':card,'notice':card['draft_notice']}
         except ProviderConfigurationError as exc:
             raise HTTPException(409,str(exc)) from exc
@@ -1634,6 +1727,183 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             raise HTTPException(404,'角色头像文件不存在')
         return FileResponse(path,media_type=asset['mime_type'],
                             headers={'Cache-Control':'private, max-age=3600'})
+
+    @app.get('/settings/local-image-model')
+    def get_local_image_model():
+        path=Path(app.state.image_model_path).expanduser().resolve()
+        available=(
+            (path/'model_index.json').is_file()
+            or (
+                path.is_file()
+                and path.suffix.lower() in {'.safetensors','.ckpt'}
+            )
+        )
+        return {
+            'provider':'local-diffusers',
+            'model_path':str(path),
+            'available':available,
+            'loaded':app.state.image_generator is not None,
+        }
+
+    @app.put('/settings/local-image-model')
+    def save_local_image_model(body:LocalImageModelRequest):
+        path=Path(body.model_path.strip()).expanduser().resolve()
+        available=(
+            (path/'model_index.json').is_file()
+            or (
+                path.is_file()
+                and path.suffix.lower() in {'.safetensors','.ckpt'}
+            )
+        )
+        if not available:
+            raise HTTPException(
+                422,
+                '本地模型目录缺少 model_index.json，或文件不是 .safetensors/.ckpt。',
+            )
+        with app.state.image_generator_lock:
+            app.state.image_model_path=str(path)
+            app.state.store.set_setting('local_image_model_path',str(path))
+            previous=app.state.image_generator
+            app.state.image_generator=None
+            unload=getattr(previous,'unload',None)
+            if callable(unload):
+                unload()
+        return get_local_image_model()
+
+    def local_image_generator():
+        with app.state.image_generator_lock:
+            if app.state.image_generator is not None:
+                return app.state.image_generator
+            factory=app.state.image_generator_factory
+            if factory is not None:
+                generator=factory(app.state.image_model_path)
+            else:
+                from image_generation import StableDiffusionAvatarGenerator
+                generator=StableDiffusionAvatarGenerator(
+                    app.state.image_model_path,
+                    steps=int(os.environ.get('SHIYU_IMAGE_STEPS','50')),
+                    width=int(os.environ.get('SHIYU_IMAGE_WIDTH','512')),
+                    height=int(os.environ.get('SHIYU_IMAGE_HEIGHT','512')),
+                )
+            if hasattr(generator,'available') and not generator.available():
+                raise HTTPException(
+                    503,
+                    '本地图片模型尚未配置，请在设置中选择 Diffusers 模型目录。',
+                )
+            app.state.image_generator=generator
+            return generator
+
+    @app.post('/characters/{character_id}/avatar/generate',status_code=201)
+    async def generate_character_avatar(
+        character_id:str,
+        body:AvatarGenerationRequest,
+    ):
+        if character_id not in runtime_characters():
+            raise HTTPException(404,'角色不存在')
+        try:
+            card=normalize_card(app.state.store.get_character_card(character_id))
+        except KeyError:
+            raise HTTPException(409,'该角色没有可用于本地生图的角色档案') from None
+        try:
+            generator=local_image_generator()
+            prompt=body.prompt.strip() if body.prompt and body.prompt.strip() else None
+            try:
+                content,metadata=await asyncio.to_thread(
+                    generator.generate_avatar,
+                    card,
+                    prompt,
+                )
+            finally:
+                # SD1.5 and CosyVoice together can exhaust an 8 GB laptop GPU.
+                # Release the image pipeline after one request by default.
+                if os.environ.get('SHIYU_IMAGE_UNLOAD_AFTER_USE','1')=='1':
+                    with app.state.image_generator_lock:
+                        if app.state.image_generator is generator:
+                            app.state.image_generator=None
+                    unload=getattr(generator,'unload',None)
+                    if callable(unload):
+                        await asyncio.to_thread(unload)
+        except HTTPException:
+            raise
+        except ValueError as exc:
+            raise HTTPException(422,str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(503,str(exc)) from exc
+        folder=(character_asset_root/character_id).resolve()
+        try:
+            folder.relative_to(character_asset_root.resolve())
+        except ValueError:
+            raise HTTPException(400,'角色头像路径无效') from None
+        folder.mkdir(parents=True,exist_ok=True)
+        asset_id=str(uuid4())
+        target=folder/f'avatar-{asset_id}.webp'
+        temporary=folder/f'avatar-{asset_id}.uploading'
+        await asyncio.to_thread(temporary.write_bytes,content)
+        temporary.replace(target)
+        app.state.store.save_character_asset({
+            'id':asset_id,
+            'character_id':character_id,
+            'asset_type':'avatar',
+            'file_path':str(target),
+            'mime_type':'image/webp',
+            'sha256':hashlib.sha256(content).hexdigest(),
+            'prompt':metadata.get('prompt',''),
+            'seed':metadata.get('seed'),
+            'metadata':{'source':'local_diffusers',**metadata},
+        })
+        return {
+            'generated':True,
+            'avatar_url':f'/characters/{character_id}/avatar',
+            'metadata':metadata,
+        }
+
+    @app.post('/characters/{character_id}/avatar',status_code=201)
+    async def upload_character_avatar(character_id:str,request:Request):
+        if character_id not in runtime_characters():
+            raise HTTPException(404,'角色不存在')
+        declared_size=int(request.headers.get('content-length','0') or 0)
+        if declared_size>12*1024*1024:
+            raise HTTPException(413,'角色头像不能超过12 MiB')
+        content=bytearray()
+        async for chunk in request.stream():
+            if len(content)+len(chunk)>12*1024*1024:
+                raise HTTPException(413,'角色头像不能超过12 MiB')
+            content.extend(chunk)
+        try:
+            normalized,width,height=await asyncio.to_thread(
+                normalize_uploaded_image,bytes(content))
+        except ValueError as exc:
+            raise HTTPException(422,str(exc)) from exc
+        folder=(character_asset_root/character_id).resolve()
+        try:
+            folder.relative_to(character_asset_root.resolve())
+        except ValueError:
+            raise HTTPException(400,'角色头像路径无效') from None
+        folder.mkdir(parents=True,exist_ok=True)
+        asset_id=str(uuid4())
+        target=folder/f'avatar-{asset_id}.webp'
+        temporary=folder/f'avatar-{asset_id}.uploading'
+        await asyncio.to_thread(temporary.write_bytes,normalized)
+        temporary.replace(target)
+        app.state.store.save_character_asset({
+            'id':asset_id,
+            'character_id':character_id,
+            'asset_type':'avatar',
+            'file_path':str(target),
+            'mime_type':'image/webp',
+            'sha256':hashlib.sha256(normalized).hexdigest(),
+            'prompt':'',
+            'seed':None,
+            'metadata':{
+                'source':'user_upload',
+                'width':width,
+                'height':height,
+            },
+        })
+        return {
+            'uploaded':True,
+            'avatar_url':f'/characters/{character_id}/avatar',
+        }
 
     @app.get('/characters/{character_id}/assets')
     def character_assets(character_id:str):
@@ -1906,7 +2176,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
         limits=token_limits()
         return JSONResponse(status_code=200 if ready else 503,content=dict(
             status='ready' if ready else 'model_unavailable',
-            app_version='0.12.0',
+            app_version='0.18.0',
             default_provider=default_provider,
             providers={
                 'deepseek':{'available':True,'configured':deepseek_ready,
@@ -2021,7 +2291,19 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
                 if app.state.structured_memory is not None else None
             ),
             speech_provider=app.state.speech.label if app.state.speech else None,
-            asr_provider=app.state.asr.label if app.state.asr else None))
+            asr_provider=app.state.asr.label if app.state.asr else None,
+            local_image_model={
+                'model_path':app.state.image_model_path,
+                'available':(
+                    (Path(app.state.image_model_path)/'model_index.json').is_file()
+                    or (
+                        Path(app.state.image_model_path).is_file()
+                        and Path(app.state.image_model_path).suffix.lower()
+                        in {'.safetensors','.ckpt'}
+                    )
+                ),
+                'loaded':app.state.image_generator is not None,
+            }))
 
     def openai_model_mode(model_name,engine):
         normalized=model_name.strip().lower()
@@ -3067,13 +3349,41 @@ if __name__=='__main__':
         default='outputs/models/bge-small-zh-v1.5',
         help='本地中文BGE模型目录；不存在时退回FTS5和词法检索',
     )
-    parser.add_argument('--speech-provider',choices=['onnx','gpt-sovits','profiles','off'],default='onnx')
+    parser.add_argument(
+        '--speech-provider',
+        choices=['onnx','cosyvoice','gpt-sovits','profiles','off'],
+        default='profiles',
+    )
     parser.add_argument('--asr-provider',choices=['whisper','off'],default='whisper')
     parser.add_argument('--asr-model-dir',default='outputs/asr-models/whisper-base')
     parser.add_argument('--tts-model-dir',default='outputs/tts-models/melo-zh-en')
     parser.add_argument('--tts-url',default='http://127.0.0.1:9880')
+    parser.add_argument(
+        '--cosyvoice-url',
+        default='http://127.0.0.1:50000',
+        help='CosyVoice 2 FastAPI 本机地址',
+    )
+    parser.add_argument(
+        '--cosyvoice-sample-rate',
+        type=int,
+        default=24000,
+        help='CosyVoice FastAPI 返回 PCM 的采样率',
+    )
     parser.add_argument('--tts-reference')
     parser.add_argument('--tts-reference-text',default='')
+    parser.add_argument(
+        '--image-model-dir',
+        default=os.environ.get(
+            'SHIYU_SD_MODEL',
+            'outputs/models/meinamix-v12',
+        ),
+        help='本地 Diffusers 生图模型目录或单文件路径',
+    )
+    parser.add_argument(
+        '--seed-product-characters',
+        action='store_true',
+        help='首次启动时写入五个可编辑、可删除的 PC 演示角色',
+    )
     args=parser.parse_args()
     import uvicorn
     lan_pair_code=f'{secrets.randbelow(1_000_000):06d}' if args.lan else None
@@ -3084,13 +3394,29 @@ if __name__=='__main__':
     if args.speech_provider=='onnx':
         from speech import OnnxSpeech
         speech_factory=lambda:OnnxSpeech(args.tts_model_dir)
+    elif args.speech_provider=='cosyvoice':
+        from speech import CosyVoice2Speech
+        speech_factory=lambda:CosyVoice2Speech(
+            args.cosyvoice_url,
+            args.cosyvoice_sample_rate,
+        )
     elif args.speech_provider=='gpt-sovits':
         from speech import GPTSoVITSSpeech
         speech_factory=lambda:GPTSoVITSSpeech(args.tts_url,args.tts_reference,args.tts_reference_text)
     elif args.speech_provider=='profiles':
-        from speech import GPTSoVITSSpeech,OnnxSpeech,ProfiledSpeech
-        speech_factory=lambda:ProfiledSpeech(OnnxSpeech(args.tts_model_dir),
-                                              GPTSoVITSSpeech(args.tts_url,args.tts_reference,args.tts_reference_text))
+        from speech import CosyVoice2Speech,GPTSoVITSSpeech,OnnxSpeech,ProfiledSpeech
+        speech_factory=lambda:ProfiledSpeech(
+            OnnxSpeech(args.tts_model_dir),
+            CosyVoice2Speech(
+                args.cosyvoice_url,
+                args.cosyvoice_sample_rate,
+            ),
+            GPTSoVITSSpeech(
+                args.tts_url,
+                args.tts_reference,
+                args.tts_reference_text,
+            ),
+        )
     asr_factory=None
     if args.asr_provider=='whisper':
         from recognition import WhisperRecognition
@@ -3118,5 +3444,7 @@ if __name__=='__main__':
                            auto_memory_worker_enabled=args.structured_memory,
                            memory_daily_token_limit=args.memory_daily_token_limit,
                            memory_embedding_model_path=args.memory_embedding_model,
+                           image_model_path=args.image_model_dir,
+                           seed_product_character_cards=args.seed_product_characters,
                            ),
                 host='0.0.0.0' if args.lan else '127.0.0.1',port=args.port,workers=1)

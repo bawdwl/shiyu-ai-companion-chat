@@ -8,7 +8,13 @@ from unittest.mock import patch
 import httpx
 from fastapi.testclient import TestClient
 from backend import create_app
-from speech import GPTSoVITSSpeech, ProfiledSpeech, speech_text, validate_wav
+from speech import (
+    CosyVoice2Speech,
+    GPTSoVITSSpeech,
+    ProfiledSpeech,
+    speech_text,
+    validate_wav,
+)
 
 
 def wav_bytes():
@@ -194,6 +200,32 @@ class SpeechTests(unittest.TestCase):
         self.assertEqual(requests[0]['ref_audio_path'],str(audio))
         self.assertEqual(requests[0]['prompt_text'],'小满专属逐字稿')
         self.assertEqual(requests[0]['text'],'今天辛苦了。')
+
+    def test_cosyvoice2_uses_multipart_profile_and_wraps_pcm(self):
+        requests=[]
+        real_client=httpx.Client
+        def respond(request):
+            requests.append(request)
+            return httpx.Response(200,content=b'\x01\x00'*256)
+        with tempfile.TemporaryDirectory() as folder:
+            audio=Path(folder)/'reference.wav';audio.write_bytes(wav_bytes())
+            provider=CosyVoice2Speech('http://127.0.0.1:50000',sample_rate=24000)
+            profile={
+                'reference_audio_path':str(audio),
+                'reference_text':'今天风很轻。',
+                'language':'zh',
+            }
+            with patch('speech.httpx.Client',side_effect=lambda **kw:real_client(
+                    transport=httpx.MockTransport(respond),**kw)):
+                result=provider.synthesize_for_profile('你好。',profile)
+        with wave.open(io.BytesIO(result),'rb') as output:
+            self.assertEqual(output.getframerate(),24000)
+            self.assertEqual(output.getnchannels(),1)
+        self.assertEqual(requests[0].url.path,'/inference_zero_shot')
+        self.assertIn('tts_text',requests[0].content.decode('utf-8','ignore'))
+        self.assertIn('prompt_text',requests[0].content.decode('utf-8','ignore'))
+        with self.assertRaises(ValueError):
+            CosyVoice2Speech('https://example.com')
 
     def test_failed_speech_initialization_does_not_prevent_text_startup(self):
         def fail():

@@ -2,8 +2,9 @@ import json
 import unittest
 
 from characters import CHARACTERS, conversation_messages
-from character_cards import (build_generation_messages, card_to_runtime, normalize_card,
-                             parse_generated_card, retrieve_worldbook)
+from character_cards import (build_enrichment_messages, build_generation_messages,
+                             card_to_runtime, missing_generated_materials,
+                             normalize_card, parse_generated_card, retrieve_worldbook)
 
 
 class CharacterCardTests(unittest.TestCase):
@@ -72,11 +73,31 @@ class CharacterCardTests(unittest.TestCase):
 
     def test_card_generation_avoids_question_hook_examples(self):
         system = build_generation_messages('海边电台主持人')[0]['content']
-        self.assertIn('每条回复末尾都问一句', system)
-        self.assertIn('示例回复不要都以问题收尾', system)
-        self.assertIn('greeting 必须是一条可直接发送给用户的首条角色聊天消息', system)
+        self.assertIn('不要每条都以反问结束', system)
+        self.assertIn('greeting 是保存后立即发送给用户的第一条角色聊天消息', system)
         self.assertIn('具体场景', system)
         self.assertIn('剧情钩子', system)
+        self.assertIn('appearance 必须填写，用80至220个中文字符', system)
+        self.assertIn('1girl, female, solo', system)
+        self.assertIn('worldbook 生成3条', system)
+
+    def test_enrichment_can_fill_visual_fields_and_reports_missing_materials(self):
+        incomplete = normalize_card({'name': '海音', 'description': '夜班主持人'})
+        self.assertEqual(
+            missing_generated_materials(incomplete),
+            [
+                'description',
+                'personality',
+                'speech_style',
+                'relationship',
+                'appearance',
+                'appearance_prompt',
+                'worldbook',
+            ],
+        )
+        prompt = build_enrichment_messages(incomplete)[0]['content']
+        self.assertIn('appearance_prompt', prompt)
+        self.assertIn('worldbook', prompt)
 
     def test_worldbook_matches_enabled_keyword_entries_and_respects_limit(self):
         card = normalize_card({
@@ -109,6 +130,39 @@ class CharacterCardTests(unittest.TestCase):
         self.assertIn('海音在海边电台', card['background'])
         self.assertEqual(len(card['example_dialogue']), 1)
         self.assertEqual(card['example_dialogue'][0]['character'], '我给你放一首轻一点的歌，慢慢听就好。')
+
+    def test_generated_chinese_boundary_labels_and_string_terms_are_normalized(self):
+        model_output = json.dumps({
+            'name': '林晚',
+            'tag': '旧书店店员',
+            'description': '温柔安静。',
+            'appearance': '二十四岁女性，黑色及肩发，米色开衫。',
+            'appearancePrompt': '1girl, female, solo, 24 years old, black hair, beige cardigan',
+            'speechStyle': '语气平缓。',
+            'knowledge_boundary': {
+                'character_kind': '原创现代角色',
+                'forbidden_terms': '系统，好感度、NPC',
+            },
+            'worldbook': [
+                {
+                    'title': '旧书店',
+                    'keywords': ['旧书', '书店'],
+                    'content': '她在旧书店工作。',
+                    'enabled': True,
+                }
+            ],
+        }, ensure_ascii=False)
+        card = parse_generated_card(model_output, '旧书店店员')
+        self.assertEqual(card['tagline'], '旧书店店员')
+        self.assertEqual(card['speech_style'], '语气平缓。')
+        self.assertEqual(
+            card['knowledge_boundary']['character_kind'],
+            'original',
+        )
+        self.assertEqual(
+            card['knowledge_boundary']['forbidden_terms'],
+            ['系统', '好感度', 'NPC'],
+        )
 
     def test_card_limits_reject_unbounded_worldbook(self):
         with self.assertRaisesRegex(ValueError, '最多30项'):

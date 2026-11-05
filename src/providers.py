@@ -229,12 +229,20 @@ class DeepSeekProvider:
     def _raise_for_response(self, response: httpx.Response) -> None:
         if response.is_success:
             return
+        if not response.is_closed and not getattr(response, "_content", None):
+            try:
+                response.read()
+            except Exception:
+                pass
         detail = ""
         try:
             body = response.json()
             detail = str((body.get("error") or {}).get("message") or body.get("detail") or "")
         except Exception:
-            detail = response.text[:500]
+            try:
+                detail = response.text[:500]
+            except Exception:
+                detail = ""
         if response.status_code in (401, 403):
             raise ProviderConfigurationError(f"{self.display_name} API Key 无效或没有访问权限")
         if response.status_code == 429:
@@ -262,13 +270,31 @@ class DeepSeekProvider:
             stream=False,
             thinking=False,
         )
-        try:
-            with self._client() as client:
-                response = client.post("/chat/completions", headers=headers, json=payload)
-        except httpx.RequestError as exc:
+        response = None
+        last_error = None
+        for attempt in range(4):
+            try:
+                with self._client() as client:
+                    response = client.post(
+                        "/chat/completions",
+                        headers=headers,
+                        json=payload,
+                    )
+                if response.status_code in (429, 500, 502, 503, 504) and attempt < 3:
+                    response.close()
+                    time.sleep(0.4 * (2 ** attempt))
+                    response = None
+                    continue
+                break
+            except httpx.RequestError as exc:
+                last_error = exc
+                if attempt < 3:
+                    time.sleep(0.4 * (2 ** attempt))
+                    continue
+        if response is None:
             raise ProviderError(
                 f"无法连接 {self.display_name} API，请检查网络或系统代理设置。"
-            ) from exc
+            ) from last_error
         self._raise_for_response(response)
         try:
             body = response.json()

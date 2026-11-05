@@ -119,6 +119,23 @@ export interface ProviderSettings {
   };
 }
 
+export interface LocalImageSettings {
+  provider: "local-diffusers";
+  model_path: string;
+  available: boolean;
+  loaded: boolean;
+}
+
+export interface VoiceProfile {
+  character_id: string;
+  display_name: string;
+  voice_style: string;
+  reference_text: string;
+  has_reference_audio: boolean;
+  gpt_sovits_ready: boolean;
+  language: "zh";
+}
+
 export interface Usage {
   prompt_tokens: number;
   completion_tokens: number;
@@ -306,6 +323,8 @@ export interface CharacterCard {
   name: string;
   tagline: string;
   description: string;
+  appearance?: string;
+  appearance_prompt?: string;
   background: string;
   personality: string;
   speech_style: string;

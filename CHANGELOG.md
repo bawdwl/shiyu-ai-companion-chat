@@ -1,163 +1,20 @@
 # Changelog
 
-## 2026-11-05 — Android `0.17.0` role library and avatar workflow
+## 2026-11-05 — PC web `0.18.0` sync
 
-### Added
-
-- Added Xiao Chengyuan and Gu Qinghe to the five-role built-in catalog.
-- Bundled the selected default artwork for Li Bai, Song Zhiyi, Pei Jiming,
-  Xiao Chengyuan and Gu Qinghe.
-- Added gallery image import for every character avatar, with orientation
-  correction, square crop and WebP compression.
-- Added persistent tombstones so deleted built-in characters stay deleted after
-  app restarts.
-
-### Changed
-
-- Retired Jiang Zhaochen and legacy duplicate/test characters.
-- Replaced the old Li Bai identity with the phone-generated Li Bai record and
-  its Qwen avatar.
-- Moved the Qwen Image API key to the top of the image-generation settings page.
-- Kept OpenCode Go visible in Release builds for testing.
-- Lowered the chat background artwork opacity to `0.06`.
-- Updated the shared Dream positive-prompt template to the 77-token template
-  currently used on the phone.
-- Added role-specific, token-bounded appearance prompts for all five roles.
-
-### Verification
-
-- JVM unit tests: 64 passed.
-- Debug and Release builds passed; Release Lint reported no issues.
-- Android `0.17.0` Release APK: 283,040,467 bytes, SHA-256
-  `0F6F28E2876329DBA0F1B5E9701E3475F83BD46F1992D65024514C38F51B600B`.
-- Device migration preserves the existing five conversations and replaces the
-  Xiao/Gu avatars with the supplied Qwen images.
-
-## 2026-11-04 — Android `0.16.1`, single build and VITS zh-ll TTS
-
-### Changed
-
-- Collapsed Android distribution back to one complete `com.shiyu.chat` package.
-- Removed the Slim product flavor, in-app TTS pack download/import controls and
-  the associated background state. Bundled speech assets now live under `main`.
-- Pinned Android builds to the installed Build Tools 35.0.0.
-- Added an offline TTS audition set comparing the current Kokoro voice with
-  MeloTTS, Piper Huayan, VITS zh-ll, Fanchen-C, Eula and Theresa candidates.
-- Replaced the bundled Kokoro TTS with `sherpa-onnx-vits-zh-ll`. Five model
-  speaker IDs contain four audibly distinct choices: female 1, male 1,
-  female 2 and male 2. `bazong` duplicates `gunian` and is hidden.
-
-### Verification
-
-- Android JVM tests: 64 passed.
-- Debug build and Release build passed.
-- Release Lint: no issues found.
-- MeloTTS synthesized the same test sentence in 2.21 s on the local CPU run,
-  compared with about 8.7–9.8 s for the tested Kokoro speakers.
-- Android `0.16.1 / versionCode 30` rebuilds with the corrected voice labels.
-- Android `0.16.1` Release APK: 282,548,528 bytes, SHA-256
-  `5B487796E5768CB80BD5E44BD395D0792067ADA75D0A6DFE23F187C7E3BE101A`.
-- Published the APK and checksum as GitHub Release assets while keeping APKs
-  outside Git history.
-- Removed obsolete Android 0.9.3 and 0.12.0 status documents and updated all
-  current download instructions to point at the `v0.16.1` Release.
-
-## 2026-11-04 — Android `0.15.0` release hygiene and device-aware model install
-
-### Added
-
-- Added the supplied purple streaming icon as the launcher icon and aligned the
-  Android visual system around lavender, plum and rose accents.
-- Added a public Android model route: Release defaults to DeepSeek and hides
-  OpenCode Go; Debug keeps OpenCode for author testing.
-- Added in-app downloads for the Song Zhiyi and Pei Jiming Q8 MNN models and
-  device-selected MeinaMix V12 QNN packages, including size/hash checks,
-  progress, failure cleanup and delete controls.
-- Added four built-in roles: Li Bai, Song Zhiyi, Jiang Zhaochen and Pei Jiming.
-- Exposed all 103 voices shipped by Kokoro v1.1-zh in a searchable picker:
-  100 Chinese voices plus Maple, Sol and Vale; each character keeps its own choice.
-- Split Android into Full and Slim builds. Full bundles Kokoro; Slim removes
-  Kokoro from the APK while retaining local speech recognition and offers an
-  official-package download or ZIP/TAR.BZ2 import after installation.
-- Added an explicit Qualcomm SoC/HTP compatibility table and tests for the
-  packages actually published under `xororz/sd-qnn`.
-
-### Changed
-
-- Split Android settings into “chat and models” and “image generation”.
-- Removed Xu Cheng and retired LoRA-character rows, references and public model
-  links from the current Android product path.
-- Removed an unused 57 MB TTS model tree and an unused British-English lexicon
-  from the APK asset payload.
-- Enabled release R8 code minification; model payload reduction comes from removing
-  unreferenced speech assets rather than deleting runtime resources.
-
-### Verification
-
-- Android JVM: 64 tests passed independently in both Full and Slim variants.
-- Both Release Lint runs and both non-minified Release builds passed.
-- Disabled R8 for native-JNI builds after release testing showed that method
-  shrinking broke sherpa-onnx `decodingMethod` lookup and the MNN bridge.
-- Full debug APK: 327,290,583 bytes. Local signed Full Release demo:
-  311,081,712 bytes, SHA-256
-  `D31190039386CDDF27052E1A58F8E5D4F9CBA37CCAA9D657FE07A5A7342BE32D`.
-- Slim debug APK: 178,312,498 bytes. Local signed Slim Release demo:
-  165,782,086 bytes, SHA-256
-  `2CE4413E25D4361B9751256DF693D950248F65C08342DB6FF0A4216BFF36960E`.
-- APK inspection found no Qwen MNN, LoRA Adapter, MeinaMix, or other model weights.
-
-## 2026-11-04 — Architecture and public MNN model index
-
-### Changed
-
-- Replaced the simplified README Mermaid diagram with the full AI companion system
-  architecture image.
-- Clarified the production chain across character definition, long-term memory,
-  internal state, dialogue generation, multimodal interaction and conversation
-  consolidation.
-- Updated the maintenance guide from Android `0.9.4 / schema 10` to
-  `0.14.3 / versionCode 27 / Room schema 11`.
-- Added public ModelScope links for the Song Zhiyi, Xu Cheng and Pei Jiming MNN Q8
-  model packages.
-- Added generic LoRA merge-logit verification and MNN smoke-test scripts.
-
-### Verification
-
-- Pei Jiming Adapter and merged BF16 model matched next-token top-1 on 3/3 fixed
-  development cases.
-- Pei Jiming MNN 3.5.0 Q8 loaded successfully in the Windows CPU runtime; five fixed
-  prompts finished normally.
-- No prebuilt Android APK is included in this update.
-
-## 2026-11-03 — Android `0.14.3` and repository refresh
-
-### Added
-
-- Android local MNN text mode with model ZIP import, per-character cloud/local routing,
-  repeat protection and rolling local summaries.
-- In-app Local Dream SD1.5/QNN avatar generation plus Qwen-Image cloud generation.
-- Local Dream positive/negative prompts, sampler, steps, CFG, seed and gender-aware
-  appearance prompt generation.
-- Android local ASR and multi-voice Kokoro TTS integration.
-- Current production tests, fixed evaluation fixtures and selected implementation docs.
-
-### Changed
-
-- Updated Android source to `0.14.3 / versionCode 27`; no new prebuilt APK is
-  published while the mobile client is still changing.
-- Synchronized the public PC and Android source trees with the current application.
-- Rewrote the README around the actual PC/Android feature split, reproduction steps,
-  limitations and data boundaries.
-- Renamed the repository concept to `shiyu-ai-companion-chat` because the project is an
-  API/local-model role companion rather than only a Qwen demo.
-
-### Verification
-
-- Public PC Python regression: 285 passed.
-- API-only clean product suite: 208 passed, 1 skipped.
-- Frontend state tests: 40 passed; React production build passed.
-- Android JVM: 60 passed; `assembleDebug` passed.
-- Android source build passed locally; the public repository intentionally contains no new APK.
+- Aligned the React web app with the Windows desktop workspace and character library.
+- Added one-time, editable seeds for five desktop demo characters with bundled portraits and the branded app icon.
+- Added appearance and local-image prompt fields to character-card persistence, plus browser avatar upload.
+- Character generation now requires visual fields and a usable worldbook, with a targeted repair pass for incomplete model output.
+- Aligned PC generation to the Android flow: one complete-character request followed by at most one visual/worldbook repair request and manual profile review before saving.
+- Removed OpenCode JSON mode after the upstream returned `this feature is not yet supported by atlas`; DeepSeek keeps JSON mode.
+- Added tolerant parsing for Android camelCase fields, Chinese character-kind labels and comma-separated forbidden-term strings.
+- Added bounded retries for transient cloud request errors and retryable HTTP statuses.
+- Character Studio supports local avatar generation, local image upload or an empty avatar, plus direct worldbook editing.
+- Added independent live OpenCode and DeepSeek connection tests; fixed streaming error parsing so HTTP failures retain their real response.
+- Made MeinaMix V12 image generation and CosyVoice 2 voice status visible in Settings.
+- Defaulted cloud startup to OpenCode Go and stopped loading local LoRA adapters in cloud mode.
+- Verification: 35 focused Python tests, 40 frontend state tests, React production build, live `/health`, role catalogue, portrait and icon endpoint checks.
 
 ## 2026-10-31 — `0.12.0` memory governance and clean reproduction
 

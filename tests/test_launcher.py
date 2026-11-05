@@ -81,6 +81,7 @@ class LauncherTests(unittest.TestCase):
                     speech_provider='本地中文语音（MeloTTS，CPU；非GPT-SoVITS）')
         with self.assertRaisesRegex(RuntimeError,'语音提供方'):
             health['default_provider']='local'
+        with self.assertRaisesRegex(RuntimeError, '语音提供方'):
             launch_app.check_reusable(health,'local','qwen3-1.7b',same_chat_memory=False,speech_provider='profiles')
 
     def test_custom_memory_budget_must_round_trip_through_launcher(self):

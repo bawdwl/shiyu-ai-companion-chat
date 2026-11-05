@@ -33,6 +33,11 @@ class ProductAppTests(unittest.TestCase):
             if asset.startswith('/ui/assets/'):
                 self.assertEqual(self.client.get(asset).status_code,200)
         self.assertEqual(self.client.get('/ui/icon.svg').status_code,200)
+        self.assertEqual(self.client.get('/ui/icon.png').status_code,200)
+        self.assertEqual(
+            self.client.get('/ui/icon.png').headers['content-type'],
+            'image/png',
+        )
         self.assertEqual(self.client.get('/ui/assets/../backend.py').status_code,404)
         self.assertEqual(self.client.get('/characters').json()['characters'], [])
 
@@ -161,6 +166,8 @@ class ProductAppTests(unittest.TestCase):
             self.engine.calls.append(messages)
             return json.dumps({
                 'name':'阿澄','tagline':'海边电台的夜班主持人','description':'在深夜陪人听歌聊天。',
+                'appearance':'二十五岁的东亚女性，黑色齐肩短发，浅褐色眼睛，常穿宽松针织衫。',
+                'appearance_prompt':'1girl, female, solo, 25 year old East Asian radio host, shoulder-length black hair, brown eyes, loose knitwear, portrait',
                 'background':'她在海边城市主持一档深夜节目。','personality':'安静、细心。',
                 'speech_style':'语气自然，不急着追问。','relationship':'从听众与主持人的友好关系开始。',
                 'greeting':'今晚的海风挺舒服，你想点一首什么歌？','boundaries':'不声称认识现实中的用户。',
@@ -177,7 +184,7 @@ class ProductAppTests(unittest.TestCase):
         self.assertEqual(card['fixed_facts'][0]['status'],'proposal')
         # The endpoint has a two-step generation flow; this assertion targets
         # the initial character-card prompt, not the later enrichment prompt.
-        self.assertIn('不要擅自补玩家姓名',generation_calls[0][0]['content'])
+        self.assertIn('不能编造用户身份或经历',generation_calls[0][0]['content'])
         saved=self.client.post('/characters',json={'card':card})
         self.assertEqual(saved.status_code,201,saved.text)
         character_id=card['id']

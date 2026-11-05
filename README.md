@@ -1,164 +1,176 @@
-# 拾语 SHIYU · AI 角色陪伴聊天
+# 拾语 SHIYU
 
-拾语是一个面向中文虚拟角色陪伴场景的双端聊天项目，包含 **PC 网页端**和
-**Android 客户端**。项目把大模型对话、角色卡、世界书、长期记忆、内部状态、
-语音输入、角色语音和图片能力串成一条可运行的聊天链路。
+拾语是一套面向中文虚拟角色陪伴场景的 PC 与 Android 双端聊天应用。它把云端大模型、角色卡、世界书、长期记忆、情绪关系状态、语音输入和角色语音组织成一条可运行的聊天链路。
 
-仓库原名 `shiyu-qwen3-chat`，但项目已经不只是 Qwen 推理 Demo，因此现名为
-`shiyu-ai-companion-chat`。
+当前主线使用 **OpenCode Go `deepseek-v4.1-flash`**，同时支持独立 DeepSeek Provider。API Key 由使用者在本机填写，不会写入源码、数据库快照或 Git 仓库。
 
-## 项目做了什么
+![拾语 PC 历史界面截图](docs/images/shiyu-home-deepseek-2026-10-28.png)
 
-| 能力 | PC 网页端 | Android 客户端 |
+> PC 网页端和 Windows EXE 共用同一套 React 工作台、角色数据、MeinaMix V12
+> 本地生图与 CosyVoice 2 语音链路。截图展示的是较早版本，当前界面的角色
+> 立绘、三栏聊天和模型状态以本机运行结果为准。
+
+## 2026-11-05 `0.18.0` PC 网页端同步
+
+- PC 网页端同步 Windows 桌面的角色库、三栏聊天工作台、角色详情和删除入口。
+- 首次启动通过一次性种子写入五个可编辑、可删除的演示角色：李白、宋知意、
+  裴既明、萧承渊、顾清禾。删除后不会在下次启动时重新出现，已有用户角色和
+  对话不会被清理。
+- 网页设置页明确显示 MeinaMix V12 本地生图模型状态，以及 CosyVoice 2 角色
+  语音链路状态；本地图片和提示词不会发送给云端图片 API。
+- 角色卡补回外貌与英文生图提示词字段，网页支持上传自定义角色头像。
+- 角色生成必须同时产出外貌、英文生图提示词和世界书；缺失时会自动再补一轮。
+- PC 角色生成按 Android 流程收敛为一次完整生成加一次按需补全，生成后先进入档案审核页，确认后才保存。
+- OpenCode 不启用其上游尚不稳定的 JSON mode；解析器兼容手机端字段名、中文角色类型和字符串形式的禁止词列表。
+- 创建或编辑角色时可选择本地生成立绘、上传自己的图片或暂时留空，并可直接编辑世界书条目。
+- 设置页可分别测试 OpenCode Go 与 DeepSeek 的实际连通状态，不再只检查 Key 是否已填写。
+- MeinaMix / SD1.5 使用 77 Token 文本窗口；网页会保留主体和关键视觉词并自动压缩过长提示词。
+- 云端默认 Provider 改为 OpenCode Go，云模式启动时不再无意义加载本地 LoRA。
+
+## 2026-10-31 `0.12.0` 更新
+
+当前 Android 产品版本为 `0.14.3 / versionCode 27`。本轮重点是把演示项目收紧为可复现、可解释、可纠错的工程：
+
+- 产品角色目录不再包含内置默认角色；新安装不会自动创建角色，升级会清理旧默认角色及其完整本地数据。
+- PC 记忆管理支持修正事实、标记错误、恢复历史版本、忘记主题、撤销主题禁止、删除和历史审计。
+- 自动记忆新增、合并、更正、疑义、墓碑、逐字证据校验和批量语义审核继续在后台运行；普通聊天不需要逐条确认。
+- 私有脱敏自然对话回放包含 18 个案例、448 轮消息和 90 个探针；结构化事实、摘要、混合检索和混合状态四种条件均为 90/90，仅最近消息为 23/90。
+- 该 90/90 只证明固定夹具上的存储与检索；另有合成案例的真实 API 链路验证了提取、审核、入库、检索和最终回答。
+- 内部状态使用相同角色、历史、记忆、模型和生成参数完成 12 对匿名 A/B；作者偏好有状态 6 对、无状态 2 对、平局 4 对，自然度 5 比 2，因此继续默认启用内部状态提示。
+- 独立 Conda Python 3.11 环境和真实 OpenCode Key 已完成服务启动、前端加载、角色创建和首轮聊天。
+- PC 已接入 MeinaMix V12 本地 Diffusers 生图；角色立绘不会发送给云端图片 API。Android 现有实现本轮不调整。
+
+完整验收、失败项和剩余边界见 [0.12.0 完成报告](docs/0.12.0完整验收与待决策_2026-10-31.md)，记忆与状态实验见 [记忆纠错、自然回放与状态消融](docs/记忆纠错自然回放与状态消融_2026-10-31.md)，干净安装见 [Windows 干净环境验收](docs/Windows干净环境验收_2026-10-31.md)。
+
+## 已实现功能
+
+### 聊天与角色
+
+- 自定义角色和角色卡生成草稿；新数据目录首次启动写入五个可删除的 PC 演示角色。
+- 身份、背景、性格、说话方式、关系、互动边界和示例对话。
+- 关键词触发世界书，固定事实优先于聊天中的即兴内容。
+- 时代、知识截止、世界范围、允许/禁止知识与禁止词边界。
+- 每个角色只有一个持续对话。
+- PC SSE 流式回答、停止生成、超时与 Provider 错误提示。
+- Android 原生流式读取、停止生成与本地历史。
+- 图片输入，可交给支持视觉的云端模型。
+- 删除、重置角色及其消息、记忆、图片和状态。
+
+### 长期记忆
+
+- 回复保存后自动创建持久后台任务，不阻塞当前聊天。
+- 从对话中提取用户事实、角色自述、共同事件、计划和边界。
+- 候选事实必须有来源消息 ID、说话人和逐字证据。
+- 自动执行新增、合并、更正、疑义和忽略。
+- 旧事实保留为历史版本；删除操作创建墓碑，旧原话不能自动复活。
+- 记忆页可修正、标错、恢复历史值、忘记整个主题和撤销主题禁止，并保留版本链与操作审计。
+- PC 使用 FTS5 + 可选本地 `BAAI/bge-small-zh-v1.5`。
+- Android 使用 FTS4 中文分词，并保留可选语义 Provider 接口。
+- 结构化事实、摘要和历史摘录使用统一上下文预算。
+- 每个角色每天有独立的后台记忆 Token 预算。
+- 候选事实经过确定性证据校验和一次批量语义审核。
+- 角色自述、计划、假设和观点保留各自权限，不能自动升级为确定事实。
+
+### 内部状态
+
+双端可保存心情、熟悉度、信任度、温暖度、关系阶段和用户边界。状态变化必须绑定证据，受单次变化幅度和自然衰减限制。状态作为自然语言提示影响角色表达，不默认在聊天界面展示数字。
+
+### 语音与图片
+
+| 能力 | PC | Android |
 |---|---|---|
-| 云端对话 | OpenCode Go、DeepSeek | Debug 与 Release 均可配置 |
-| 本地模型 | Qwen3-1.7B Base / LoRA 实验入口 | 应用内下载 Q8 MNN，或导入 MNN Chat 兼容 ZIP |
-| 角色系统 | 创建、编辑、删除角色；角色卡、世界书、知识边界 | 相同角色结构；每个角色独立选择云端或本地模型 |
-| 上下文 | SSE 流式回答、停止生成、错误提示 | 原生流式回答、停止生成、本地历史 |
-| 长期记忆 | 自动提取、审核、更正、主题遗忘、版本恢复 | 自动结构化记忆；本地 MNN 使用滚动摘要 |
-| 内部状态 | 心情、熟悉、信任、温暖、关系阶段 | 同结构状态，供提示词使用，不默认显示数值 |
-| 图片理解 | 支持发送图片给视觉模型 | 云端模式支持；本地 MNN 模式仅支持文字 |
-| 语音输入 | Whisper，可选 | sherpa-onnx 本地 ASR |
-| 角色语音 | GPT-SoVITS / MeloTTS，可选 | Android 完整版内置本地 TTS |
-| 图片生成 | 本地生图入口已关闭 | 内置 Local Dream SD1.5 QNN；也支持千问图片 API |
-| 数据存储 | SQLite、本机加密 Key | Room、Android Keystore |
+| 语音识别 | Whisper | sherpa-onnx 本地 ASR |
+| 角色语音 | CosyVoice 2 优先，GPT-SoVITS、MeloTTS 依次回退 | Kokoro 本地 TTS，多音色 |
+| 交互方式 | 录音/上传 → 识别 → 发送 → 回复后播放 | 录音 → 识别 → 发送 → 回复后播放 |
+| 图片输入 | 支持 | 支持 |
+| 图片生成 | 本地 MeinaMix V12 / Diffusers，无云端图片 API | 保持当前内置 Dream/NPU 本地生成 |
 
-PC 与 Android 当前是两套独立客户端，**不会自动同步聊天记录，也不要求电脑和手机处于同一网络**。
+语音目前不是实时电话式双向通话，也没有自动打断。
 
-## 系统结构
+## 快速使用 PC 端
 
-![拾语 AI 虚拟角色陪伴系统架构](docs/images/shiyu-ai-companion-architecture-2026-11-04.png)
-
-整体链路由多端交互、虚拟角色对话引擎、多模态交互和对话沉淀四部分组成：
-
-- 角色定位与设定由角色卡、世界书、知识边界和固定事实约束；
-- 长期记忆负责候选提取、去重、更正、检索和上下文预算；
-- 内部心情、信任、熟悉、温暖和关系阶段以自然语言进入提示词；
-- 对话生成支持云端模型、本地 Qwen3 LoRA 和 Android MNN；
-- 回答保存后继续沉淀记忆和状态，形成下一轮对话上下文。
-
-## PC 端已实现
-
-### 对话与角色
-
-- React + TypeScript + Vite 前端，FastAPI 后端，SQLite 持久化。
-- 创建、编辑和删除自定义角色；角色卡包含身份、背景、性格、说话方式、
-  与用户关系、互动边界和示例对话。
-- 关键词触发的世界书，以及时代、知识截止、世界范围、禁止知识和禁止词约束。
-- 每个角色只有一个持续对话，支持删除角色及关联数据。
-- 流式回答、主动停止、Provider 配置错误、超时和空回答处理。
-- 支持图片输入，交给具备视觉能力的云端模型。
-
-### 记忆与状态
-
-- 回答保存后，后台异步提取用户事实、角色自述、共同事件、计划和边界，不阻塞聊天。
-- 候选事实要求绑定来源消息、说话人和逐字证据。
-- 支持新增、合并、更正、疑义、忽略、事实有效期和删除墓碑。
-- 手动修正、标记错误、恢复历史值、忘记主题和撤销主题禁止。
-- SQLite FTS5 检索；安装 BGE 后加入本地向量检索，失败时自动回退。
-- 内部状态只进入角色提示，聊天界面不默认展示“好感度数字”。
-
-### 语音与本机模型
-
-- 语音识别可接 Whisper。
-- 角色语音可接 GPT-SoVITS，MeloTTS 作为回退。
-- 可选接入本机 Qwen3-1.7B Base 或实验 LoRA；未下载模型时使用云端 API 即可。
-- API Key 保存在本机加密 Secret Store，不返回给浏览器。
-
-## Android 端已实现
-
-- Kotlin + Jetpack Compose，Room schema 11，WorkManager，OkHttp 和 Android Keystore。
-- 自定义角色、角色卡、世界书、知识边界、固定事实和唯一持续对话。
-- 默认 DeepSeek；OpenCode Go 在 Debug 和 Release 中都可配置用于测试。
-- 本地模式可下载或导入 MNN Chat 兼容模型 ZIP，在手机上完成文字推理。
-- 本地 MNN 模式保留最近 24 条原话；更早消息按批次压缩为简短事实，
-  不调用云端记忆提取。
-- sherpa-onnx 本地语音识别和 VITS 中文语音合成；模型含 5 个 speaker，
-  去重后提供 4 个可试听声部（2 个女声、2 个男声），并按角色保存选择。
-- 内置 Local Dream SD1.5/QNN 后端，可在应用内下载或导入兼容模型并生成角色头像。
-- 设置页分为“对话与模型”和“图片生成”，支持下载进度、SHA-256 校验、删除模型和清理缓存。
-- 内置李白、宋知意、裴既明、萧承渊和顾清禾五个角色；江昭谌与旧实验角色会在升级时删除。
-- 可切换千问图片 API；角色外貌提示词会包含明确的主体性别和视觉描述。
-- 删除角色时清理所属消息、记忆、Trace、图片、模型状态和本地摘要。
-
-## 快速运行 PC 网页端
-
-### 1. 准备环境
+### 环境
 
 - Windows 10/11
 - Python 3.11
 - Git
-- 可选：Node.js 20+ / pnpm，仅在修改前端源码时需要
+- pnpm 或 Node.js 20+
+- 可选：NVIDIA GPU。当前主链路使用云端 API，显卡不是必需条件。
+
+### 安装
 
 ```powershell
-git clone https://github.com/bawdwl/shiyu-ai-companion-chat.git
-cd shiyu-ai-companion-chat
+git clone https://github.com/bawdwl/shiyu-qwen3-chat.git
+cd shiyu-qwen3-chat
 
 conda create -n shiyu-chat python=3.11 pip -y
 conda activate shiyu-chat
-python -m pip install -r requirements-api-windows-py311.txt
-.\scripts\setup_secret_runtime.ps1 -Python python
+python -m pip install -r requirements-lock-windows-py311.txt
+
+pnpm --dir frontend install --frozen-lockfile
+pnpm --dir frontend build
 ```
 
-`requirements-api-windows-py311.txt` 是仅使用云端 API 的最小依赖。仓库已经包含
-构建后的 `web/react-dist/`，因此默认不需要安装 Node.js。
+仓库同时包含已经构建好的 `web/react-dist/`；修改前端源码后需要重新运行构建。
 
-### 2. 启动
-
-OpenCode Go：
+### 启动文字聊天
 
 ```powershell
 python launch_app.py --provider opencode --speech-provider off --asr-provider off
 ```
 
-DeepSeek：
+打开 <http://127.0.0.1:8000/ui/>，在设置中选择 Provider 并填写自己的 API Key。API Key 通过本机服务保存到加密 Secret Store，不会发送回浏览器。
+
+也可以改用 DeepSeek：
 
 ```powershell
 python launch_app.py --provider deepseek --speech-provider off --asr-provider off
 ```
 
-打开 <http://127.0.0.1:8000/ui/>，在设置页填入对应的 API Key，然后创建角色开始聊天。
-
-### 3. 修改前端源码后重新构建
+### 启用 PC BGE 语义记忆
 
 ```powershell
-pnpm --dir frontend install --frozen-lockfile
-pnpm --dir frontend build
-```
-
-### 可选：启用 BGE 语义记忆
-
-```powershell
-python -m pip install huggingface_hub
 python scripts/fetch_embedding_model.py
 ```
 
-模型缺失时 PC 会自动使用 FTS5 和词法检索，不影响基本聊天。
+模型缺失或运行失败时，应用会自动回退到 FTS5 和词法检索。
 
-### 可选：启用 PC 语音
+### 启用 PC 语音
 
-PC 语音依赖独立的 Whisper、GPT-SoVITS 或 MeloTTS 模型和服务，不包含在 Git
-仓库中。安装和启动方法见 [语音部署](docs/语音部署.md)。
+PC 语音优先调用本机 CosyVoice 2 FastAPI；服务或角色参考音频不可用时，再回退到 GPT-SoVITS 和 MeloTTS。CosyVoice2-0.5B 官方页面标称约 4.86 GB；本地同时保留 fp16/fp32 和训练缓存文件后实际约 5.62 GB。它不按调用次数收费。模型准备和启动方式见 [本地生图与 CosyVoice 语音](docs/本地生图与CosyVoice语音.md)。
 
-## 构建 Android
+### 启用 PC 本地生图
 
-当前 Android 源码为 `0.17.0 / versionCode 31`，只提供一个完整安装包
-`com.shiyu.chat`。语音输入、角色朗读、MNN 和图片生成入口都保留在同一版本中，
-不再维护精简版或应用内 TTS 语音包下载流程。预编译 APK 从
-[GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.17.0)
-下载；APK 不提交到 Git 历史。
+```powershell
+.\scripts\setup_local_image_runtime.ps1 `
+  -Python "D:\Others\Study\Anaconda3\envs\qwen3-im-chat\python.exe"
+```
 
-Debug 与 Release 都可在设置中填写 OpenCode Go 或 DeepSeek Key。手机与电脑不要求
-局域网连接，因为 Android 云端模式直接调用模型 API。
+启动后在“设置 → 本地图片模型”确认 MeinaMix V12 路径，随后在角色右侧点击“本地生成立绘”。模型权重不进入 Git。
 
-### 从源码构建 Android APK
+## 安装 Android 端
 
-需要 JDK 17、Android SDK 35 和 Git LFS。
+本机构建调试包：
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+- 版本：`0.14.3 / versionCode 27`
+- Room schema：11
+- APK SHA-256：`E4A632B837D55D29C3FA4525CEB0EA076119FD5C82A69D11D72DE212443C93F9`
+- 安装后请在设置中填写自己的 OpenCode Go 或 DeepSeek Key。
+
+APK 包含本地语音运行库、语音模型、Qwen MNN 运行库和 Dream SD1.5/QNN 后端，体积约 316 MiB。MeinaMix V12 等生成模型不随 APK 分发，需要在应用设置中导入兼容的 Local Dream SD1.5 QNN ZIP。`0.14.3` 已完成 60 项 JVM 测试和 APK 构建；真机覆盖安装与 NPU 生成需在设备在线后验收。
+
+### 从源码构建 Android
+
+需要 JDK 17、Android SDK 35 和 Android Studio 或等价工具链。
 
 ```powershell
 $env:JAVA_HOME = "C:\path\to\jdk-17"
-$env:ANDROID_HOME = "C:\path\to\Android\Sdk"
-.\gradlew.bat assembleDebug
+$env:ANDROID_HOME = "C:\Users\<you>\AppData\Local\Android\Sdk"
+.\scripts\build_android.ps1
 ```
 
 输出：
@@ -167,57 +179,24 @@ $env:ANDROID_HOME = "C:\path\to\Android\Sdk"
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## 手机本地模型与图片模型
+也可以直接在 Android Studio 中打开 `android/` 并运行 `app` 配置。
 
-构建出的应用不包含 Qwen MNN 权重或 SD1.5 QNN 模型。可在设置页按需下载，
-也可导入本地 ZIP。MNN 与 Dream 模型共用独立存储槽位，重新安装或删除时会清理旧目录：
+本地生图在“应用设置 → Dream 本地生图”中导入 SD1.5 QNN ZIP，并可调整正面/负面提示词、步数、CFG、采样器和种子。角色编辑页可填写单独的生图外貌提示词。云端头像需要另外填写千问图片 API Key。
 
-- MNN 模型 ZIP 至少应包含 `config.json`、`llm.mnn`、`llm.mnn.weight`
-  和 `tokenizer.mtok`。
-- Local Dream 模型需使用兼容的 SD1.5 QNN ZIP；模型和各第三方组件分别遵循
-  自己的许可。
-- 本地 MNN 当前只处理文字；图片输入需要切换到云端模式。
-- Local Dream 组件采用 CC BY-NC 4.0，当前项目只能作为非商业 Demo 使用。
+连接已授权 Android 设备后，可用 `scripts/deploy_android_dream.ps1` 覆盖安装 APK，并把本机 MeinaMix V12 ZIP 推到手机 `Download` 目录；随后在应用内导入。
 
-MeinaMix V12 在 `xororz/sd-qnn` 中只发布三种 QNN 包：
+## 数据与密钥
 
-| 包 | 文件大小 | SHA-256 |
-|---|---:|---|
-| `_min` | 1,156,786,441 bytes | `7ed33339b305f0df97fd746790962808c38e56bb98e560d55d8eb239fa6c4dc8` |
-| `_8gen1` | 1,032,314,916 bytes | `10d9f52607146c85428d3f66919a8a86ccf8f680c21b51ef2a39c6c0ff1b2695` |
-| `_8gen2` | 1,031,765,133 bytes | `90463ac0db6eb7424bb6c7a048c811bde2996b2321eaf58b64d02d626c333098` |
+- 仓库不包含 API Key、聊天数据库、个人录音、角色生成图片、模型权重或 LoRA Adapter。
+- PC 的 Key、数据库和语音档案默认位于 Git 忽略的 `outputs/`。
+- Android 的 Key 使用 Android Keystore/EncryptedSharedPreferences。
+- 角色、消息、记忆和状态保存在各自设备的 Room 或 SQLite 中。
+- PC 与 Android 目前不会自动同步数据。
+- 重置角色会删除该角色的消息、长期记忆、图片和状态。
 
-Local Dream 的 SD1.5 后端要求 Qualcomm Hexagon V68 或更新架构。拾语会识别
-SM8350/888、SM8450 与 SM8475/8 Gen 1、SM8550 系列/8 Gen 2、SM8650/8 Gen 3、
-SM8750/8 Elite、SM8850 等已知平台。8 Gen 3、8 Elite 和新平台没有单独 MeinaMix
-包，Local Dream 当前复用 `_8gen2`；未知高通平台和非高通设备不会强行安装 QNN 包。
-这是当前内置的 Qualcomm NPU 路径限制，不代表其他平台永远不能本地生图。
+如果发现任何泄露的凭证，请立即在 Provider 控制台撤销并更换。不要通过 Issue 或 Pull Request 上传 API Key。
 
-LoRA 训练、Adapter、MNN Q8 导出与对照实验位于独立仓库：
-<https://github.com/bawdwl/qwen3-1.7b-lora>
-
-### 公开 MNN Q8 模型
-
-| 角色 | 检查点 | ModelScope |
-|---|---|---|
-| 宋知意 | 1.5 轮，Q8 block64 | <https://modelscope.cn/models/Alixs666/shiyu-qwen3-1.7b-song-zhiyi-mnn-q8> |
-| 裴既明 | 第 1 轮，Q8 block64，实验版 | <https://modelscope.cn/models/Alixs666/shiyu-qwen3-1.7b-pei-jiming-mnn-q8> |
-
-这些是 MNN 3.5.0 Q8 合并模型，不是 GPTQ。模型均包含对应角色提示词和文件哈希；
-可以直接下载模型目录，或按 MNN Chat 兼容包要求重新打包后导入 Android。实验版模型
-用于端侧工程和角色效果验证，不代表生产级安全通过。
-
-## 数据、密钥与隐私
-
-- 不提交 API Key、聊天数据库、个人录音、生成图片、模型权重或 Adapter。
-- PC Key 保存在本机加密 Secret Store；Android Key 使用 Keystore 加密。
-- PC 数据写入 `outputs/` 下的 SQLite；Android 数据保存在 Room。
-- 系统只默认监听本机，不应在无鉴权情况下将 PC 服务直接暴露到公网。
-- 云端模式下，聊天文字或图片会发送给所选 Provider；本地 MNN 模式不把文字发送给云端。
-
-## 复现测试
-
-PC：
+## 测试
 
 ```powershell
 python -B scripts/check_project.py
@@ -232,29 +211,34 @@ cd android
 .\gradlew.bat testDebugUnitTest assembleDebug --no-daemon
 ```
 
-当前公开仓库对应的验证记录：
+当前发布前验证结果：
 
-- PC Python：285 项通过。
-- API-only 干净环境：208 项通过，1 项按设计跳过。
-- PC 前端状态测试：40 项通过，React 生产构建通过。
-- Android 64 项 JVM 测试通过；Release Lint、Debug 与关闭 R8 的 Release 构建通过。
-- 固定角色质量检查：基础条件 18/24，长期记忆条件 22/24。
-- 私有自然记忆固定夹具回放：事实、摘要、混合检索、混合状态均为 90/90；
-  仅最近消息为 23/90。
+- PC 全量 Python 回归：426 项通过。
+- 独立 API 环境的精简产品回归：208 项通过，1 项按设计跳过。
+- PC 前端状态测试：40 项通过。
+- React 生产构建通过。
+- Android JVM：60 项通过。
+- Android `0.14.3` debug APK 构建通过；真机覆盖安装和本地 Dream 生图尚需在设备在线时验收。
+- 自然记忆冻结回放：结构化事实、摘要、混合检索和混合状态均为 90/90；仅最近消息为 23/90。
+- 一条合成案例的真实 API 端到端记忆链路通过；该结果不是准确率基准。
+- 固定角色质量评测仍为：基础条件 18/24，长期记忆条件 22/24。
 
-完整本地研究目录还包含未进入公开仓库的训练实验测试，之前记录为 426 项。
-以上结果验证的是工程与固定夹具，不代表模型在真实用户上的总体质量。
+这些结果证明主要工程流程可运行，不等同于大规模真实聊天质量评估。
 
-## 已知限制
+## 当前限制
 
-- 角色自然度和长期一致性仍需要独立人工评测。
-- 本地 Qwen LoRA 在部分设置下会过度简短、复读或丢失细节。
-- PC 与 Android 不自动同步；Android 也不会把推理任务转交给电脑。
-- 当前语音是“录音识别 → 发送 → 回复后播放”，不是实时双向通话或自动打断。
-- PC 与 Android 的记忆摘要实现尚未完全一致。
-- Android 未内置 BGE，语义召回弱于 PC。
-- 没有账号系统、多用户隔离、内容审核、跨设备同步和生产级并发。
-- 没有 Live2D、动作演出和剧情 World Clock；内部状态不默认显示数值。
+- 固定评测目前每题单次生成，仍需独立人工盲评，不是统计稳定基准。
+- 内部状态结论来自一位作者的 12 对评审，可用于当前产品默认值，不能外推为总体统计显著性。
+- 自然记忆的真实 API 端到端验证只有一条合成案例；90/90 回放不代表真实模型的端到端准确率。
+- Android 没有内置 BGE，语义召回弱于 PC。
+- PC 与 Android 的摘要管理尚未完全对等。
+- 反思记忆、人物成长、长期目标和剧情 World Clock 未完成。
+- 认知边界尚未实现完整 K1–K5 与多角色隐藏事实隔离。
+- 没有账号、多用户、跨设备同步、内容审核和生产级并发。
+- 还没有完整浏览器 E2E、Android UI instrumentation 和长时间运行测试。
+- 当前主机干净环境验收不能替代另一台全新电脑的从零安装验收。
+- Android `0.14.3` 尚未在本次构建后做真机升级；GitHub 暂未同步。
+- `src/backend.py` 与 Android `ChatRepository.kt` 仍偏大。
 
 ## 目录
 
@@ -264,27 +248,12 @@ src/                          FastAPI、Provider、记忆、提示词、存储�
 frontend/                     React + TypeScript 源码
 web/react-dist/               已构建 PC 前端
 android/                      Kotlin + Compose + Room Android 项目
-tests/                        回归测试
-evaluation/                   固定质量与记忆案例
-scripts/                      构建、部署、模型下载和检查脚本
-docs/                         架构、验收与复现文档
-release/                      Android 发布说明与下载入口
+tests/                        当前生产链路回归测试
+scripts/                      构建、模型下载和检查脚本
+docs/                         架构、验收、语音与复现文档
+evaluation/                   固定质量场景、记忆语义案例和结果报告
 ```
-
-## 进一步阅读
-
-- [PC / Android 使用与复现](docs/使用与复现.md)
-- [PC 记忆检索与内部状态](docs/PC记忆检索与内部状态_2026-10-30.md)
-- [Android 本地 Dream 生图](docs/Android本地Dream生图嵌入_2026-11-02.md)
-- [Android 模型下载与 NPU 兼容](docs/Android模型下载与NPU兼容_2026-11-04.md)
-- [音色标签与自定义音色说明](docs/音色标签与自定义音色说明_2026-11-04.md)
-- [Android 完整版构建](docs/Android完整版构建_2026-11-04.md)
-- [Android 本地 MNN 双模式](docs/Android本地MNN双模式_2026-11-01.md)
-- [角色质量评测、Trace 与记忆语义](docs/角色质量评测Trace与记忆语义_2026-10-30.md)
-- [Windows 干净环境验收](docs/Windows干净环境验收_2026-10-31.md)
 
 ## 许可证
 
-项目原创代码采用 [AGPL-3.0](LICENSE)。Qwen、MNN、Local Dream、sherpa-onnx、
-VITS 中文模型、GPT-SoVITS、千问图片 API 和其他第三方组件分别遵循各自许可，详见
-[LICENSE-NOTICE.md](LICENSE-NOTICE.md)。
+项目原创代码采用 [AGPL-3.0](LICENSE)。模型、模型转换产物、角色图片、语音模型和其他第三方组件分别遵循各自上游许可，详见 [LICENSE-NOTICE.md](LICENSE-NOTICE.md)。

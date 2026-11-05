@@ -2,6 +2,7 @@ import type {
   Character,
   CharacterCard,
   Health,
+  LocalImageSettings,
   ProviderName,
   ProviderSettings,
   Session,
@@ -13,6 +14,7 @@ import type {
   StructuredMemoryStatus,
   MemoryTopicSuppressionRequest,
   TurnTrace,
+  VoiceProfile,
 } from "./types";
 
 export class ApiError extends Error {
@@ -73,8 +75,95 @@ export const deleteCharacter = (characterId: string) =>
     { method: "DELETE" },
   );
 
+export async function uploadCharacterAvatar(characterId: string, file: File) {
+  const response = await fetch(
+    `/characters/${encodeURIComponent(characterId)}/avatar`,
+    {
+      method: "POST",
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+      body: file,
+    },
+  );
+  if (!response.ok) await parseError(response);
+  return response.json() as Promise<{ uploaded: boolean; avatar_url: string }>;
+}
+
 export const getProviderSettings = () =>
   api<ProviderSettings>("/settings/providers");
+
+export const testProviderConnection = (provider: "opencode" | "deepseek") =>
+  api<{
+    connected: boolean;
+    provider: string;
+    model_id: string;
+    answer: string;
+    seconds: number;
+  }>("/settings/providers/test", {
+    method: "POST",
+    body: JSON.stringify({ provider }),
+  });
+
+export const getLocalImageSettings = () =>
+  api<LocalImageSettings>("/settings/local-image-model");
+
+export const saveLocalImageModel = (modelPath: string) =>
+  api<LocalImageSettings>("/settings/local-image-model", {
+    method: "PUT",
+    body: JSON.stringify({ model_path: modelPath }),
+  });
+
+export const generateCharacterAvatar = (
+  characterId: string,
+  prompt?: string,
+) =>
+  api<{ generated: boolean; avatar_url: string }>(
+    `/characters/${encodeURIComponent(characterId)}/avatar/generate`,
+    {
+      method: "POST",
+      body: JSON.stringify(prompt?.trim() ? { prompt: prompt.trim() } : {}),
+    },
+  );
+
+export const getVoiceProfile = (characterId: string) =>
+  api<VoiceProfile>(
+    `/characters/${encodeURIComponent(characterId)}/voice-profile`,
+  );
+
+export const saveVoiceProfile = (
+  characterId: string,
+  body: {
+    display_name: string;
+    voice_style: string;
+    reference_text: string;
+    language: "zh";
+  },
+) =>
+  api<VoiceProfile>(
+    `/characters/${encodeURIComponent(characterId)}/voice-profile`,
+    {
+      method: "PUT",
+      body: JSON.stringify(body),
+    },
+  );
+
+export async function uploadVoiceReferenceAudio(
+  characterId: string,
+  file: File,
+) {
+  const response = await fetch(
+    `/characters/${encodeURIComponent(characterId)}/voice-profile/reference-audio`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": file.type || "audio/wav" },
+      body: file,
+    },
+  );
+  if (!response.ok) await parseError(response);
+  return response.json() as Promise<{
+    uploaded: boolean;
+    has_reference_audio: boolean;
+  }>;
+}
 
 export const saveDeepSeekKey = (apiKey: string) =>
   api<{ saved: boolean; configured: boolean }>("/settings/deepseek-key", {
