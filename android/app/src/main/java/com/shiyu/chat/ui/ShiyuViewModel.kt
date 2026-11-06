@@ -1,6 +1,7 @@
 package com.shiyu.chat.ui
 
 import android.net.Uri
+import com.shiyu.chat.data.ArtworkCropSelection
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -361,28 +362,68 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
         }
     }
 
-    fun importCharacterAvatar(
+    fun importCharacterArtwork(
         character: CharacterEntity,
         uri: Uri,
+        backgroundSelection: ArtworkCropSelection,
+        avatarSelection: ArtworkCropSelection,
         onImported: (CharacterEntity) -> Unit,
     ) {
         if (_state.value.avatarBusy) return
-        _state.value = _state.value.copy(avatarBusy = true, status = "正在导入角色头像…")
+        _state.value = _state.value.copy(
+            avatarBusy = true,
+            status = "正在裁剪角色背景和头像…",
+        )
         viewModelScope.launch {
-            runCatching { repository.importCharacterAvatar(character, uri) }
+            runCatching {
+                repository.importCharacterArtwork(
+                    character,
+                    uri,
+                    backgroundSelection,
+                    avatarSelection,
+                )
+            }
                 .onSuccess { updated ->
                     _state.value = _state.value.copy(
                         avatarBusy = false,
-                        status = "头像已导入，保存角色后生效",
+                        status = "背景和头像已应用，保存角色后生效",
                     )
                     onImported(updated)
                 }
                 .onFailure { error ->
                     _state.value = _state.value.copy(
                         avatarBusy = false,
-                        status = error.message ?: "角色头像导入失败",
+                        status = error.message ?: "角色图片导入失败",
                     )
                 }
+        }
+    }
+
+    fun applyAvatarCrop(
+        character: CharacterEntity,
+        selection: ArtworkCropSelection,
+        onApplied: (CharacterEntity) -> Unit,
+    ) {
+        if (_state.value.avatarBusy) return
+        _state.value = _state.value.copy(
+            avatarBusy = true,
+            status = "正在应用头像裁剪…",
+        )
+        viewModelScope.launch {
+            runCatching {
+                repository.applyAvatarCrop(character, selection)
+            }.onSuccess { updated ->
+                _state.value = _state.value.copy(
+                    avatarBusy = false,
+                    status = "角色头像裁剪已保存",
+                )
+                onApplied(updated)
+            }.onFailure { error ->
+                _state.value = _state.value.copy(
+                    avatarBusy = false,
+                    status = error.message ?: "头像裁剪失败",
+                )
+            }
         }
     }
 

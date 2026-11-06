@@ -24,6 +24,11 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
+data class CharacterArtworkPaths(
+    val backgroundPath: String,
+    val avatarPath: String,
+)
+
 /**
  * Adapter around the Local Dream SD1.5 NPU process bundled in this app.
  * It imports the QNN model package directly and talks to the private loopback
@@ -67,7 +72,14 @@ class DreamAvatarGenerator(private val context: Context) {
 
     fun modelRootDirectory(): File = modelDirectory
 
-    suspend fun importAvatar(characterId: String, uri: Uri): String = withContext(Dispatchers.IO) {
+    suspend fun importArtwork(
+        characterId: String,
+        uri: Uri,
+        backgroundSelection: ArtworkCropSelection =
+            CharacterArtworkPolicy.DEFAULT_BACKGROUND,
+        avatarSelection: ArtworkCropSelection =
+            CharacterArtworkPolicy.DEFAULT_AVATAR,
+    ): CharacterArtworkPaths = withContext(Dispatchers.IO) {
         val mime = context.contentResolver.getType(uri)
         require(mime == null || mime.startsWith("image/")) { "请选择图片文件" }
         val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
@@ -77,17 +89,17 @@ class DreamAvatarGenerator(private val context: Context) {
                 val count = input.read(buffer)
                 if (count < 0) break
                 require(output.size() + count <= MAX_IMPORTED_AVATAR_BYTES) {
-                    "头像图片不能超过 20 MiB"
+                    "角色图片不能超过 20 MiB"
                 }
                 output.write(buffer, 0, count)
             }
             output.toByteArray()
-        } ?: error("无法读取头像图片")
-        require(bytes.isNotEmpty()) { "头像图片为空" }
+        } ?: error("无法读取角色图片")
+        require(bytes.isNotEmpty()) { "角色图片为空" }
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         require(bounds.outWidth in 1..8192 && bounds.outHeight in 1..8192) {
-            "头像图片尺寸无效"
+            "角色图片尺寸无效"
         }
         var sample = 1
         while (maxOf(bounds.outWidth / sample, bounds.outHeight / sample) > 2048) sample *= 2
@@ -96,7 +108,7 @@ class DreamAvatarGenerator(private val context: Context) {
             0,
             bytes.size,
             BitmapFactory.Options().apply { inSampleSize = sample },
-        ) ?: error("头像图片解析失败")
+        ) ?: error("角色图片解析失败")
         val orientation = runCatching {
             ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(
                 ExifInterface.TAG_ORIENTATION,
@@ -120,27 +132,81 @@ class DreamAvatarGenerator(private val context: Context) {
                 if (it !== decoded) decoded.recycle()
             }
         }
-        val outputBitmap = CharacterArtworkPolicy.toPortrait(oriented)
-        if (outputBitmap !== oriented) oriented.recycle()
         avatarDirectory.mkdirs()
         val safeId = characterId.replace(Regex("[^A-Za-z0-9._-]"), "_")
-        val output = File(avatarDirectory, "$safeId-user.webp")
-        val temporary = File.createTempFile("user-avatar-", ".tmp", avatarDirectory)
+        val backgroundOutput = File(
+            avatarDirectory,
+            "$safeId-background.webp",
+        )
+        val avatarOutput = File(avatarDirectory, "$safeId-avatar.webp")
+        var portrait: Bitmap? = null
+        var avatar: Bitmap? = null
         try {
-            val format = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                Bitmap.CompressFormat.WEBP_LOSSY
-            } else {
-                Bitmap.CompressFormat.WEBP
-            }
-            temporary.outputStream().buffered().use { stream ->
-                check(outputBitmap.compress(format, 92, stream)) { "头像图片保存失败" }
-            }
-            if (output.exists()) output.delete()
-            check(temporary.renameTo(output)) { "头像图片保存失败" }
+            portrait = CharacterArtworkPolicy.toPortrait(
+                oriented,
+                backgroundSelection,
+            )
+            avatar = CharacterArtworkPolicy.toAvatar(
+                oriented,
+                avatarSelection,
+            )
+            saveWebp(
+                requireNotNull(portrait),
+                backgroundOutput,
+                "背景图片保存失败",
+            )
+            saveWebp(
+                requireNotNull(avatar),
+                avatarOutput,
+                "头像图片保存失败",
+            )
+            CharacterArtworkPaths(
+                backgroundPath = backgroundOutput.absolutePath,
+                avatarPath = avatarOutput.absolutePath,
+            )
+        } finally {
+            portrait?.recycle()
+            avatar?.recycle()
+            oriented.recycle()
+        }
+    }
+
+    suspend fun createAvatarFromBackground(
+        characterId: String,
+        backgroundPath: String,
+        selection: ArtworkCropSelection =
+            CharacterArtworkPolicy.DEFAULT_AVATAR,
+    ): String = withContext(Dispatchers.IO) {
+        val source = BitmapFactory.decodeFile(backgroundPath)
+            ?: error("无法读取角色背景图片")
+        val avatar = CharacterArtworkPolicy.toAvatar(source, selection)
+        avatarDirectory.mkdirs()
+        val safeId = characterId.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        val output = File(avatarDirectory, "$safeId-avatar.webp")
+        try {
+            saveWebp(avatar, output, "头像图片保存失败")
             output.absolutePath
         } finally {
+            avatar.recycle()
+            source.recycle()
+        }
+    }
+
+    private fun saveWebp(bitmap: Bitmap, output: File, message: String) {
+        val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Bitmap.CompressFormat.WEBP_LOSSY
+        } else {
+            Bitmap.CompressFormat.WEBP
+        }
+        val temporary = File.createTempFile("artwork-", ".tmp", avatarDirectory)
+        try {
+            temporary.outputStream().buffered().use { stream ->
+                check(bitmap.compress(format, 92, stream)) { message }
+            }
+            if (output.exists()) output.delete()
+            check(temporary.renameTo(output)) { message }
+        } finally {
             temporary.delete()
-            outputBitmap.recycle()
         }
     }
 
@@ -326,6 +392,8 @@ class DreamAvatarGenerator(private val context: Context) {
             "$safeId-translated.webp",
             "$safeId-cloud.webp",
             "$safeId-cloud.jpg",
+            "$safeId-background.webp",
+            "$safeId-avatar.webp",
             "$safeId-user.webp",
             "$safeId-default.webp",
         ).forEach { deleteAvatar(File(avatarDirectory, it).absolutePath) }

@@ -21,11 +21,26 @@ class CharacterArtworkPolicyTest {
     }
 
     @Test
-    fun veryTallArtworkKeepsUpperCentreSubject() {
+    fun veryTallArtworkUsesCentreCropForBackground() {
         val crop = CharacterArtworkPolicy.sourceCrop(1000, 2500)
 
         assertEquals(1000, crop.width)
         assertEquals(1778, crop.height)
-        assertEquals(130, crop.top)
+        assertEquals(361, crop.top)
+    }
+
+    @Test
+    fun portraitAvatarDefaultsToUpperFaceArea() {
+        val crop = CharacterArtworkPolicy.crop(
+            width = 1080,
+            height = 1920,
+            aspectRatio = 1.0,
+            selection = CharacterArtworkPolicy.DEFAULT_AVATAR,
+        )
+
+        assertEquals(0, crop.left)
+        assertEquals(1080, crop.width)
+        assertEquals(1080, crop.height)
+        assertEquals(0, crop.top)
     }
 }

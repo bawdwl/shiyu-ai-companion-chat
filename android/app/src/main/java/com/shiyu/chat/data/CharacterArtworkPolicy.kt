@@ -14,52 +14,93 @@ internal data class ArtworkCrop(
     val height: Int,
 )
 
-/**
- * Character artwork is stored as a phone wallpaper rather than a square.
- * Existing/imported images are centre-cropped instead of stretched.
- */
+data class ArtworkCropSelection(
+    val horizontal: Float = 0.5f,
+    val vertical: Float = 0.5f,
+    val zoom: Float = 1f,
+) {
+    fun normalized(): ArtworkCropSelection = copy(
+        horizontal = horizontal.coerceIn(0f, 1f),
+        vertical = vertical.coerceIn(0f, 1f),
+        zoom = zoom.coerceIn(1f, 4f),
+    )
+}
+
 internal object CharacterArtworkPolicy {
     const val OUTPUT_WIDTH = 1080
     const val OUTPUT_HEIGHT = 1920
+    const val AVATAR_SIZE = 1024
     const val ASPECT_RATIO = OUTPUT_WIDTH.toDouble() / OUTPUT_HEIGHT
+    val DEFAULT_BACKGROUND = ArtworkCropSelection(0.5f, 0.5f, 1f)
+    val DEFAULT_AVATAR = ArtworkCropSelection(0.5f, 0.18f, 1f)
 
-    fun sourceCrop(width: Int, height: Int): ArtworkCrop {
+    fun crop(
+        width: Int,
+        height: Int,
+        aspectRatio: Double,
+        selection: ArtworkCropSelection = DEFAULT_BACKGROUND,
+    ): ArtworkCrop {
         require(width > 0 && height > 0) { "图片尺寸无效" }
-        val sourceAspect = width.toDouble() / height
-        return if (sourceAspect > ASPECT_RATIO) {
-            val cropWidth = (height * ASPECT_RATIO)
-                .roundToInt()
-                .coerceIn(1, width)
-            ArtworkCrop(
-                left = (width - cropWidth) / 2,
-                top = 0,
-                width = cropWidth,
-                height = height,
-            )
-        } else {
-            val cropHeight = (width / ASPECT_RATIO)
-                .roundToInt()
-                .coerceIn(1, height)
-            ArtworkCrop(
-                left = 0,
-                top = ((height - cropHeight) * 0.18f)
-                    .roundToInt()
-                    .coerceIn(0, height - cropHeight),
-                width = width,
-                height = cropHeight,
-            )
-        }
+        require(aspectRatio > 0) { "裁剪比例无效" }
+        val focus = selection.normalized()
+        val maximumWidth = minOf(width.toDouble(), height * aspectRatio)
+        val cropWidth = (maximumWidth / focus.zoom)
+            .roundToInt()
+            .coerceIn(1, width)
+        val cropHeight = (cropWidth / aspectRatio)
+            .roundToInt()
+            .coerceIn(1, height)
+        val centerX = (width * focus.horizontal).roundToInt()
+        val centerY = (height * focus.vertical).roundToInt()
+        return ArtworkCrop(
+            left = (centerX - cropWidth / 2)
+                .coerceIn(0, width - cropWidth),
+            top = (centerY - cropHeight / 2)
+                .coerceIn(0, height - cropHeight),
+            width = cropWidth,
+            height = cropHeight,
+        )
     }
 
-    fun toPortrait(source: Bitmap): Bitmap {
-        val crop = sourceCrop(source.width, source.height)
+    fun sourceCrop(width: Int, height: Int): ArtworkCrop =
+        crop(width, height, ASPECT_RATIO, DEFAULT_BACKGROUND)
+
+    fun toPortrait(
+        source: Bitmap,
+        selection: ArtworkCropSelection = DEFAULT_BACKGROUND,
+    ): Bitmap = renderCrop(
+        source = source,
+        outputWidth = OUTPUT_WIDTH,
+        outputHeight = OUTPUT_HEIGHT,
+        aspectRatio = ASPECT_RATIO,
+        selection = selection,
+    )
+
+    fun toAvatar(
+        source: Bitmap,
+        selection: ArtworkCropSelection = DEFAULT_AVATAR,
+    ): Bitmap = renderCrop(
+        source = source,
+        outputWidth = AVATAR_SIZE,
+        outputHeight = AVATAR_SIZE,
+        aspectRatio = 1.0,
+        selection = selection,
+    )
+
+    private fun renderCrop(
+        source: Bitmap,
+        outputWidth: Int,
+        outputHeight: Int,
+        aspectRatio: Double,
+        selection: ArtworkCropSelection,
+    ): Bitmap {
+        val crop = crop(source.width, source.height, aspectRatio, selection)
         val output = Bitmap.createBitmap(
-            OUTPUT_WIDTH,
-            OUTPUT_HEIGHT,
+            outputWidth,
+            outputHeight,
             Bitmap.Config.ARGB_8888,
         )
-        val canvas = Canvas(output)
-        canvas.drawBitmap(
+        Canvas(output).drawBitmap(
             source,
             Rect(
                 crop.left,
@@ -70,8 +111,8 @@ internal object CharacterArtworkPolicy {
             RectF(
                 0f,
                 0f,
-                OUTPUT_WIDTH.toFloat(),
-                OUTPUT_HEIGHT.toFloat(),
+                outputWidth.toFloat(),
+                outputHeight.toFloat(),
             ),
             Paint(
                 Paint.ANTI_ALIAS_FLAG or

@@ -1,10 +1,10 @@
 # 拾语 Android
 
-当前源码版本：`0.18.4 / versionCode 34`，只提供一个完整安装包：
+当前源码版本：`0.18.5 / versionCode 35`，Room schema 13，只提供一个完整安装包：
 
 - `com.shiyu.chat`：内置本地语音识别、角色朗读、MNN 和图片生成入口。
 
-技术栈：Kotlin、Jetpack Compose、Room schema 11、WorkManager、OkHttp、
+技术栈：Kotlin、Jetpack Compose、Room schema 13、WorkManager、OkHttp、
 Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 
 ## 已实现
@@ -71,8 +71,8 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 ## 当前验证
 
-- `0.18.4` 源码已通过 76 项 JVM 测试、Debug Lint 和 Debug APK 构建。
-- Debug Lint 为 0 errors、1 个既有 `android.media.ExifInterface` 警告。
+- `0.18.5` 源码已通过 77 项 JVM 测试、Debug Lint 和 Debug APK 构建。
+- Debug Lint 为 0 errors、2 个既有 `android.media.ExifInterface` 警告。
 - 预编译 APK 仅作为 GitHub Release 附件分发，不提交到 Git：
   <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.0>
 

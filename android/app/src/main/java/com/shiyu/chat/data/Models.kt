@@ -30,6 +30,7 @@ data class CharacterEntity(
     val allowEverydayInvention: Boolean = true,
     val custom: Boolean = false,
     val avatarPath: String? = null,
+    val backgroundPath: String? = null,
     @ColumnInfo(defaultValue = "'api'") val modelSource: String = MODEL_SOURCE_API,
     val createdAt: Long = System.currentTimeMillis(),
 )

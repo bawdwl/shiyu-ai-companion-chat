@@ -28,6 +28,9 @@ interface CharacterDao {
     @Query("UPDATE characters SET avatarPath=:avatarPath WHERE id=:id")
     suspend fun updateAvatar(id: String, avatarPath: String?)
 
+    @Query("UPDATE characters SET avatarPath=:avatarPath,backgroundPath=:backgroundPath WHERE id=:id")
+    suspend fun updateArtwork(id: String, avatarPath: String?, backgroundPath: String?)
+
     @Query("DELETE FROM characters WHERE id=:id AND custom=1")
     suspend fun deleteCustom(id: String)
 
@@ -486,7 +489,7 @@ interface InternalStateDao {
         TurnTraceEntity::class,
         AppMetaEntity::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -828,6 +831,14 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
                     "ALTER TABLE characters ADD COLUMN modelSource TEXT NOT NULL DEFAULT 'api'",
+                )
+            }
+        }
+
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE characters ADD COLUMN backgroundPath TEXT",
                 )
             }
         }

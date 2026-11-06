@@ -1,6 +1,8 @@
 package com.shiyu.chat.ui
 
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -74,6 +76,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -119,6 +122,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.shiyu.chat.data.CharacterEntity
 import com.shiyu.chat.data.ChatRepository
+import com.shiyu.chat.data.ArtworkCropSelection
+import com.shiyu.chat.data.CharacterArtworkPolicy
 import com.shiyu.chat.data.DreamGenerationSettings
 import com.shiyu.chat.data.insertActionBrackets
 import com.shiyu.chat.data.MemoryEntity
@@ -138,6 +143,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.io.File
+import java.io.ByteArrayInputStream
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
@@ -313,18 +319,30 @@ fun ShiyuApp(repository: ChatRepository) {
                 showEdit = false
                 pendingCharacter = null
             },
-            onGenerateLocalAvatar = { edited ->
+            onGenerateLocalAvatar = { edited, onGenerated ->
                 vm.generateLocalAvatar(edited) { updated ->
                     pendingCharacter = updated
+                    onGenerated(updated)
                 }
             },
-            onGenerateCloudAvatar = { edited ->
+            onGenerateCloudAvatar = { edited, onGenerated ->
                 vm.generateCloudAvatar(edited) { updated ->
+                    pendingCharacter = updated
+                    onGenerated(updated)
+                }
+            },
+            onImportArtwork = { edited, uri, backgroundSelection, avatarSelection ->
+                vm.importCharacterArtwork(
+                    edited,
+                    uri,
+                    backgroundSelection,
+                    avatarSelection,
+                ) { updated ->
                     pendingCharacter = updated
                 }
             },
-            onImportAvatar = { edited, uri ->
-                vm.importCharacterAvatar(edited, uri) { updated ->
+            onApplyAvatarCrop = { edited, selection ->
+                vm.applyAvatarCrop(edited, selection) { updated ->
                     pendingCharacter = updated
                 }
             },
@@ -655,7 +673,9 @@ private fun CharacterCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val hasAvatar = character.avatarPath?.let { File(it).isFile } == true
+    val backgroundPath = character.backgroundPath?.takeIf { File(it).isFile }
+        ?: character.avatarPath?.takeIf { File(it).isFile }
+    val hasAvatar = backgroundPath != null
     val artworkColors = when (character.id.hashCode().mod(4)) {
         0 -> listOf(Color(0xFFB9A8D9), Color(0xFF5E4A91))
         1 -> listOf(Color(0xFFA6B7DC), Color(0xFF4F5E8D))
@@ -678,7 +698,7 @@ private fun CharacterCard(
             )
             if (hasAvatar) {
                 LocalAvatar(
-                    path = character.avatarPath,
+                    path = backgroundPath,
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
@@ -937,21 +957,9 @@ private fun ChatScreen(
             ),
     ) {
         LocalAvatar(
-            path = character.avatarPath,
+            path = character.backgroundPath?.takeIf { File(it).isFile }
+                ?: character.avatarPath,
             modifier = Modifier.fillMaxSize(),
-        )
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color.Black.copy(alpha = 0.08f),
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.08f),
-                        ),
-                    ),
-                ),
         )
         Column(
             Modifier
@@ -2449,9 +2457,15 @@ private fun EditCharacterDialog(
     imageApiConfigured: Boolean,
     localModelReady: Boolean,
     onDismiss: () -> Unit,
-    onGenerateLocalAvatar: (CharacterEntity) -> Unit,
-    onGenerateCloudAvatar: (CharacterEntity) -> Unit,
-    onImportAvatar: (CharacterEntity, Uri) -> Unit,
+    onGenerateLocalAvatar: (CharacterEntity, (CharacterEntity) -> Unit) -> Unit,
+    onGenerateCloudAvatar: (CharacterEntity, (CharacterEntity) -> Unit) -> Unit,
+    onImportArtwork: (
+        CharacterEntity,
+        Uri,
+        ArtworkCropSelection,
+        ArtworkCropSelection,
+    ) -> Unit,
+    onApplyAvatarCrop: (CharacterEntity, ArtworkCropSelection) -> Unit,
     onModelSourceChange: (String) -> Unit,
     onSave: (CharacterEntity) -> Unit,
 ) {
@@ -2476,6 +2490,15 @@ private fun EditCharacterDialog(
     var avatarPath by remember(character.id, character.avatarPath) {
         mutableStateOf(character.avatarPath)
     }
+    var backgroundPath by remember(character.id, character.backgroundPath) {
+        mutableStateOf(character.backgroundPath ?: character.avatarPath)
+    }
+    var pendingImportArtwork by remember(character.id) {
+        mutableStateOf<Uri?>(null)
+    }
+    var generatedArtwork by remember(character.id) {
+        mutableStateOf<String?>(null)
+    }
     fun editedCharacter() = character.copy(
         name = name.trim().ifBlank { character.name },
         tag = tag.trim(),
@@ -2497,11 +2520,12 @@ private fun EditCharacterDialog(
         worldbookJson = worldbookJson.trim().ifBlank { "[]" },
         modelSource = modelSource,
         avatarPath = avatarPath,
+        backgroundPath = backgroundPath,
     )
     val avatarPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
     ) { uri ->
-        uri?.let { onImportAvatar(editedCharacter(), it) }
+        pendingImportArtwork = uri
     }
 
     ModalBottomSheet(
@@ -2596,7 +2620,7 @@ private fun EditCharacterDialog(
                         Modifier.fillMaxWidth().padding(15.dp),
                         verticalArrangement = Arrangement.spacedBy(9.dp),
                     ) {
-                        Text("角色头像", fontWeight = FontWeight.SemiBold)
+                        Text("角色背景与头像", fontWeight = FontWeight.SemiBold)
                         Box(
                             Modifier
                                 .fillMaxWidth()
@@ -2609,10 +2633,13 @@ private fun EditCharacterDialog(
                                 ),
                             contentAlignment = Alignment.Center,
                         ) {
-                            CharacterBadge(character.copy(avatarPath = avatarPath), 92.dp)
                             LocalAvatar(
-                                path = avatarPath,
+                                path = backgroundPath ?: avatarPath,
                                 modifier = Modifier.fillMaxSize(),
+                            )
+                            CharacterBadge(
+                                character.copy(avatarPath = avatarPath),
+                                92.dp,
                             )
                         }
                         Text(
@@ -2626,16 +2653,28 @@ private fun EditCharacterDialog(
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
-                                onClick = { onGenerateLocalAvatar(editedCharacter()) },
+                                onClick = {
+                                    onGenerateLocalAvatar(editedCharacter()) { updated ->
+                                        avatarPath = updated.avatarPath
+                                        backgroundPath = updated.backgroundPath
+                                        generatedArtwork = updated.backgroundPath
+                                    }
+                                },
                                 enabled = avatarModelReady && !avatarBusy && name.isNotBlank(),
                             ) {
-                                Text(if (avatarBusy) "生成中…" else "NPU 生成头像")
+                                Text(if (avatarBusy) "生成中…" else "NPU 生成竖屏图")
                             }
                             Button(
-                                onClick = { onGenerateCloudAvatar(editedCharacter()) },
+                                onClick = {
+                                    onGenerateCloudAvatar(editedCharacter()) { updated ->
+                                        avatarPath = updated.avatarPath
+                                        backgroundPath = updated.backgroundPath
+                                        generatedArtwork = updated.backgroundPath
+                                    }
+                                },
                                 enabled = imageApiConfigured && !avatarBusy && name.isNotBlank(),
                             ) {
-                                Text(if (avatarBusy) "生成中…" else "云端生成头像")
+                                Text(if (avatarBusy) "生成中…" else "云端生成竖屏图")
                             }
                         }
                         OutlinedButton(
@@ -2645,7 +2684,7 @@ private fun EditCharacterDialog(
                         ) {
                             Icon(Icons.Default.Image, contentDescription = null)
                             Spacer(Modifier.width(7.dp))
-                            Text(if (avatarBusy) "正在导入…" else "从相册导入角色头像")
+                            Text(if (avatarBusy) "正在导入…" else "从相册导入并裁剪背景/头像")
                         }
                     }
                 }
@@ -2732,7 +2771,335 @@ private fun EditCharacterDialog(
             }
         }
     }
+    pendingImportArtwork?.let { uri ->
+        ArtworkCropDialog(
+            sourceUri = uri,
+            avatarOnly = false,
+            onDismiss = { pendingImportArtwork = null },
+            onApply = { backgroundSelection, avatarSelection ->
+                pendingImportArtwork = null
+                onImportArtwork(
+                    editedCharacter(),
+                    uri,
+                    backgroundSelection,
+                    avatarSelection,
+                )
+            },
+        )
+    }
+    generatedArtwork?.let { path ->
+        ArtworkCropDialog(
+            sourcePath = path,
+            avatarOnly = true,
+            onDismiss = { generatedArtwork = null },
+            onApply = { _, avatarSelection ->
+                val base = editedCharacter().copy(backgroundPath = path)
+                generatedArtwork = null
+                onApplyAvatarCrop(base, avatarSelection)
+            },
+        )
+    }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ArtworkCropDialog(
+    sourceUri: Uri? = null,
+    sourcePath: String? = null,
+    avatarOnly: Boolean,
+    onDismiss: () -> Unit,
+    onApply: (ArtworkCropSelection, ArtworkCropSelection) -> Unit,
+) {
+    val context = LocalContext.current
+    val sourceKey = sourceUri?.toString() ?: sourcePath.orEmpty()
+    val bitmap = remember(sourceKey) {
+        decodeArtworkPreview(context, sourceUri, sourcePath)
+    }
+    DisposableEffect(bitmap) {
+        onDispose { bitmap?.recycle() }
+    }
+    var step by remember(sourceKey, avatarOnly) {
+        mutableIntStateOf(if (avatarOnly) 1 else 0)
+    }
+    var backgroundSelection by remember(sourceKey) {
+        mutableStateOf(CharacterArtworkPolicy.DEFAULT_BACKGROUND)
+    }
+    var avatarSelection by remember(sourceKey) {
+        mutableStateOf(CharacterArtworkPolicy.DEFAULT_AVATAR)
+    }
+    val selectingBackground = step == 0 && !avatarOnly
+    val previewSelection = if (selectingBackground) {
+        backgroundSelection
+    } else {
+        avatarSelection
+    }
+    val updateSelection: (ArtworkCropSelection) -> Unit = { updated ->
+        if (selectingBackground) {
+            backgroundSelection = updated
+        } else {
+            avatarSelection = updated
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFFFDFBFF),
+        shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.92f)
+                .navigationBarsPadding()
+                .padding(horizontal = 18.dp),
+        ) {
+            Text(
+                when {
+                    selectingBackground -> "裁剪聊天背景"
+                    avatarOnly -> "选择角色头像"
+                    else -> "选择角色头像"
+                },
+                fontSize = 23.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                when {
+                    selectingBackground ->
+                        "背景会以 9:16 手机竖屏显示。调整左右、上下和缩放，让角色在聊天界面中处于合适位置。"
+                    avatarOnly ->
+                        "使用刚刚生成的手机竖屏图选择头像区域。建议让脸部和眼睛位于圆形头像中央。"
+                    else ->
+                        "头像使用 1:1 正方形裁切。可以直接把脸部移到圆形预览中央。"
+                },
+                modifier = Modifier.padding(top = 5.dp, bottom = 10.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.sp,
+                lineHeight = 17.sp,
+            )
+            Box(
+                Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (bitmap == null) {
+                    Text(
+                        "无法读取这张图片，请重新选择。",
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                } else {
+                    val ratio = if (selectingBackground) 9f / 16f else 1f
+                    ArtworkCropPreview(
+                        bitmap = bitmap,
+                        aspectRatio = ratio,
+                        selection = previewSelection,
+                        roundAvatar = !selectingBackground,
+                        modifier = Modifier
+                            .fillMaxHeight(0.96f)
+                            .aspectRatio(ratio),
+                    )
+                }
+            }
+            ArtworkCropControls(
+                selection = previewSelection,
+                onChange = updateSelection,
+            )
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (!avatarOnly && selectingBackground) {
+                    TextButton(
+                        onClick = {
+                            updateSelection(CharacterArtworkPolicy.DEFAULT_BACKGROUND)
+                        },
+                    ) {
+                        Text("重置背景")
+                    }
+                } else {
+                    TextButton(
+                        onClick = {
+                            updateSelection(CharacterArtworkPolicy.DEFAULT_AVATAR)
+                        },
+                    ) {
+                        Text("脸部居中")
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onDismiss) { Text("取消") }
+                Button(
+                    enabled = bitmap != null,
+                    onClick = {
+                        if (selectingBackground) {
+                            step = 1
+                        } else {
+                            onApply(
+                                backgroundSelection,
+                                avatarSelection,
+                            )
+                        }
+                    },
+                ) {
+                    Text(
+                        if (selectingBackground) "下一步：头像" else "应用",
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArtworkCropPreview(
+    bitmap: android.graphics.Bitmap,
+    aspectRatio: Float,
+    selection: ArtworkCropSelection,
+    roundAvatar: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val shape = if (roundAvatar) CircleShape else RoundedCornerShape(18.dp)
+    val image = bitmap.asImageBitmap()
+    Canvas(
+        modifier
+            .clip(shape)
+            .background(Color(0xFF241A39)),
+    ) {
+        val crop = CharacterArtworkPolicy.crop(
+            width = bitmap.width,
+            height = bitmap.height,
+            aspectRatio = aspectRatio.toDouble(),
+            selection = selection,
+        )
+        drawImage(
+            image = image,
+            srcOffset = IntOffset(crop.left, crop.top),
+            srcSize = IntSize(crop.width, crop.height),
+            dstOffset = IntOffset.Zero,
+            dstSize = IntSize(
+                size.width.roundToInt(),
+                size.height.roundToInt(),
+            ),
+            filterQuality = FilterQuality.High,
+        )
+    }
+}
+
+@Composable
+private fun ArtworkCropControls(
+    selection: ArtworkCropSelection,
+    onChange: (ArtworkCropSelection) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            "左右位置 ${"%.0f".format(selection.horizontal * 100)}%",
+            fontSize = 10.sp,
+            color = InkMuted,
+        )
+        Slider(
+            value = selection.horizontal,
+            onValueChange = {
+                onChange(selection.copy(horizontal = it))
+            },
+            valueRange = 0f..1f,
+        )
+        Text(
+            "上下位置 ${"%.0f".format(selection.vertical * 100)}%",
+            fontSize = 10.sp,
+            color = InkMuted,
+        )
+        Slider(
+            value = selection.vertical,
+            onValueChange = {
+                onChange(selection.copy(vertical = it))
+            },
+            valueRange = 0f..1f,
+        )
+        Text(
+            "缩放 ${"%.1f".format(selection.zoom)}×",
+            fontSize = 10.sp,
+            color = InkMuted,
+        )
+        Slider(
+            value = selection.zoom,
+            onValueChange = {
+                onChange(selection.copy(zoom = it))
+            },
+            valueRange = 1f..4f,
+        )
+    }
+}
+
+private fun decodeArtworkPreview(
+    context: android.content.Context,
+    uri: Uri?,
+    path: String?,
+): android.graphics.Bitmap? = runCatching {
+    val bytes = when {
+        uri != null -> context.contentResolver.openInputStream(uri)?.use { input ->
+            val output = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                require(output.size() + count <= 20 * 1024 * 1024) {
+                    "图片不能超过 20 MiB"
+                }
+                output.write(buffer, 0, count)
+            }
+            output.toByteArray()
+        }
+        path != null && File(path).isFile -> File(path).readBytes()
+        else -> null
+    } ?: return@runCatching null
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    var sample = 1
+    while (maxOf(bounds.outWidth / sample, bounds.outHeight / sample) > 2400) {
+        sample *= 2
+    }
+    val decoded = BitmapFactory.decodeByteArray(
+        bytes,
+        0,
+        bytes.size,
+        BitmapFactory.Options().apply { inSampleSize = sample },
+    ) ?: return@runCatching null
+    val orientation = runCatching {
+        ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(
+            ExifInterface.TAG_ORIENTATION,
+            ExifInterface.ORIENTATION_NORMAL,
+        )
+    }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+    val matrix = Matrix()
+    when (orientation) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+        ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+        ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+        ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
+        ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
+        ExifInterface.ORIENTATION_TRANSPOSE -> {
+            matrix.postRotate(90f)
+            matrix.postScale(-1f, 1f)
+        }
+        ExifInterface.ORIENTATION_TRANSVERSE -> {
+            matrix.postRotate(270f)
+            matrix.postScale(-1f, 1f)
+        }
+    }
+    if (matrix.isIdentity) {
+        decoded
+    } else {
+        android.graphics.Bitmap.createBitmap(
+            decoded,
+            0,
+            0,
+            decoded.width,
+            decoded.height,
+            matrix,
+            true,
+        ).also {
+            if (it !== decoded) decoded.recycle()
+        }
+    }
+}.getOrNull()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

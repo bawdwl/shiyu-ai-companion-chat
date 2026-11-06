@@ -94,6 +94,7 @@ class ChatRepository(
         }
         retired.forEach { character ->
             avatarGenerator.deleteAvatar(character.avatarPath)
+                avatarGenerator.deleteAvatar(character.backgroundPath)
             avatarGenerator.deleteCharacterAvatars(character.id)
             prefs.edit().remove("summarized:${character.id}").apply()
         }
@@ -166,7 +167,10 @@ class ChatRepository(
             if (force && current != null && current.absolutePath != output.absolutePath) {
                 avatarGenerator.deleteAvatar(current.absolutePath)
             }
-            character.copy(avatarPath = output.absolutePath)
+            character.copy(
+                avatarPath = output.absolutePath,
+                backgroundPath = output.absolutePath,
+            )
         } finally {
             temporary.delete()
         }
@@ -502,14 +506,55 @@ class ChatRepository(
     suspend fun generateCloudAvatar(character: CharacterEntity): CharacterEntity {
         val key = secrets.getString("bailian_image_api_key", null)
             ?: error("请先在设置中填写千问 AI 平台 API Key")
-        val path = cloudAvatarGenerator.generate(character, key)
-        database.characters().updateAvatar(character.id, path)
-        return character.copy(avatarPath = path)
+        val backgroundPath = cloudAvatarGenerator.generate(character, key)
+        val avatarPath = avatarGenerator.createAvatarFromBackground(
+            character.id,
+            backgroundPath,
+        )
+        database.characters().updateArtwork(
+            character.id,
+            avatarPath,
+            backgroundPath,
+        )
+        return character.copy(
+            avatarPath = avatarPath,
+            backgroundPath = backgroundPath,
+        )
     }
 
-    suspend fun importCharacterAvatar(character: CharacterEntity, uri: Uri): CharacterEntity {
-        val path = avatarGenerator.importAvatar(character.id, uri)
-        return character.copy(avatarPath = path)
+    suspend fun importCharacterArtwork(
+        character: CharacterEntity,
+        uri: Uri,
+        backgroundSelection: ArtworkCropSelection,
+        avatarSelection: ArtworkCropSelection,
+    ): CharacterEntity {
+        val paths = avatarGenerator.importArtwork(
+            character.id,
+            uri,
+            backgroundSelection,
+            avatarSelection,
+        )
+        return character.copy(
+            avatarPath = paths.avatarPath,
+            backgroundPath = paths.backgroundPath,
+        )
+    }
+
+    suspend fun applyAvatarCrop(
+        character: CharacterEntity,
+        avatarSelection: ArtworkCropSelection,
+    ): CharacterEntity {
+        val source = character.backgroundPath
+            ?: character.avatarPath
+            ?: error("请先生成或导入角色背景图片")
+        val avatarPath = avatarGenerator.createAvatarFromBackground(
+            character.id,
+            source,
+            avatarSelection,
+        )
+        val updated = character.copy(avatarPath = avatarPath)
+        database.characters().upsert(updated)
+        return updated
     }
 
     suspend fun generateLocalAvatar(character: CharacterEntity): CharacterEntity {
@@ -517,9 +562,23 @@ class ChatRepository(
             "请先在应用设置中导入 Local Dream 兼容的 SD1.5 NPU 模型 ZIP"
         }
         val resolved = ensureDreamAppearanceProfile(character)
-        val path = avatarGenerator.generate(resolved, dreamGenerationSettings())
-        database.characters().updateAvatar(resolved.id, path)
-        return resolved.copy(avatarPath = path)
+        val backgroundPath = avatarGenerator.generate(
+            resolved,
+            dreamGenerationSettings(),
+        )
+        val avatarPath = avatarGenerator.createAvatarFromBackground(
+            resolved.id,
+            backgroundPath,
+        )
+        database.characters().updateArtwork(
+            resolved.id,
+            avatarPath,
+            backgroundPath,
+        )
+        return resolved.copy(
+            avatarPath = avatarPath,
+            backgroundPath = backgroundPath,
+        )
     }
 
     private suspend fun ensureDreamAppearanceProfile(
@@ -850,11 +909,15 @@ class ChatRepository(
         avatarGenerator.deleteCharacterAvatars(characterId)
         database.withTransaction {
             clearCharacterScope(characterId)
-            database.characters().updateAvatar(characterId, null)
+            database.characters().updateArtwork(characterId, null, null)
         }
         val restored = installDefaultAvatar(character.copy(avatarPath = null), force = true)
         if (restored.avatarPath != null) {
-            database.characters().updateAvatar(characterId, restored.avatarPath)
+            database.characters().updateArtwork(
+                characterId,
+                restored.avatarPath,
+                restored.backgroundPath,
+            )
         }
         ensureOpening(restored)
         prefs.edit().remove("summarized:$characterId").apply()
@@ -2049,6 +2112,7 @@ class ChatRepository(
             }
         }
         avatarGenerator.deleteAvatar(character.avatarPath)
+        avatarGenerator.deleteAvatar(character.backgroundPath)
         avatarGenerator.deleteCharacterAvatars(characterId)
         prefs.edit()
             .remove("summarized:$characterId")
@@ -2303,6 +2367,13 @@ class ChatRepository(
         database.characters().upsert(character)
         if (existing?.avatarPath != null && existing.avatarPath != character.avatarPath) {
             avatarGenerator.deleteAvatar(existing.avatarPath)
+        }
+        if (
+            existing?.backgroundPath != null &&
+            existing.backgroundPath != character.backgroundPath &&
+            existing.backgroundPath != existing.avatarPath
+        ) {
+            avatarGenerator.deleteAvatar(existing.backgroundPath)
         }
     }
 

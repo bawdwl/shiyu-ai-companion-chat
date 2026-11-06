@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-11-06 — Android `0.18.4` conversation layout and rollback
+## 2026-11-06 — Android `0.18.5` immersive chat and artwork cropping
 
 - Entering a chat now positions directly at the newest message without the previous animated scroll from the start of the conversation.
 - The full-screen character artwork now stays fixed at 100% opacity while the interactive layer avoids the software keyboard. The latest reply is anchored above the composer, so opening the keyboard moves the message but leaves the artwork in place.
@@ -9,7 +9,8 @@
 - Added a “（）” action shortcut. With no selection it inserts empty brackets and places the cursor between them; selected text is wrapped as “（选中内容）”.
 - Added “回退到之前的发言” from the chat overflow menu. Selecting any prior user message removes that turn and everything after it, including derived traces, structured/legacy memory, pending memory jobs, rolling summaries and later relationship-state transitions. The selected text is returned to the composer for editing.
 - Character artwork is now normalized to a 1080×1920 phone wallpaper. Local Dream uses its 768.patch when available, cloud generation requests 768×1344, and square fallback images are centre-cropped rather than stretched. Character avatars use the upper part of the portrait so the face remains visible.
-- Added deterministic rollback and artwork-crop tests. Android JVM tests and the debug APK build pass.
+- Each character now stores separate background and avatar image paths. Generated phone artwork opens an avatar-crop review; user-imported photos use a guided 9:16 background crop followed by a 1:1 avatar crop with position and zoom controls.
+- Room schema is now 13 with a lossless 12→13 migration. Added deterministic rollback, artwork-crop and action-bracket tests. Android JVM tests and the debug APK build pass.
 
 ## 2026-11-06 — `v0.18.0` republish with Windows 0.18.0 / Android 0.18.3
 
