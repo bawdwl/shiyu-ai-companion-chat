@@ -860,6 +860,126 @@ class ChatRepository(
         prefs.edit().remove("summarized:$characterId").apply()
     }
 
+    /**
+     * Restore the conversation to immediately before a selected user message.
+     *
+     * The selected message is deleted together with every later row. Derived
+     * traces, memories, pending memory jobs and state transitions are removed
+     * in the same database transaction so the next reply cannot retrieve facts
+     * that the user explicitly rolled back.
+     */
+    suspend fun rollbackToUserMessage(
+        characterId: String,
+        messageId: Long,
+    ): String = memoryMutex.withLock {
+        val messages = database.messages().getAllForCharacter(characterId)
+        val target = messages.firstOrNull { it.id == messageId }
+            ?: error("找不到要回退的消息")
+        require(target.role == "user") { "只能回退到用户发言之前" }
+
+        val legacyMemories = database.memories().allForCharacter(characterId)
+            .filter {
+                legacyMemoryTouchesRollback(
+                    it.sourceMessageIds,
+                    messageId,
+                )
+            }
+        val structuredMemories = database.structuredMemories()
+            .allForCharacter(characterId)
+            .filter {
+                structuredMemoryTouchesRollback(
+                    it.evidenceJson,
+                    messageId,
+                )
+            }
+        val transitions = database.internalStates()
+            .transitionsForCharacter(characterId)
+        val restoreTransition = transitions.firstOrNull {
+            it.messageEnd >= messageId
+        }
+        val retainedMessageId = database.messages().maxIdBefore(
+            characterId,
+            messageId,
+        )
+        val now = System.currentTimeMillis()
+
+        database.withTransaction {
+            database.structuredMemorySupport().deleteUsageFromMessage(
+                characterId,
+                messageId,
+            )
+            database.structuredMemoryJobs().deleteFromMessage(
+                characterId,
+                messageId,
+            )
+            structuredMemories.forEach {
+                database.structuredMemories().deleteById(it.id, characterId)
+            }
+            legacyMemories.forEach {
+                database.memories().deleteById(it.id, characterId)
+            }
+            database.turnTraces().deleteFromMessage(characterId, messageId)
+            database.internalStates().deleteTransitionsFromMessage(
+                characterId,
+                messageId,
+            )
+            if (restoreTransition != null) {
+                restoreStateBefore(
+                    characterId,
+                    restoreTransition,
+                )
+            }
+            database.messages().deleteFrom(characterId, messageId)
+            database.structuredMemorySupport().upsertCursor(
+                StructuredMemoryCursorEntity(
+                    characterId = characterId,
+                    lastMessageId = retainedMessageId,
+                    updatedAt = now,
+                ),
+            )
+        }
+        localSummaryMutex.withLock {
+            prefs.edit()
+                .remove(localSummaryKey(characterId))
+                .remove(localSummaryWatermarkKey(characterId))
+                .remove("summarized:$characterId")
+                .apply()
+        }
+        target.content
+    }
+
+    private suspend fun restoreStateBefore(
+        characterId: String,
+        transition: StateTransitionEntity,
+    ) {
+        val mood = runCatching {
+            JSONObject(transition.moodBeforeJson)
+        }.getOrNull() ?: return
+        val relationship = runCatching {
+            JSONObject(transition.relationshipBeforeJson)
+        }.getOrNull() ?: return
+        database.internalStates().upsertCharacterState(
+            CharacterStateEntity(
+                characterId = characterId,
+                moodValence = mood.optDouble("valence", 0.0),
+                moodArousal = mood.optDouble("arousal", 0.35),
+                moodLabel = mood.optString("label", "平静"),
+                moodUpdatedAt = transition.createdAt,
+                updatedAt = transition.createdAt,
+            ),
+        )
+        database.internalStates().upsertRelationshipState(
+            RelationshipStateEntity(
+                characterId = characterId,
+                familiarity = relationship.optDouble("familiarity", 0.15),
+                trust = relationship.optDouble("trust", 0.20),
+                warmth = relationship.optDouble("warmth", 0.50),
+                stage = relationship.optString("stage", "初次交谈"),
+                updatedAt = transition.createdAt,
+            ),
+        )
+    }
+
     suspend fun deleteMemory(characterId: String, memoryId: Long) {
         database.withTransaction {
             val memory = database.memories().get(memoryId, characterId) ?: return@withTransaction

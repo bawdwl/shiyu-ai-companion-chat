@@ -25,7 +25,7 @@ Windows EXE 的“基础版”不是完整研究环境。需要本地大模型�
 - Android 以稳定的 `0.17.0` 行为为基线，删除顾清禾及其聊天、记忆、状态、头像和音色数据；升级时自动清理旧角色。
 - Android 新建角色档案直接移植了已验收 Windows `0.18.0` 备份中的生成提示、`1800/1200` Token 两阶段请求、12 个字段的 JSON 解析、缺失材料阈值和第二次补全流程；同时有 DeepSeek 与 OpenCode Key 时，档案生成优先使用该 PC 版本对应的 DeepSeek。
 - 宋知意和裴既明恢复为 LoRA 项目训练与推理时使用的逐字精简提示词；API 与本地 MNN 模式都使用同一份固定文本，不再拼接完整角色卡。逐字文本与来源哈希见 [固定角色提示词](docs/固定角色提示词_2026-11-06.md)。
-- Windows 使用已验收的 `0.18.0` 备份、Android 使用 `0.18.3`。
+- Windows 使用已验收的 `0.18.0` 备份；公开 Android Release 为 `0.18.3`，当前源码候选为 `0.18.4`。
 
 ## 2026-11-05 `0.18.0` PC 网页端同步
 
@@ -183,9 +183,9 @@ PC 语音优先调用本机 CosyVoice 2 FastAPI；服务或角色参考音频不
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-- 版本：`0.18.3 / versionCode 33`
+- 当前源码：`0.18.4 / versionCode 34`
 - Room schema：11
-- APK SHA-256：`10717CF9A90C54C6920D95ECF4E951FCE4A89006A098D6C3991F67AC0A5F5BAA`
+- 当前 Debug APK SHA-256：`AA3D4AB5077E981CC1811389C2F4E8A6E804AEE59645193D4AD7F76FA828DC54`
 - 安装后请在设置中填写自己的 OpenCode Go 或 DeepSeek Key。
 
 APK 包含本地语音运行库、VITS 中文语音模型、Qwen MNN 运行库和 Dream SD1.5/QNN 后端。本地 Qwen 与 MeinaMix V12 等模型权重不随 APK 分发，需要用户按应用设置中的说明导入。

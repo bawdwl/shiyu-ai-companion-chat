@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -35,6 +36,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -46,6 +48,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Mic
@@ -88,6 +91,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -198,6 +202,7 @@ fun ShiyuApp(repository: ChatRepository) {
                         pendingCharacter = null
                         showEdit = true
                     },
+                    onRollback = vm::rollbackToUserMessage,
                     onReset = vm::reset,
                     onDelete = vm::deleteCharacter,
                 )
@@ -779,6 +784,7 @@ private fun ChatScreen(
     onMemory: () -> Unit,
     onTrace: () -> Unit,
     onEdit: () -> Unit,
+    onRollback: (Long, (String) -> Unit) -> Unit,
     onReset: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -797,7 +803,12 @@ private fun ChatScreen(
     }
     var showVoicePicker by remember(character.id) { mutableStateOf(false) }
     var confirmDelete by remember(character.id) { mutableStateOf(false) }
+    var showRollback by remember(character.id) { mutableStateOf(false) }
+    var pendingRollback by remember(character.id) { mutableStateOf<MessageEntity?>(null) }
     var draft by remember(character.id) { mutableStateOf("") }
+    val userMessages = remember(state.messages) {
+        state.messages.filter { it.role == "user" }
+    }
     fun startRecording() {
         if (voiceBusy) return
         voiceBusy = true; recording = true; voice.recording = true
@@ -820,9 +831,21 @@ private fun ChatScreen(
         ActivityResultContracts.GetContent(),
     ) { imageUri = it }
 
-    LaunchedEffect(state.messages.size, state.streamingText) {
-        if (state.messages.isNotEmpty()) {
-            listState.animateScrollToItem((state.messages.size - 1).coerceAtLeast(0))
+    var initialPositionApplied by remember(character.id) { mutableStateOf(false) }
+    LaunchedEffect(character.id, state.messages.isNotEmpty()) {
+        if (!initialPositionApplied && state.messages.isNotEmpty()) {
+            listState.scrollToItem(state.messages.lastIndex)
+            initialPositionApplied = true
+        }
+    }
+    LaunchedEffect(
+        state.messages.size,
+        state.busy,
+        state.streamingText.length / 96,
+    ) {
+        if (initialPositionApplied && state.messages.isNotEmpty()) {
+            val lastItem = state.messages.lastIndex + if (state.busy) 1 else 0
+            listState.scrollToItem(lastItem)
         }
     }
 
@@ -830,6 +853,7 @@ private fun ChatScreen(
         Modifier
             .fillMaxSize()
             .statusBarsPadding()
+            .imePadding()
             .background(
                 Brush.verticalGradient(
                     listOf(Color(0xFFF3EDFF), CanvasMist, Color(0xFFFFF5F8)),
@@ -903,6 +927,19 @@ private fun ChatScreen(
                             },
                         )
                         androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("回退到之前的发言") },
+                            leadingIcon = {
+                                Icon(Icons.Default.History, contentDescription = null)
+                            },
+                            enabled = userMessages.isNotEmpty() &&
+                                !state.busy &&
+                                !state.historyBusy,
+                            onClick = {
+                                menu = false
+                                showRollback = true
+                            },
+                        )
+                        androidx.compose.material3.DropdownMenuItem(
                             text = { Text("重置角色对话") },
                             leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
                             onClick = {
@@ -943,7 +980,7 @@ private fun ChatScreen(
             )
             LocalAvatar(
                 path = character.avatarPath,
-                modifier = Modifier.fillMaxSize().alpha(0.06f),
+                modifier = Modifier.fillMaxSize().alpha(0.30f),
             )
             if (state.messages.isEmpty() && state.streamingText.isEmpty()) {
                 Column(
@@ -1010,112 +1047,164 @@ private fun ChatScreen(
             }
         }
         Surface(
-            color = Color.White.copy(alpha = 0.92f),
-            shadowElevation = 8.dp,
+            color = Color.White.copy(alpha = 0.97f),
+            shadowElevation = 3.dp,
         ) {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .imePadding()
                     .navigationBarsPadding()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
             ) {
+                val transientVoiceStatus = voiceStatus ?: when {
+                    recording -> "录音中，点击停止后识别"
+                    voiceBusy -> "语音处理中…"
+                    else -> null
+                }
+                transientVoiceStatus?.let {
+                    Text(
+                        it,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 imageUri?.let { uri ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        UriImage(uri, Modifier.size(72.dp).clip(RoundedCornerShape(12.dp)))
-                        TextButton(onClick = { imageUri = null }) { Text("移除图片") }
+                    Row(
+                        Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        UriImage(
+                            uri,
+                            Modifier
+                                .size(54.dp)
+                                .clip(RoundedCornerShape(10.dp)),
+                        )
+                        TextButton(onClick = { imageUri = null }) {
+                            Text("移除图片")
+                        }
                     }
                 }
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = Color.White,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
                 ) {
-                    Column(Modifier.padding(12.dp)) {
-                        OutlinedTextField(
+                    IconButton(
+                        onClick = { picker.launch("image/*") },
+                        modifier = Modifier.size(48.dp),
+                        enabled = character.modelSource != MODEL_SOURCE_LOCAL_MNN &&
+                            !state.busy &&
+                            !state.historyBusy,
+                    ) {
+                        Icon(
+                            Icons.Default.Image,
+                            contentDescription = "上传图片",
+                            tint = InkMuted,
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            if (recording) {
+                                voice.recording = false
+                                recording = false
+                                voiceStatus = "正在识别…"
+                            } else if (!voiceBusy && !state.busy && !state.historyBusy) {
+                                microphone.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        },
+                        modifier = Modifier.size(48.dp),
+                        enabled = recording || (!voiceBusy && !state.busy && !state.historyBusy),
+                    ) {
+                        Icon(
+                            if (recording) Icons.Default.Stop else Icons.Default.Mic,
+                            contentDescription = if (recording) "结束录音" else "语音输入",
+                            tint = if (recording) MaterialTheme.colorScheme.error else InkMuted,
+                        )
+                    }
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 44.dp, max = 96.dp),
+                        shape = RoundedCornerShape(21.dp),
+                        color = Color(0xFFF7F5FA),
+                        border = BorderStroke(1.dp, Hairline),
+                    ) {
+                        BasicTextField(
                             value = draft,
                             onValueChange = { draft = it.take(4096) },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("和${character.name}说点什么…", color = InkMuted) },
-                            shape = RoundedCornerShape(12.dp),
-                            minLines = 1,
-                            maxLines = 4,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 44.dp, max = 96.dp)
+                                .padding(horizontal = 14.dp, vertical = 11.dp),
+                            enabled = !state.busy && !state.historyBusy,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurface,
+                                lineHeight = 20.sp,
+                            ),
+                            cursorBrush = SolidColor(Forest),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                             keyboardActions = KeyboardActions(onSend = {
-                                if (draft.isNotBlank() || imageUri != null) {
+                                if (
+                                    (draft.isNotBlank() || imageUri != null) &&
+                                    !state.busy &&
+                                    !state.historyBusy
+                                ) {
                                     onSend(draft.trim(), imageUri)
                                     draft = ""
                                     imageUri = null
                                 }
                             }),
+                            decorationBox = { innerTextField ->
+                                Box {
+                                    if (draft.isBlank()) {
+                                        Text(
+                                            "和${character.name}说点什么…",
+                                            color = InkMuted,
+                                            fontSize = 13.sp,
+                                            lineHeight = 20.sp,
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            },
                         )
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                IconButton(
-                                    onClick = { picker.launch("image/*") },
-                                    enabled = character.modelSource != MODEL_SOURCE_LOCAL_MNN,
-                                ) {
-                                    Icon(Icons.Default.Image, contentDescription = "上传图片", tint = InkMuted)
-                                }
-                                IconButton(onClick = {
-                                    if (recording) { voice.recording = false; recording = false; voiceStatus = "正在识别…" }
-                                    else if (!voiceBusy) microphone.launch(Manifest.permission.RECORD_AUDIO)
-                                }, enabled = recording || !voiceBusy) {
-                                    Icon(
-                                        if (recording) Icons.Default.Stop else Icons.Default.Mic,
-                                        contentDescription = if (recording) "结束录音" else "语音输入",
-                                        tint = if (recording) MaterialTheme.colorScheme.error else InkMuted,
-                                    )
-                                }
-                            }
-                            Spacer(Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    val canSend = (draft.isNotBlank() || imageUri != null) &&
+                        !state.busy &&
+                        !state.historyBusy
+                    IconButton(
+                        onClick = {
                             if (state.busy) {
-                                Button(
-                                    onClick = onStop,
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                ) {
-                                    Icon(Icons.Default.Stop, contentDescription = null)
-                                    Text(" 停止")
-                                }
-                            } else {
-                                Button(
-                                    onClick = {
-                                        onSend(draft.trim(), imageUri)
-                                        draft = ""
-                                        imageUri = null
-                                    },
-                                    enabled = draft.isNotBlank() || imageUri != null,
-                                    shape = RoundedCornerShape(12.dp),
-                                ) {
-                                    Text("发送")
-                                    Spacer(Modifier.width(4.dp))
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.Send,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(17.dp),
-                                    )
-                                }
+                                onStop()
+                            } else if (canSend) {
+                                onSend(draft.trim(), imageUri)
+                                draft = ""
+                                imageUri = null
                             }
-                        }
+                        },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(
+                                when {
+                                    state.busy -> MaterialTheme.colorScheme.error
+                                    canSend -> Forest
+                                    else -> Hairline
+                                },
+                            ),
+                        enabled = state.busy || canSend,
+                    ) {
+                        Icon(
+                            if (state.busy) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send,
+                            contentDescription = if (state.busy) "停止生成" else "发送",
+                            tint = if (state.busy || canSend) Color.White else InkMuted,
+                            modifier = Modifier.size(20.dp),
+                        )
                     }
                 }
-                Text(
-                    voiceStatus ?: when {
-                        recording -> "录音中，点击停止后识别"
-                        voiceBusy -> "语音处理中…"
-                        character.modelSource == MODEL_SOURCE_LOCAL_MNN ->
-                            "文字在本机 MNN 模型运行 · 图片仅支持云端模式"
-                        else ->
-                            "文字和图片会发送给 ${if (state.cloudProvider == "opencode") "OpenCode Go" else "DeepSeek"} · 语音在手机处理"
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                    textAlign = TextAlign.Center,
-                    fontSize = 9.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
     }
@@ -1163,6 +1252,55 @@ private fun ChatScreen(
             },
         )
     }
+    if (showRollback) {
+        RollbackPickerSheet(
+            messages = userMessages,
+            onDismiss = { showRollback = false },
+            onSelect = { message ->
+                showRollback = false
+                pendingRollback = message
+            },
+        )
+    }
+    pendingRollback?.let { message ->
+        AlertDialog(
+            onDismissRequest = { pendingRollback = null },
+            shape = RoundedCornerShape(22.dp),
+            containerColor = Color(0xFFFDFBFF),
+            title = { Text("回退到这句话之前？") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "“${message.content.take(160)}${if (message.content.length > 160) "…" else ""}”",
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        "会删除这条发言及其后的全部聊天，并同步清理这段时间产生的记忆、关系状态和调试记录。所选文字会放回输入框。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingRollback = null
+                        onRollback(message.id) { restored ->
+                            draft = restored
+                            voiceStatus = null
+                            imageUri = null
+                        }
+                    },
+                ) {
+                    Text("确认回退", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRollback = null }) { Text("取消") }
+            },
+        )
+    }
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
@@ -1175,6 +1313,100 @@ private fun ChatScreen(
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } },
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RollbackPickerSheet(
+    messages: List<MessageEntity>,
+    onDismiss: () -> Unit,
+    onSelect: (MessageEntity) -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFFFDFBFF),
+        shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.72f)
+                .navigationBarsPadding()
+                .padding(horizontal = 18.dp),
+        ) {
+            Text("回退对话", fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "选择一句话，回到它发出之前。该消息及之后的内容会从聊天、记忆和状态中删除，所选文字会放回输入框。",
+                modifier = Modifier.padding(top = 5.dp, bottom = 12.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.sp,
+                lineHeight = 17.sp,
+            )
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 20.dp),
+            ) {
+                items(messages.asReversed(), key = { it.id }) { message ->
+                    Surface(
+                        onClick = { onSelect(message) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color.White,
+                        border = BorderStroke(1.dp, Hairline),
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(LilacMist),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Default.History,
+                                    contentDescription = null,
+                                    tint = Forest,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                            Spacer(Modifier.width(11.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    message.content
+                                        .replace(Regex("\\s+"), " ")
+                                        .trim()
+                                        .ifBlank { "（图片消息）" },
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    fontSize = 14.sp,
+                                    lineHeight = 20.sp,
+                                )
+                                Text(
+                                    SimpleDateFormat(
+                                        "M月d日 HH:mm",
+                                        Locale.CHINA,
+                                    ).format(Date(message.createdAt)),
+                                    modifier = Modifier.padding(top = 3.dp),
+                                    color = InkMuted,
+                                    fontSize = 9.sp,
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "回退到这条消息之前",
+                                tint = Forest,
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

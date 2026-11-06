@@ -49,11 +49,17 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE characterId=:characterId ORDER BY id DESC LIMIT :limit")
     suspend fun recent(characterId: String, limit: Int): List<MessageEntity>
 
+    @Query("SELECT COALESCE(MAX(id),0) FROM messages WHERE characterId=:characterId AND id<:messageId")
+    suspend fun maxIdBefore(characterId: String, messageId: Long): Long
+
     @Insert
     suspend fun insert(message: MessageEntity): Long
 
     @Query("DELETE FROM messages WHERE characterId=:characterId")
     suspend fun clear(characterId: String)
+
+    @Query("DELETE FROM messages WHERE characterId=:characterId AND id>=:messageId")
+    suspend fun deleteFrom(characterId: String, messageId: Long): Int
 
     @Query("SELECT COUNT(*) FROM messages WHERE characterId=:characterId")
     suspend fun count(characterId: String): Int
@@ -75,6 +81,9 @@ interface MemoryDao {
     @Query("SELECT * FROM memories WHERE characterId=:characterId ORDER BY id DESC LIMIT :limit")
     suspend fun recent(characterId: String, limit: Int): List<MemoryEntity>
 
+    @Query("SELECT * FROM memories WHERE characterId=:characterId ORDER BY id")
+    suspend fun allForCharacter(characterId: String): List<MemoryEntity>
+
     @Insert
     suspend fun insert(memory: MemoryEntity)
 
@@ -86,6 +95,9 @@ interface MemoryDao {
 
     @Query("DELETE FROM memories WHERE id=:id AND characterId=:characterId")
     suspend fun delete(id: Long, characterId: String)
+
+    @Query("DELETE FROM memories WHERE id=:id AND characterId=:characterId")
+    suspend fun deleteById(id: Long, characterId: String): Int
 }
 
 @Dao
@@ -190,6 +202,9 @@ interface StructuredMemoryDao {
 
     @Query("DELETE FROM structured_memories WHERE characterId=:characterId")
     suspend fun clear(characterId: String)
+
+    @Query("DELETE FROM structured_memories WHERE id=:id AND characterId=:characterId")
+    suspend fun deleteById(id: Long, characterId: String): Int
 }
 
 @Dao
@@ -308,6 +323,9 @@ interface StructuredMemoryJobDao {
 
     @Query("DELETE FROM structured_memory_jobs WHERE characterId=:characterId")
     suspend fun clear(characterId: String)
+
+    @Query("DELETE FROM structured_memory_jobs WHERE characterId=:characterId AND messageEnd>=:messageId")
+    suspend fun deleteFromMessage(characterId: String, messageId: Long): Int
 }
 
 @Dao
@@ -347,6 +365,12 @@ interface TurnTraceDao {
 
     @Query("DELETE FROM turn_traces WHERE characterId=:characterId")
     suspend fun clear(characterId: String)
+
+    @Query(
+        """DELETE FROM turn_traces WHERE characterId=:characterId
+           AND (COALESCE(userMessageId,0)>=:messageId OR COALESCE(assistantMessageId,0)>=:messageId)"""
+    )
+    suspend fun deleteFromMessage(characterId: String, messageId: Long): Int
 }
 
 @Dao
@@ -386,6 +410,15 @@ interface StructuredMemorySupportDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertCursor(cursor: StructuredMemoryCursorEntity)
+
+    @Query(
+        """DELETE FROM structured_memory_usage
+           WHERE characterId=:characterId AND jobId IN (
+               SELECT id FROM structured_memory_jobs
+               WHERE characterId=:characterId AND messageEnd>=:messageId
+           )"""
+    )
+    suspend fun deleteUsageFromMessage(characterId: String, messageId: Long): Int
 
     @Query("DELETE FROM structured_memory_tombstones WHERE characterId=:characterId")
     suspend fun clearTombstones(characterId: String)
@@ -428,6 +461,12 @@ interface InternalStateDao {
 
     @Query("DELETE FROM relationship_states WHERE characterId=:characterId")
     suspend fun clearRelationshipState(characterId: String)
+
+    @Query("SELECT * FROM state_transitions WHERE characterId=:characterId ORDER BY messageEnd,id")
+    suspend fun transitionsForCharacter(characterId: String): List<StateTransitionEntity>
+
+    @Query("DELETE FROM state_transitions WHERE characterId=:characterId AND messageEnd>=:messageId")
+    suspend fun deleteTransitionsFromMessage(characterId: String, messageId: Long): Int
 }
 
 @Database(

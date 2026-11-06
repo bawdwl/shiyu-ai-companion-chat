@@ -39,6 +39,7 @@ data class ShiyuUiState(
     val todayUsage: Int = 0,
     val streamingText: String = "",
     val busy: Boolean = false,
+    val historyBusy: Boolean = false,
     val avatarBusy: Boolean = false,
     val memoryBusy: Boolean = false,
     val avatarModelReady: Boolean = false,
@@ -250,6 +251,35 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 turnTraces = emptyList(),
                 status = "角色对话、记忆和状态已重置",
             )
+        }
+    }
+
+    fun rollbackToUserMessage(
+        messageId: Long,
+        onRestored: (String) -> Unit,
+    ) {
+        val character = _state.value.selected ?: return
+        if (_state.value.busy || _state.value.historyBusy) return
+        _state.value = _state.value.copy(
+            historyBusy = true,
+            status = "正在回退对话…",
+        )
+        viewModelScope.launch {
+            runCatching {
+                repository.rollbackToUserMessage(character.id, messageId)
+            }.onSuccess { restoredText ->
+                _state.value = _state.value.copy(
+                    historyBusy = false,
+                    streamingText = "",
+                    status = "对话已回退，所选发言已放回输入框",
+                )
+                onRestored(restoredText)
+            }.onFailure { error ->
+                _state.value = _state.value.copy(
+                    historyBusy = false,
+                    status = error.message ?: "回退对话失败",
+                )
+            }
         }
     }
 
