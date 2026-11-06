@@ -6,6 +6,7 @@ from uuid import uuid4
 
 
 MAX_WORLD_ENTRIES = 30
+MAX_GENERATED_WORLD_ENTRIES = 10
 LOCAL_MODEL_MODES = ('base', 'half', 'full', 'wukong', 'xucheng', 'haruhi')
 _CJK_TEXT = re.compile(r'[\u3400-\u9fff]')
 
@@ -354,6 +355,8 @@ def parse_generated_card(text, inspiration):
     card['fixed_facts'] = facts
     if not isinstance(card.get('worldbook'), list):
         card['worldbook'] = []
+    elif len(card['worldbook']) > MAX_GENERATED_WORLD_ENTRIES:
+        card['worldbook'] = card['worldbook'][:MAX_GENERATED_WORLD_ENTRIES]
     if not isinstance(card.get('example_dialogue'), list):
         card['example_dialogue'] = []
     card['source_notes'] = inspiration
@@ -376,22 +379,28 @@ allowed_knowledge, forbidden_knowledge, forbidden_terms, can_learn_from_user,
 allow_everyday_invention。
 固定身份必须尊重用户输入。历史人物要写清时代截止和时代外知识。
 角色可以创造普通日常细节，不能改变核心身份，也不能编造用户身份或经历。
-description 用100至200个中文字符完整说明角色身份和当前处境；
-personality 用80至220个中文字符写明性格、行为方式和矛盾点；
-speech_style 用60至180个中文字符写明语言节奏、用词和动作表达习惯；
-relationship 用40至160个中文字符说明双方关系、边界和当前距离。
-appearance 必须填写，用80至220个中文字符描述可见外貌，
+各字段按角色实际需要写完整、具体，以能支持稳定角色扮演为准；
+不要为了凑字数重复、堆砌标签或复述同一设定，系统会执行字段存储硬上限。
+description 说明角色身份和当前处境；personality 写明性格、行为方式和矛盾点；
+speech_style 写明语言节奏、用词和动作表达习惯；
+relationship 说明双方关系、边界和当前距离。
+appearance 必须填写，描述可见外貌，
 明确写出性别与外观年龄，并覆盖脸型、眼睛、发型与发色、身高或身形、
 服装、配饰和常见神态。即使用户没有写外貌，也要创作与身份、性别和时代一致的外貌。
 appearance_prompt 是仅供本地 Dream/SD1.5 生图使用的视觉提示词，
 重点写年龄、性别、脸型、眼睛、发型、服装、配饰和常见神态；
 必须以 1boy, male, solo、1girl, female, solo 或 1person, solo 开头；
-只写可见外貌和简单场景，控制在20至35个英文词，不写画质、镜头或艺术风格。
-worldbook 生成3条，每条包含 title、keywords、content、priority、enabled；
-内容围绕重要地点、职业、人际关系或关键经历，关键词必须具体且能在聊天中自然触发。
+只写可见外貌和简单场景，不写画质、镜头或艺术风格；
+生成后必须能压缩进77 Token的CLIP窗口。
+worldbook 条数由你根据角色复杂度判断，通常为2至10条，不要为了凑数重复主卡：
+普通日常角色用2至3条；有明显职业、组织、固定地点或关系网络的用4至6条；
+历史、架空世界观、复杂人际关系或多段关键经历的用6至10条。
+每条包含 title、keywords、content、priority、enabled；
+只补充按需触发的稳定设定，围绕重要地点、职业、人际关系或关键经历；
+关键词必须具体、彼此有区分，并能在聊天中自然触发。
 fixed_facts 最多6条；example_dialogue 最多2组，每条必须有完整用户输入和角色回复；
 若没有把握就返回空数组。
-greeting 是保存后立即发送给用户的第一条角色聊天消息，约100至300个汉字：
+greeting 是保存后立即发送给用户的第一条角色聊天消息：
 写清一个具体场景，由角色主动开口，最多用一到两处中文括号嵌入自然动作或神态，
 再留下一个能自然接话的剧情钩子。不要写“你好，我是……”资料介绍，
 不要列字段，不要加 Markdown 标题，不要默认输出内心独白、好感度或数值。
@@ -405,11 +414,14 @@ def build_enrichment_messages(card):
         '只返回JSON对象，字段为scenario、motivation、appearance、appearance_prompt、worldbook、example_dialogue。'
         'scenario是普通开场情境，motivation是人物自己的目标与顾虑，不是服务用户的口号。'
         'appearance必须是具体中文外貌；appearance_prompt必须是以1girl, female, solo、1boy, male, solo或1person, solo开头的英文生图提示词，包含年龄、发型、眼睛、服装和构图。'
-        'worldbook最多3条，每条title、keywords列表、content、priority整数；总内容不超过400字，'
-        '围绕具体地点、人际关系或职业细节，不重复主卡，补充均为虚构草稿。'
+        'worldbook返回完整列表，保留已有有效条目，并根据角色复杂度补到通常2至10条；'
+        '普通日常角色2至3条，有明显职业、固定地点或关系网络的4至6条，'
+        '复杂世界观或关键经历较多的6至10条。每条title、keywords列表、content、priority整数；'
+        '内容精炼但不遗漏关键信息，围绕具体地点、人际关系或职业细节，'
+        '不重复主卡，补充均为虚构草稿。'
         'example_dialogue给3组user和character：具体接话、自然分享、尊重结束。'
         '语气有差异，不用统一套话，不要每条末尾反问；不要擅自补玩家姓名、年龄、外貌等身份。'
-        '不能只填标签或角色名，回答应完整；全体输出约600字以内。')),
+        '不能只填标签或角色名，回答应完整。')),
         dict(role='user', content=json.dumps(card, ensure_ascii=False))]
 
 
@@ -438,6 +450,11 @@ def apply_enrichment(card, text):
     }
     if not fields:
         raise ValueError('人物补充内容为空')
+    if (
+        isinstance(fields.get('worldbook'), list)
+        and len(fields['worldbook']) > MAX_GENERATED_WORLD_ENTRIES
+    ):
+        fields['worldbook'] = fields['worldbook'][:MAX_GENERATED_WORLD_ENTRIES]
     result = normalize_card({**card, **fields}, generating=True)
     result['draft_notice'] = '两步生成的角色草稿；请检查作者创作前提与补充的情境、世界书和示例后保存。'
     return result
@@ -445,18 +462,18 @@ def apply_enrichment(card, text):
 
 def missing_generated_materials(card):
     missing = []
-    if len(str(card.get('description') or '').strip()) < 80:
+    if not str(card.get('description') or '').strip():
         missing.append('description')
-    if len(str(card.get('personality') or '').strip()) < 60:
+    if not str(card.get('personality') or '').strip():
         missing.append('personality')
-    if len(str(card.get('speech_style') or '').strip()) < 40:
+    if not str(card.get('speech_style') or '').strip():
         missing.append('speech_style')
-    if len(str(card.get('relationship') or '').strip()) < 30:
+    if not str(card.get('relationship') or '').strip():
         missing.append('relationship')
-    if len(str(card.get('appearance') or '').strip()) < 60:
+    if not str(card.get('appearance') or '').strip():
         missing.append('appearance')
     prompt = str(card.get('appearance_prompt') or '').strip()
-    if len(prompt.split()) < 12 or _CJK_TEXT.search(prompt):
+    if not prompt or _CJK_TEXT.search(prompt):
         missing.append('appearance_prompt')
     if len(card.get('worldbook') or []) < 2:
         missing.append('worldbook')
@@ -472,14 +489,18 @@ def build_material_repair_messages(card, inspiration):
                 '你是角色卡完整性修复器。根据角色草稿和作者灵感，只补齐缺失的 '
                 'description、personality、speech_style、relationship、'
                 'appearance、appearance_prompt 和 worldbook。'
-                'description 用100至200字说明身份与当前处境；personality 用80至220字，'
-                'speech_style 用60至180字，relationship 用40至160字。'
-                'appearance 必须是具体中文外貌，包括年龄感、脸型或五官、发型、服装和气质。'
+                '按角色实际需要写完整且具体，不要为凑字数重复或堆砌标签；'
+                'description说明身份与当前处境，personality说明性格与行为矛盾，'
+                'speech_style说明语言节奏和用词，relationship说明关系与边界。'
+                'appearance必须是具体中文外貌，包括年龄感、脸型或五官、发型、服装和气质。'
                 'appearance_prompt 必须是简洁英文，以 1girl, female, solo、'
                 '1boy, male, solo 或 1person, solo 开头，并包含年龄、发型、眼睛、'
-                '服装和肖像构图，控制在20至35个英文词；不要包含 Markdown、中文或解释。'
-                'worldbook 给 3 条具体的触发条目，每条包含 title、keywords、'
-                'content、priority、enabled；关键词必须能从日常聊天中自然命中。'
+                '服装和肖像构图；生成后必须能压缩进77 Token的CLIP窗口，'
+                '不要包含 Markdown、中文或解释。'
+                'worldbook 根据角色复杂度补到通常2至10条，每条包含 title、keywords、'
+                'content、priority、enabled；普通日常角色2至3条，有明显职业、固定地点'
+                '或关系网络的4至6条，复杂世界观或关键经历较多的6至10条。'
+                '关键词必须能从日常聊天中自然命中且彼此有区分。'
                 '只返回一个合法 JSON 对象，不要输出其他字段或说明。'
             ),
         },

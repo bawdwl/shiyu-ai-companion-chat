@@ -606,11 +606,11 @@ class ChatRepository(
                     "content",
                     "Create a detailed visual appearance profile from the supplied character. " +
                         "Return one JSON object only with string fields appearance_zh and " +
-                        "appearance_prompt. appearance_zh must be 80 to 220 Chinese characters " +
-                        "and explicitly include apparent gender, apparent age, face shape, eyes, " +
+                        "appearance_prompt. Write appearance_zh as completely as the character " +
+                        "requires, without padding, and explicitly include apparent gender, apparent age, face shape, eyes, " +
                         "hair, build, height when known, clothing, accessories, expression and " +
                         "one common setting. appearance_prompt must be one comma-separated English " +
-                        "SD1.5 tag line with 18 to 30 concise tags. $subjectRule Do not include " +
+                        "SD1.5 tag line that fits within 77 CLIP tokens. $subjectRule Do not include " +
                         "quality, camera or art-style tags. Never include contradictory gender " +
                         "words. Preserve distinctive details from the profile.",
                 ),
@@ -630,7 +630,7 @@ class ChatRepository(
         addUsage(usage.promptTokens + usage.completionTokens)
         val json = parseJsonObject(raw)
         val chinese = json.optString("appearance_zh").trim().take(700)
-        require(chinese.length >= 20) { "模型没有生成完整的中文外貌描述" }
+        require(chinese.isNotEmpty()) { "模型没有生成中文外貌描述" }
         return DreamAppearanceProfile(
             chinese = chinese,
             english = normalizeEnglishAppearancePrompt(json.optString("appearance_prompt")),
@@ -2021,15 +2021,21 @@ class ChatRepository(
             canLearnFromUser（布尔）, allowEverydayInvention（布尔）。
             固定身份必须尊重用户输入。历史人物要写清时代截止和时代外知识。
             角色可以创造普通日常细节，不能改变核心身份。
-            appearance 必须填写，用 80 到 220 个中文字符描述角色可见外貌，
+            各字段按角色实际需要写完整、具体，以能支持稳定角色扮演为准；
+            不要为了凑字数重复、堆砌标签或复述同一设定，系统会执行字段存储硬上限。
+            appearance 必须填写，描述角色可见外貌，
             明确写出性别与 apparent age，并覆盖脸型、眼睛、发型与发色、身高/身形、
             服装、配饰和常见神态；如果用户没有写外貌，可以创作与身份、性别和时代一致的视觉细节。
             appearancePrompt 是仅供本地 Dream/SD1.5 生图使用的视觉提示词，
             重点写年龄、性别、脸型、眼睛、发型、服装、配饰和常见神态；
             必须以 "1boy, male, solo,"、"1girl, female, solo," 或 "solo," 开头；
-            只写可见外貌和简单场景，控制在 20 到 35 个英文单词，
-            不要写画质、镜头或艺术风格，不要输出到聊天正文。
-            greeting 是保存角色后立即发送给用户的第一条角色聊天消息，约100到300字：
+            只写可见外貌和简单场景，不要写画质、镜头或艺术风格，
+            生成后必须能压缩进 77 Token 的 CLIP 窗口，不要输出到聊天正文。
+            worldbook 条数由你根据角色复杂度判断，通常为 2 至 10 条，不要为了凑数重复主卡：
+            普通日常角色用 2 至 3 条；有明显职业、组织、固定地点或关系网络的用 4 至 6 条；
+            历史、架空世界观、复杂人际关系或多段关键经历的用 6 至 10 条。
+            每条只补充按需触发的稳定设定，关键词必须具体、彼此有区分，并能在聊天中自然触发。
+            greeting 是保存角色后立即发送给用户的第一条角色聊天消息：
             写清一个具体场景，由角色主动开口，最多用一到两处中文括号嵌入自然动作或神态，
             再留下一个能自然接话的剧情钩子。不要写“你好，我是……”资料介绍，
             不要列字段，不要加 Markdown 标题，不要默认输出内心独白、好感度或数值。
@@ -2041,7 +2047,7 @@ class ChatRepository(
             opencodeClient.completeWithUsage(
                 key,
                 messages,
-                1200,
+                2400,
                 "shiyu-character-studio-${UUID.randomUUID()}",
                 json = true,
             ).first
@@ -2060,7 +2066,7 @@ class ChatRepository(
             personality = json.optString("personality").take(500),
             speechStyle = json.optString("speechStyle").take(500),
             relationship = json.optString("relationship").take(400),
-            appearance = json.optString("appearance").take(600),
+            appearance = json.optString("appearance").take(1200),
             appearancePrompt = normalizeOptionalAppearancePrompt(
                 json.optString("appearancePrompt"),
             ),
@@ -2070,7 +2076,13 @@ class ChatRepository(
             knowledgeCutoff = json.optString("knowledgeCutoff").take(120),
             forbiddenKnowledge = json.optString("forbiddenKnowledge").take(1200),
             forbiddenTerms = terms.joinToString(","),
-            worldbookJson = json.optJSONArray("worldbook")?.toString() ?: "[]",
+            worldbookJson = json.optJSONArray("worldbook")?.let { entries ->
+                JSONArray().also { limited ->
+                    for (index in 0 until minOf(entries.length(), 10)) {
+                        limited.put(entries.get(index))
+                    }
+                }.toString()
+            } ?: "[]",
             canLearnFromUser = json.optBoolean("canLearnFromUser", true),
             allowEverydayInvention = json.optBoolean("allowEverydayInvention", true),
             custom = true,

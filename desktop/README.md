@@ -34,11 +34,15 @@ python desktop/build_desktop.py
 输出：
 
 ```text
-release/windows/Shiyu-0.18.0-Windows-x64/
+release/windows/Shiyu-0.18.2-Windows-x64/
 ```
 
 采用 PyInstaller `onedir`，发布时必须分发整个目录或重新压缩该目录。不要只发送
-`Shiyu-0.18.0-Windows-x64.exe`。
+`Shiyu-0.18.2-Windows-x64.exe`。
 
 程序不会打入模型权重、API Key、SQLite 数据库或个人图片。Windows 10/11 需要
 Microsoft Edge WebView2 Runtime；新版 Windows 通常已自带。
+
+发布 EXE 是基础云端版，支持角色生成、聊天、世界书、长期记忆和云端图片输入。
+本地 Qwen/LoRA、MeinaMix、BGE、Whisper 与 CosyVoice 等完整能力需要运行
+PC 网页工程并单独安装环境和模型，不能通过基础 EXE 自动获得。

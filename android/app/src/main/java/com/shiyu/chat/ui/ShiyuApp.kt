@@ -2233,6 +2233,12 @@ private fun EditCharacterDialog(
                     minLines = 5,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Text(
+                    "生成数量由模型按角色复杂度决定，通常 2–10 条；每轮最多命中 4 条。",
+                    fontSize = 9.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
             }
             item {
                 Row(

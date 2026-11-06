@@ -8,7 +8,7 @@ Android Keystore 实现。云端模式直接调用所选大模型 API，不要�
 
 从
 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases)
-下载最新 APK。当前公开版为 `0.17.0`。
+下载最新 APK。当前公开版为 `0.18.2`。
 
 安装后进入设置，在“对话与模型”中填写 DeepSeek API Key 或 OpenCode Go API
 Key（测试入口）。

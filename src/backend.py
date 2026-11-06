@@ -573,7 +573,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
                 )
         app.state.structured_memory=None
 
-    app=FastAPI(title='Qwen3 IM Chat API',version='0.18.0',lifespan=lifespan)
+    app=FastAPI(title='Qwen3 IM Chat API',version='0.18.2',lifespan=lifespan)
 
     def is_loopback_client(request):
         host=request.client.host if request.client else ''
@@ -1647,7 +1647,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             raise HTTPException(409,'模型正在生成回答，请稍后再创建角色。')
         try:
             generation_messages=build_generation_messages(body.inspiration)
-            check_token_limits(selected,generation_messages,1800)
+            check_token_limits(selected,generation_messages,2400)
             session_id=f'character-generation-{uuid4()}'
             generation_overrides=provider_request_overrides(selected,session_id)
             if selected!='opencode':
@@ -1655,7 +1655,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             generated,generation_metrics=engine.reply(
                 generation_messages,
                 model_mode=local_mode_for_provider(selected,'base'),
-                max_new_tokens=1800,
+                max_new_tokens=2400,
                 generation_overrides=generation_overrides)
             record_provider_usage(selected,None,uuid4(),generation_metrics)
             card=parse_generated_card(generated,body.inspiration)
@@ -1663,14 +1663,14 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             if missing:
                 try:
                     repair_messages=build_material_repair_messages(card,body.inspiration)
-                    check_token_limits(selected,repair_messages,1200)
+                    check_token_limits(selected,repair_messages,1800)
                     repair_overrides=provider_request_overrides(selected,session_id)
                     if selected!='opencode':
                         repair_overrides['response_format']={'type':'json_object'}
                     repaired,repair_metrics=engine.reply(
                         repair_messages,
                         model_mode=local_mode_for_provider(selected,'base'),
-                        max_new_tokens=1200,
+                        max_new_tokens=1800,
                         generation_overrides=repair_overrides)
                     record_provider_usage(selected,None,uuid4(),repair_metrics)
                     card=apply_enrichment(card,repaired)
@@ -2176,7 +2176,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
         limits=token_limits()
         return JSONResponse(status_code=200 if ready else 503,content=dict(
             status='ready' if ready else 'model_unavailable',
-            app_version='0.18.0',
+            app_version='0.18.2',
             default_provider=default_provider,
             providers={
                 'deepseek':{'available':True,'configured':deepseek_ready,

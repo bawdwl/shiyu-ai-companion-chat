@@ -77,16 +77,20 @@ class CharacterCardTests(unittest.TestCase):
         self.assertIn('greeting 是保存后立即发送给用户的第一条角色聊天消息', system)
         self.assertIn('具体场景', system)
         self.assertIn('剧情钩子', system)
-        self.assertIn('appearance 必须填写，用80至220个中文字符', system)
+        self.assertIn('各字段按角色实际需要写完整、具体', system)
+        self.assertNotIn('100至200个中文字符', system)
+        self.assertNotIn('80至220个中文字符', system)
+        self.assertNotIn('约100至300个汉字', system)
         self.assertIn('1girl, female, solo', system)
-        self.assertIn('worldbook 生成3条', system)
+        self.assertIn('worldbook 条数由你根据角色复杂度判断', system)
+        self.assertIn('普通日常角色用2至3条', system)
+        self.assertIn('复杂人际关系或多段关键经历的用6至10条', system)
 
     def test_enrichment_can_fill_visual_fields_and_reports_missing_materials(self):
         incomplete = normalize_card({'name': '海音', 'description': '夜班主持人'})
         self.assertEqual(
             missing_generated_materials(incomplete),
             [
-                'description',
                 'personality',
                 'speech_style',
                 'relationship',
@@ -169,6 +173,25 @@ class CharacterCardTests(unittest.TestCase):
             normalize_card({'name': '山海', 'worldbook': [
                 {'title': str(i), 'keywords': ['词'], 'content': '条目'} for i in range(31)
             ]})
+
+    def test_generated_worldbook_is_capped_without_reducing_manual_capacity(self):
+        generated = json.dumps({
+            'name': '山海',
+            'worldbook': [
+                {'title': f'地点{i}', 'keywords': [f'关键词{i}'], 'content': f'条目{i}'}
+                for i in range(12)
+            ],
+        }, ensure_ascii=False)
+        card = parse_generated_card(generated, '山海世界')
+        self.assertEqual(len(card['worldbook']), 10)
+        manual = normalize_card({
+            'name': '山海',
+            'worldbook': [
+                {'title': f'地点{i}', 'keywords': [f'关键词{i}'], 'content': f'条目{i}'}
+                for i in range(12)
+            ],
+        })
+        self.assertEqual(len(manual['worldbook']), 12)
 
 
 if __name__ == '__main__':

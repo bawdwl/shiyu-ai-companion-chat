@@ -19,7 +19,7 @@ from pathlib import Path
 
 
 APP_NAME = "Shiyu"
-APP_VERSION = "0.18.0"
+APP_VERSION = "0.18.2"
 
 
 def application_root() -> Path:
@@ -54,13 +54,21 @@ for folder in (DATA, LOGS, MODELS, IMAGES):
     folder.mkdir(parents=True, exist_ok=True)
 
 LOG_FILE = LOGS / "desktop.log"
+log_handlers: list[logging.Handler] = []
+if sys.stderr is not None:
+    log_handlers.append(logging.StreamHandler())
+try:
+    log_handlers.append(logging.FileHandler(LOG_FILE, encoding="utf-8"))
+except OSError:
+    # A second instance or an antivirus scanner may briefly hold the log file.
+    # Never prevent the application window from starting because logging failed.
+    pass
+if not log_handlers:
+    log_handlers.append(logging.NullHandler())
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_FILE, encoding="utf-8"),
-        logging.StreamHandler(),
-    ],
+    handlers=log_handlers,
 )
 logger = logging.getLogger("shiyu.desktop")
 
@@ -176,7 +184,7 @@ def main() -> int:
         webview.start(
             gui="edgechromium",
             debug=False,
-            icon=str(ROOT / "web" / "brand-icon.png"),
+            icon=str(ROOT / "web" / "brand-icon.ico"),
         )
         return 0
     except Exception as exc:

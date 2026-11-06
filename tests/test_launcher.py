@@ -78,9 +78,8 @@ class LauncherTests(unittest.TestCase):
 
     def test_speech_provider_must_match_when_explicitly_requested(self):
         health=dict(status='ready',model_id='Qwen/Qwen3-1.7B',same_chat_memory_enabled=False,
-                    speech_provider='本地中文语音（MeloTTS，CPU；非GPT-SoVITS）')
-        with self.assertRaisesRegex(RuntimeError,'语音提供方'):
-            health['default_provider']='local'
+                    speech_provider='本地中文语音（MeloTTS，CPU；非GPT-SoVITS）',
+                    default_provider='local')
         with self.assertRaisesRegex(RuntimeError, '语音提供方'):
             launch_app.check_reusable(health,'local','qwen3-1.7b',same_chat_memory=False,speech_provider='profiles')
 
