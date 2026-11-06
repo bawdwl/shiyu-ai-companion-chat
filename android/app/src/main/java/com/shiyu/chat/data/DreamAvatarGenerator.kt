@@ -305,10 +305,14 @@ class DreamAvatarGenerator(private val context: Context) {
         }
         require(character.name.isNotBlank()) { "角色名称不能为空" }
         File(context.filesDir, DreamBackendService.BACKEND_ERROR_FILE).delete()
-        val generationSize = if (File(modelDirectory, "768.patch").isFile) {
-            768
-        } else {
-            512
+        val normalizedSettings = settings.normalized()
+        val generationSize = listOf(
+            normalizedSettings.resolution,
+            1024,
+            768,
+            512,
+        ).distinct().first { size ->
+            size == 512 || File(modelDirectory, "$size.patch").isFile
         }
         DreamBackendService.start(
             context,
@@ -318,7 +322,7 @@ class DreamAvatarGenerator(private val context: Context) {
         )
         return withContext(Dispatchers.IO) {
             awaitBackend()
-            val normalized = settings.normalized()
+            val normalized = normalizedSettings
             val prompt = compactCommaPromptToLimit(
                 normalized.buildPrompt(character),
                 CLIP_TOKEN_LIMIT,

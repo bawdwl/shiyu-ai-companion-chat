@@ -461,7 +461,7 @@ class ChatRepository(
         ).orEmpty()
         val positiveTemplate = if (
             savedTemplate.isBlank() ||
-            savedTemplate == LEGACY_DREAM_POSITIVE_TEMPLATE
+            savedTemplate in LEGACY_DREAM_POSITIVE_TEMPLATES
         ) {
             DreamGenerationSettings.DEFAULT_POSITIVE_TEMPLATE
         } else {
@@ -476,10 +476,11 @@ class ChatRepository(
             KEY_DREAM_NEGATIVE_PROMPT,
             DreamGenerationSettings.DEFAULT_NEGATIVE_PROMPT,
         ).orEmpty(),
-        steps = prefs.getInt(KEY_DREAM_STEPS, 25),
+        steps = prefs.getInt(KEY_DREAM_STEPS, 50),
         cfg = prefs.getFloat(KEY_DREAM_CFG, 7.0f),
         scheduler = prefs.getString(KEY_DREAM_SCHEDULER, "dpm_sde_karras").orEmpty(),
         seed = prefs.getLong(KEY_DREAM_SEED, 20261102L),
+        resolution = prefs.getInt(KEY_DREAM_RESOLUTION, 1024),
         ).normalized()
     }
 
@@ -492,6 +493,7 @@ class ChatRepository(
             .putFloat(KEY_DREAM_CFG, normalized.cfg)
             .putString(KEY_DREAM_SCHEDULER, normalized.scheduler)
             .putLong(KEY_DREAM_SEED, normalized.seed)
+            .putInt(KEY_DREAM_RESOLUTION, normalized.resolution)
             .apply()
     }
 
@@ -2700,8 +2702,14 @@ class ChatRepository(
         private const val KEY_DREAM_CFG = "dream_cfg"
         private const val KEY_DREAM_SCHEDULER = "dream_scheduler"
         private const val KEY_DREAM_SEED = "dream_seed"
-        private const val LEGACY_DREAM_POSITIVE_TEMPLATE =
-            "masterpiece, best quality, {appearance}, anime portrait, upper body"
+        private const val KEY_DREAM_RESOLUTION = "dream_resolution"
+        private val LEGACY_DREAM_POSITIVE_TEMPLATES = setOf(
+            "masterpiece, best quality, {appearance}, anime portrait, upper body",
+            "masterpiece, best quality, anime portrait, detailed expressive eyes, " +
+                "soft lighting, clean lineart, full body or three-quarter body, " +
+                "standing, vertical smartphone wallpaper, centered figure, " +
+                "face in the upper half, detailed outfit, {appearance}",
+        )
         private const val MEMORY_DAILY_TOKEN_LIMIT = 30_000
         private const val MEMORY_OUTPUT_TOKENS = 1_600
         private const val MEMORY_VERIFY_OUTPUT_TOKENS = 1_200

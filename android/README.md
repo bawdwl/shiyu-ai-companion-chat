@@ -1,6 +1,6 @@
 # 拾语 Android
 
-当前源码版本：`0.18.5 / versionCode 35`，Room schema 13，只提供一个完整安装包：
+当前源码版本：`0.18.6 / versionCode 36`，Room schema 13，只提供一个完整安装包：
 
 - `com.shiyu.chat`：内置本地语音识别、角色朗读、MNN 和图片生成入口。
 
@@ -23,7 +23,8 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 - 内置李白、宋知意、裴既明和萧承渊；删除顾清禾、江昭谌、许澄与旧实验角色。
 - API Key 使用 Android Keystore；聊天、记忆、图片和状态保存在本机。
 - 聊天页使用固定全屏角色背景、默认仅显示最新角色回复，并提供独立历史开关；键盘弹出时消息和输入栏上移。输入栏包含“（）”动作快捷插入，并可从菜单回退到任意一条用户发言之前。
-- 生成图片统一保存为 `1080×1920` 手机竖屏背景；角色头像从竖图上部裁切。Local Dream 优先使用模型内 `768.patch`，云端图片请求 `768×1344`，方形回退图使用中心裁切而不是拉伸。
+- 生成图片统一保存为 `1080×1920` 手机竖屏背景；角色头像从竖图上部裁切。Local Dream 使用所选分辨率的模型补丁，云端图片请求 `768×1344`，方形回退图使用中心裁切而不是拉伸。
+- Dream 默认优先使用 `1024.patch`、50 步、DPM++ 2M SDE Karras；设置页可切换 512/768/1024、5 种调度器与 Karras。
 
 ## 模型
 
@@ -71,7 +72,7 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 ## 当前验证
 
-- `0.18.5` 源码已通过 77 项 JVM 测试、Debug Lint 和 Debug APK 构建。
+- `0.18.6` 源码已通过 78 项 JVM 测试、Debug Lint 和 Debug APK 构建。
 - Debug Lint 为 0 errors、2 个既有 `android.media.ExifInterface` 警告。
 - 预编译 APK 仅作为 GitHub Release 附件分发，不提交到 Git：
   <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.0>

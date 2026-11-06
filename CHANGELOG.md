@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-11-06 — Android `0.18.5` immersive chat and artwork cropping
+## 2026-11-06 — Android `0.18.6` compact chat overlay and full image controls
 
 - Entering a chat now positions directly at the newest message without the previous animated scroll from the start of the conversation.
 - The full-screen character artwork now stays fixed at 100% opacity while the interactive layer avoids the software keyboard. The latest reply is anchored above the composer, so opening the keyboard moves the message but leaves the artwork in place.
@@ -10,6 +10,9 @@
 - Added “回退到之前的发言” from the chat overflow menu. Selecting any prior user message removes that turn and everything after it, including derived traces, structured/legacy memory, pending memory jobs, rolling summaries and later relationship-state transitions. The selected text is returned to the composer for editing.
 - Character artwork is now normalized to a 1080×1920 phone wallpaper. Local Dream uses its 768.patch when available, cloud generation requests 768×1344, and square fallback images are centre-cropped rather than stretched. Character avatars use the upper part of the portrait so the face remains visible.
 - Each character now stores separate background and avatar image paths. Generated phone artwork opens an avatar-crop review; user-imported photos use a guided 9:16 background crop followed by a 1:1 avatar crop with position and zoom controls.
+- The latest-message card is shorter, removes the duplicated character name and “最新回复” label, and moves playback to a compact icon at its upper-left corner. The top navigation is a translucent overlay with a 56dp row so more of the character artwork remains visible.
+- Local Dream defaults now use 1024×1024 when the model contains its 1024 patch, 50 steps, CFG 7, and DPM++ 2M SDE with Karras. Settings expose 512/768/1024 resolution, all five scheduler families, and the supported Karras variant; LCM correctly disables Karras.
+- The default positive preset is reduced to `anime illustration, full body, vertical composition, {appearance}` so more of the 77-token CLIP window remains available for the character's actual appearance.
 - Room schema is now 13 with a lossless 12→13 migration. Added deterministic rollback, artwork-crop and action-bracket tests. Android JVM tests and the debug APK build pass.
 
 ## 2026-11-06 — `v0.18.0` republish with Windows 0.18.0 / Android 0.18.3

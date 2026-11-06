@@ -32,9 +32,11 @@ class AvatarPromptPolicyTest {
             ),
         )
 
-        assertTrue(prompt.startsWith("masterpiece, best quality, anime portrait"))
-        assertTrue(prompt.contains("vertical smartphone wallpaper"))
-        assertTrue(prompt.contains("centered figure, face in the upper half"))
+        assertTrue(
+            prompt.startsWith(
+                "anime illustration, full body, vertical composition",
+            ),
+        )
         assertTrue(prompt.contains("1girl, female, solo"))
         assertTrue(prompt.contains("long black hair"))
         assertFalse(prompt.contains("黑色长发"))
@@ -74,10 +76,22 @@ class AvatarPromptPolicyTest {
             steps = 99,
             cfg = 0.2f,
             scheduler = "not-a-scheduler",
+            resolution = 999,
         ).normalized()
 
         org.junit.Assert.assertEquals(50, normalized.steps)
         org.junit.Assert.assertEquals(1.0f, normalized.cfg, 0.001f)
         org.junit.Assert.assertEquals("dpm_sde_karras", normalized.scheduler)
+        org.junit.Assert.assertEquals(1024, normalized.resolution)
+    }
+
+    @Test
+    fun lcmSchedulerIsAccepted() {
+        val normalized = DreamGenerationSettings(
+            steps = 12,
+            scheduler = "lcm",
+        ).normalized()
+
+        org.junit.Assert.assertEquals("lcm", normalized.scheduler)
     }
 }

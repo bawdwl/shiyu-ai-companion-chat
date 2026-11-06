@@ -80,6 +80,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -968,27 +969,28 @@ private fun ChatScreen(
                 .imePadding(),
         ) {
         Surface(
-            color = Color.White.copy(alpha = 0.9f),
-            shadowElevation = 1.dp,
+            color = Color.Black.copy(alpha = 0.30f),
+            shadowElevation = 0.dp,
         ) {
             Row(
-                Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 8.dp),
+                Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "返回",
-                        tint = DeepForest,
+                        tint = Color.White,
                     )
                 }
-                CharacterBadge(character, 42.dp)
-                Spacer(Modifier.width(10.dp))
+                CharacterBadge(character, 38.dp)
+                Spacer(Modifier.width(9.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         character.name,
+                        color = Color.White,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 17.sp,
+                        fontSize = 16.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -1000,13 +1002,13 @@ private fun ChatScreen(
                             Modifier
                                 .size(5.dp)
                                 .clip(CircleShape)
-                                .background(Forest),
+                                .background(Color(0xFF77D6A0)),
                         )
                         Text(
                             "${character.tag.ifBlank { "AI 角色" }} · ${
                                 if (character.modelSource == MODEL_SOURCE_LOCAL_MNN) "本地 MNN" else "云端 API"
                             } · 唯一对话",
-                            color = InkMuted,
+                            color = Color.White.copy(alpha = 0.72f),
                             fontSize = 9.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -1014,17 +1016,32 @@ private fun ChatScreen(
                     }
                 }
                 IconButton(onClick = onMemory) {
-                    Icon(Icons.Default.Memory, contentDescription = "记忆", tint = Forest)
-                }
-                IconButton(onClick = onEdit) {
-                    Icon(Icons.Default.Edit, contentDescription = "编辑角色", tint = Forest)
+                    Icon(
+                        Icons.Default.Memory,
+                        contentDescription = "长期记忆",
+                        tint = Color.White,
+                    )
                 }
                 var menu by remember { mutableStateOf(false) }
                 Box {
                     IconButton(onClick = { menu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = "设置与更多",
+                            tint = Color.White,
+                        )
                     }
                     androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("编辑角色档案") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Edit, contentDescription = null)
+                            },
+                            onClick = {
+                                menu = false
+                                onEdit()
+                            },
+                        )
                         androidx.compose.material3.DropdownMenuItem(
                             text = { Text("调试 Trace") },
                             leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
@@ -1074,7 +1091,7 @@ private fun ChatScreen(
                 }
             }
         }
-        HorizontalDivider(color = Hairline)
+        HorizontalDivider(color = Color.White.copy(alpha = 0.14f))
         Box(Modifier.weight(1f)) {
             if (state.messages.isEmpty() && state.streamingText.isEmpty()) {
                 Column(
@@ -1102,7 +1119,6 @@ private fun ChatScreen(
             } else if (!historyVisible) {
                 latestRoleMessage?.let { message ->
                     LatestRoleMessage(
-                        character = character,
                         message = message,
                         playing = { playingId == message.id },
                         onPlay = { playMessage(message) },
@@ -1456,7 +1472,6 @@ private fun ChatScreen(
 
 @Composable
 private fun LatestRoleMessage(
-    character: CharacterEntity,
     message: MessageEntity,
     playing: () -> Boolean,
     onPlay: () -> Unit,
@@ -1464,49 +1479,37 @@ private fun LatestRoleMessage(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         color = Color.White.copy(alpha = 0.94f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.72f)),
-        shadowElevation = 6.dp,
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.66f)),
+        shadowElevation = 4.dp,
     ) {
-        Column(Modifier.padding(horizontal = 17.dp, vertical = 15.dp)) {
-            Text(
-                character.name,
-                color = DeepForest,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.height(7.dp))
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            IconButton(
+                onClick = onPlay,
+                modifier = Modifier.size(38.dp),
+                enabled = message.id > 0 && message.content.isNotBlank(),
+            ) {
+                Icon(
+                    if (playing()) Icons.Default.Stop else Icons.Default.PlayArrow,
+                    contentDescription = if (playing()) "停止朗读" else "播放角色语音",
+                    tint = if (message.id > 0) Forest else InkMuted,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Spacer(Modifier.width(7.dp))
             Text(
                 naturalMessageText(message.content, message.displayJson),
+                modifier = Modifier.weight(1f).padding(top = 2.dp),
                 color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 15.sp,
-                lineHeight = 23.sp,
-                maxLines = 12,
+                fontSize = 14.sp,
+                lineHeight = 21.sp,
+                maxLines = 8,
                 overflow = TextOverflow.Ellipsis,
             )
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "最新回复",
-                    color = InkMuted,
-                    fontSize = 9.sp,
-                )
-                Spacer(Modifier.weight(1f))
-                if (message.id > 0 && message.content.isNotBlank()) {
-                    TextButton(onClick = onPlay) {
-                        Icon(
-                            if (playing()) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(if (playing()) "停止" else "朗读", fontSize = 10.sp)
-                    }
-                }
-            }
         }
     }
 }
@@ -2000,6 +2003,10 @@ private fun SettingsDialog(
     var dreamScheduler by remember(state.dreamGenerationSettings) {
         mutableStateOf(state.dreamGenerationSettings.scheduler)
     }
+    var dreamResolution by remember(state.dreamGenerationSettings) {
+        mutableStateOf(state.dreamGenerationSettings.resolution.toString())
+    }
+    val dreamSchedulerBase = dreamScheduler.removeSuffix("_karras")
     var requestLimit by remember(state.limits) { mutableStateOf(state.limits.requestTokens.toString()) }
     var dailyLimit by remember(state.limits) { mutableStateOf(state.limits.dailyTokens.toString()) }
     var settingsPage by remember { mutableIntStateOf(0) }
@@ -2299,11 +2306,37 @@ private fun SettingsDialog(
                         Text("删除本地生图模型", color = MaterialTheme.colorScheme.error)
                     }
                 }
+                Text("分辨率", fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("512" to "512×512", "768" to "768×768", "1024" to "1024×1024")
+                        .forEach { (value, label) ->
+                            DreamSchedulerChoice(
+                                label = label,
+                                value = value,
+                                selected = dreamResolution,
+                                onSelect = { dreamResolution = it },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                }
+                Text(
+                    "1024×1024 需要模型包内存在 1024.patch；缺失时自动回退到 768。",
+                    fontSize = 9.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = dreamSteps,
-                        onValueChange = { dreamSteps = it.filter(Char::isDigit).take(2) },
-                        label = { Text("步数") },
+                        onValueChange = {
+                            dreamSteps = it.filter(Char::isDigit)
+                                .take(2)
+                                .takeIf(String::isNotEmpty)
+                                ?.toIntOrNull()
+                                ?.coerceAtMost(50)
+                                ?.toString()
+                                .orEmpty()
+                        },
+                        label = { Text("步数（1–50）") },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
@@ -2325,27 +2358,109 @@ private fun SettingsDialog(
                 Text("采样器", fontSize = 11.sp, fontWeight = FontWeight.Medium)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     DreamSchedulerChoice(
-                        label = "SDE Karras",
-                        value = "dpm_sde_karras",
-                        selected = dreamScheduler,
-                        onSelect = { dreamScheduler = it },
+                        label = "DPM++ 2M",
+                        value = "dpm",
+                        selected = dreamSchedulerBase,
+                        onSelect = {
+                            dreamScheduler = if (
+                                dreamScheduler.endsWith("_karras")
+                            ) {
+                                "${it}_karras"
+                            } else {
+                                it
+                            }
+                        },
                         modifier = Modifier.weight(1f),
                     )
                     DreamSchedulerChoice(
-                        label = "2M Karras",
-                        value = "dpm_karras",
-                        selected = dreamScheduler,
-                        onSelect = { dreamScheduler = it },
+                        label = "DPM++ 2M SDE",
+                        value = "dpm_sde",
+                        selected = dreamSchedulerBase,
+                        onSelect = {
+                            dreamScheduler = if (
+                                dreamScheduler.endsWith("_karras")
+                            ) {
+                                "${it}_karras"
+                            } else {
+                                it
+                            }
+                        },
                         modifier = Modifier.weight(1f),
                     )
                     DreamSchedulerChoice(
                         label = "Euler A",
-                        value = "euler_a_karras",
-                        selected = dreamScheduler,
-                        onSelect = { dreamScheduler = it },
+                        value = "euler_a",
+                        selected = dreamSchedulerBase,
+                        onSelect = {
+                            dreamScheduler = if (
+                                dreamScheduler.endsWith("_karras")
+                            ) {
+                                "${it}_karras"
+                            } else {
+                                it
+                            }
+                        },
                         modifier = Modifier.weight(1f),
                     )
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    DreamSchedulerChoice(
+                        label = "Euler",
+                        value = "euler",
+                        selected = dreamSchedulerBase,
+                        onSelect = {
+                            dreamScheduler = if (
+                                dreamScheduler.endsWith("_karras")
+                            ) {
+                                "${it}_karras"
+                            } else {
+                                it
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    DreamSchedulerChoice(
+                        label = "LCM",
+                        value = "lcm",
+                        selected = dreamSchedulerBase,
+                        onSelect = { dreamScheduler = it },
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.weight(1f))
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Karras",
+                        fontSize = 11.sp,
+                        color = if (dreamScheduler == "lcm") {
+                            InkMuted
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Switch(
+                        checked = dreamScheduler.endsWith("_karras"),
+                        enabled = dreamScheduler != "lcm",
+                        onCheckedChange = { enabled ->
+                            val base = dreamScheduler.removeSuffix("_karras")
+                            dreamScheduler = if (enabled) {
+                                "${base}_karras"
+                            } else {
+                                base
+                            }
+                        },
+                    )
+                }
+                Text(
+                    "调度器来自 Local Dream；Karras 是时间步变体，LCM 不支持 Karras。",
+                    fontSize = 9.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 OutlinedTextField(
                     value = dreamPositive,
                     onValueChange = { dreamPositive = it.take(1_800) },
@@ -2392,6 +2507,7 @@ private fun SettingsDialog(
                         cfg = dreamCfg.toFloatOrNull() ?: 7.0f,
                         scheduler = dreamScheduler,
                         seed = dreamSeed.toLongOrNull() ?: 20261102L,
+                        resolution = dreamResolution.toIntOrNull() ?: 1024,
                     ),
                 )
                 onSaveLimits(requestLimit.toIntOrNull() ?: 12_000, dailyLimit.toIntOrNull() ?: 200_000)
