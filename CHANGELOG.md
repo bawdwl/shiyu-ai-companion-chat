@@ -12,7 +12,8 @@
 - Each character now stores separate background and avatar image paths. Generated phone artwork opens an avatar-crop review; user-imported photos use a guided 9:16 background crop followed by a 1:1 avatar crop with position and zoom controls.
 - The latest-message card is shorter, removes the duplicated character name and “最新回复” label, and moves playback to a compact icon at its upper-left corner. The top navigation is a translucent overlay with a 56dp row so more of the character artwork remains visible.
 - Local Dream defaults now use 1024×1024 when the model contains its 1024 patch, 50 steps, CFG 7, and DPM++ 2M SDE with Karras. Settings expose 512/768/1024 resolution, all five scheduler families, and the supported Karras variant; LCM correctly disables Karras.
-- The default positive preset is reduced to `anime illustration, full body, vertical composition, {appearance}` so more of the 77-token CLIP window remains available for the character's actual appearance.
+- The default positive preset is reduced to `masterpiece, best quality, anime illustration, three-quarter upper body, {appearance}` so most of the 77-token CLIP window remains available for the character's actual appearance.
+- New characters now request 140–320 Chinese characters of distinctive visual detail and 30–50 English appearance tags. The home cards no longer overlay role tags or cloud/local model badges, and the chat composer no longer shows a name-based placeholder.
 - Room schema is now 13 with a lossless 12→13 migration. Added deterministic rollback, artwork-crop and action-bracket tests. Android JVM tests and the debug APK build pass.
 
 ## 2026-11-06 — `v0.18.0` republish with Windows 0.18.0 / Android 0.18.3

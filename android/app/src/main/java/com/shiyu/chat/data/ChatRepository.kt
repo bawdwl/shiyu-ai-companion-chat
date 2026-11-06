@@ -652,11 +652,14 @@ class ChatRepository(
                     "content",
                     "Create a detailed visual appearance profile from the supplied character. " +
                         "Return one JSON object only with string fields appearance_zh and " +
-                        "appearance_prompt. appearance_zh must be 80 to 220 Chinese characters " +
-                        "and explicitly include apparent gender, apparent age, face shape, eyes, " +
-                        "hair, build, height when known, clothing, accessories, expression and " +
-                        "one common setting. appearance_prompt must be one comma-separated English " +
-                        "SD1.5 tag line with 18 to 30 concise tags. $subjectRule Do not include " +
+                        "appearance_prompt. appearance_zh must be 140 to 320 Chinese characters " +
+                        "and explicitly include apparent gender, apparent age, face shape, " +
+                        "eyebrows, eyes, nose, lips, skin tone, hair style and color, build, " +
+                        "height when known, clothing cut/color/material, accessories, expression, " +
+                        "habitual pose and one common setting. Highlight distinctive visual traits. " +
+                        "appearance_prompt must be one comma-separated English SD1.5 tag line " +
+                        "with 30 to 50 concise tags translated faithfully from appearance_zh. " +
+                        "$subjectRule Do not include " +
                         "quality, camera or art-style tags. Never include contradictory gender " +
                         "words. Preserve distinctive details from the profile.",
                 ),
@@ -666,17 +669,17 @@ class ChatRepository(
             opencodeClient.completeWithUsage(
                 key,
                 messages,
-                420,
+                700,
                 "shiyu-avatar-prompt-${character.id}-${UUID.randomUUID()}",
                 json = true,
             )
         } else {
-            deepseekClient.completeWithUsage(key, messages, 420, json = true)
+            deepseekClient.completeWithUsage(key, messages, 700, json = true)
         }
         addUsage(usage.promptTokens + usage.completionTokens)
         val json = parseJsonObject(raw)
         val chinese = json.optString("appearance_zh").trim().take(700)
-        require(chinese.length >= 20) { "模型没有生成完整的中文外貌描述" }
+        require(chinese.length >= 80) { "模型没有生成完整的中文外貌描述" }
         return DreamAppearanceProfile(
             chinese = chinese,
             english = normalizeEnglishAppearancePrompt(json.optString("appearance_prompt")),
@@ -2704,7 +2707,13 @@ class ChatRepository(
         private const val KEY_DREAM_SEED = "dream_seed"
         private const val KEY_DREAM_RESOLUTION = "dream_resolution"
         private val LEGACY_DREAM_POSITIVE_TEMPLATES = setOf(
+            "masterpiece, best quality, anime illustration, {appearance}",
+            "anime illustration, {appearance}",
+            "anime illustration, full body, vertical composition, {appearance}",
             "masterpiece, best quality, {appearance}, anime portrait, upper body",
+            "masterpiece, best quality, anime portrait, detailed expressive eyes, " +
+                "soft lighting, clean lineart, upper body, facing viewer, " +
+                "centered composition, {appearance}",
             "masterpiece, best quality, anime portrait, detailed expressive eyes, " +
                 "soft lighting, clean lineart, full body or three-quarter body, " +
                 "standing, vertical smartphone wallpaper, centered figure, " +

@@ -725,35 +725,6 @@ private fun CharacterCard(
                     ),
             ) {
             }
-            Surface(
-                modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
-                shape = RoundedCornerShape(8.dp),
-                color = Color.White.copy(alpha = 0.9f),
-            ) {
-                Text(
-                    character.tag.ifBlank { "原创角色" },
-                    Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                    color = Color(0xFF4E3A86),
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Surface(
-                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
-                shape = RoundedCornerShape(8.dp),
-                color = Color(0xFF2E2344).copy(alpha = 0.62f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-            ) {
-                Text(
-                    if (character.modelSource == MODEL_SOURCE_LOCAL_MNN) "本地 MNN" else "云端对话",
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                    color = Color.White.copy(alpha = 0.9f),
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
             Column(
                 Modifier
                     .align(Alignment.BottomStart)
@@ -1305,17 +1276,7 @@ private fun ChatScreen(
                                 }
                             }),
                             decorationBox = { innerTextField ->
-                                Box {
-                                    if (draft.text.isBlank()) {
-                                        Text(
-                                            "和${character.name}说点什么…",
-                                            color = InkMuted,
-                                            fontSize = 13.sp,
-                                            lineHeight = 20.sp,
-                                        )
-                                    }
-                                    innerTextField()
-                                }
+                                innerTextField()
                             },
                         )
                     }
@@ -2324,6 +2285,11 @@ private fun SettingsDialog(
                     fontSize = 9.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Text(
+                    "SD1.5 QNN 先按方形画布生成，保存前自动转换为 1080×1920 手机竖屏背景；生成后只需调整头像裁剪。",
+                    fontSize = 9.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = dreamSteps,
@@ -2842,7 +2808,7 @@ private fun EditCharacterDialog(
                 )
                 Text(
                     "留空时使用上面的中文外貌描述；填写后会优先用于 Dream/SD1.5。" +
-                        "建议英文不超过 35 个单词，合并模板后需在 77 Token 内。",
+                        "建议写 30–50 个英文视觉标签；超过 77 Token 时会从末尾压缩。",
                     fontSize = 9.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),

@@ -25,6 +25,7 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 - 聊天页使用固定全屏角色背景、默认仅显示最新角色回复，并提供独立历史开关；键盘弹出时消息和输入栏上移。输入栏包含“（）”动作快捷插入，并可从菜单回退到任意一条用户发言之前。
 - 生成图片统一保存为 `1080×1920` 手机竖屏背景；角色头像从竖图上部裁切。Local Dream 使用所选分辨率的模型补丁，云端图片请求 `768×1344`，方形回退图使用中心裁切而不是拉伸。
 - Dream 默认优先使用 `1024.patch`、50 步、DPM++ 2M SDE Karras；设置页可切换 512/768/1024、5 种调度器与 Karras。
+- 默认正面模板仅保留 `masterpiece, best quality, anime illustration, three-quarter upper body, {appearance}`；新角色要求更详细的中文外貌和 30–50 个英文视觉标签。
 
 ## 模型
 

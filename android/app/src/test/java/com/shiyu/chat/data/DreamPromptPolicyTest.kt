@@ -98,7 +98,8 @@ class DreamPromptPolicyTest {
 
         assertTrue(
             prompt.startsWith(
-                "anime illustration, full body, vertical composition",
+                "masterpiece, best quality, anime illustration, " +
+                    "three-quarter upper body",
             ),
         )
         assertTrue(prompt.contains("1boy, male, solo"))

@@ -6,12 +6,19 @@ import org.junit.Test
 
 class CharacterGenerationPolicyTest {
     @Test
-    fun promptMatchesAcceptedCharacterStudioFlow() {
-        assertEquals(1323, CharacterGenerationPolicy.SYSTEM_PROMPT.length)
-        assertEquals(510, CharacterGenerationPolicy.MATERIAL_REPAIR_PROMPT.length)
+    fun promptRequestsDetailedDistinctiveAppearance() {
         assertTrue(CharacterGenerationPolicy.SYSTEM_PROMPT.contains("worldbook 生成3条"))
         assertTrue(CharacterGenerationPolicy.SYSTEM_PROMPT.contains("description 用100至200个中文字符"))
-        assertTrue(CharacterGenerationPolicy.SYSTEM_PROMPT.contains("appearance 必须填写，用80至220个中文字符"))
+        assertTrue(
+            CharacterGenerationPolicy.SYSTEM_PROMPT.contains(
+                "appearance 必须填写，用140至320个中文字符",
+            ),
+        )
+        assertTrue(
+            CharacterGenerationPolicy.MATERIAL_REPAIR_PROMPT.contains(
+                "30至50个逗号分隔的英文视觉标签",
+            ),
+        )
         assertTrue(CharacterGenerationPolicy.MATERIAL_REPAIR_PROMPT.contains("worldbook 给 3 条"))
     }
 
@@ -44,8 +51,12 @@ class CharacterGenerationPolicyTest {
             personality = "性".repeat(80),
             speechStyle = "语".repeat(60),
             relationship = "关".repeat(40),
-            appearance = "貌".repeat(80),
-            appearancePrompt = "1boy male solo black hair calm eyes dark suit portrait centered indoor",
+            appearance = "貌".repeat(130),
+            appearancePrompt =
+                "1boy male solo twenty six year old angular face narrow black eyes " +
+                    "straight brows high nose thin lips fair skin short black hair " +
+                    "tall broad shoulders dark charcoal suit silver tie watch " +
+                    "calm expression candlelit study",
             worldbookJson = "[{},{}]",
         )
         assertTrue(CharacterGenerationPolicy.missingMaterials(complete).isEmpty())
