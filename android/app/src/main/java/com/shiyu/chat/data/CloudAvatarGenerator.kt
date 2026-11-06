@@ -33,14 +33,22 @@ class CloudAvatarGenerator(private val context: Context) {
             character.era,
         )
             .filter(String::isNotBlank).joinToString("；").take(600)
-        val prompt = "请依据以下角色资料画一张单人彩色动漫人物头像，半身或头肩构图，" +
-            "画面干净、五官清晰，不含文字或水印。角色名：${character.name.take(60)}。角色资料：$description"
+        val prompt = "请依据以下角色资料画一张适合手机全屏背景的竖版单人角色插画，" +
+            "完整人物或大部分身体入镜，站立姿态，人物居中，脸部位于画面上半部分，" +
+            "背景与角色故事一致，画面干净、五官清晰，不含文字或水印。" +
+            "角色名：${character.name.take(60)}。角色资料：$description"
         val payload = JSONObject()
             .put("model", "qwen-image-2.0")
             .put("input", JSONObject().put("messages", JSONArray().put(
                 JSONObject().put("role", "user").put("content", JSONArray().put(JSONObject().put("text", prompt)))
             )))
-            .put("parameters", JSONObject().put("size", "1024*1024").put("n", 1).put("prompt_extend", true))
+            .put(
+                "parameters",
+                JSONObject()
+                    .put("size", "768*1344")
+                    .put("n", 1)
+                    .put("prompt_extend", true),
+            )
         val request = Request.Builder()
             .url("https://maas.qianwenaiapi.com/api/v1/services/aigc/multimodal-generation/generation")
             .header("Authorization", "Bearer $apiKey")
@@ -78,6 +86,7 @@ class CloudAvatarGenerator(private val context: Context) {
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
         require(options.outWidth in 1..4096 && options.outHeight in 1..4096) { "图片已生成，但格式无效；请勿重复点击以免再次计费" }
         val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: error("图片已生成，但解析失败；请勿重复点击以免再次计费")
+        val portrait = CharacterArtworkPolicy.toPortrait(bitmap)
         val directory = File(context.filesDir, "character-avatars").apply { mkdirs() }
         val safeId = character.id.replace(Regex("[^A-Za-z0-9._-]"), "_")
         val output = File(directory, "$safeId-cloud.webp")
@@ -88,9 +97,13 @@ class CloudAvatarGenerator(private val context: Context) {
             } else {
                 Bitmap.CompressFormat.WEBP
             }
-            temporary.outputStream().buffered().use { check(bitmap.compress(format, 90, it)) }
+            temporary.outputStream().buffered().use { check(portrait.compress(format, 92, it)) }
             check(temporary.renameTo(output)) { "图片已生成，但保存失败；请勿重复点击以免再次计费" }
-        } finally { temporary.delete(); bitmap.recycle() }
+        } finally {
+            temporary.delete()
+            portrait.recycle()
+            bitmap.recycle()
+        }
         output.absolutePath
     }
 

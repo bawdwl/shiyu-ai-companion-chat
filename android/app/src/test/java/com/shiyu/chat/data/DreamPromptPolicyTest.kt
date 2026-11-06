@@ -97,6 +97,8 @@ class DreamPromptPolicyTest {
         val prompt = DreamGenerationSettings().buildPrompt(male)
 
         assertTrue(prompt.startsWith("masterpiece, best quality, anime portrait"))
-        assertTrue(prompt.contains("centered composition, 1boy, male, solo"))
+        assertTrue(prompt.contains("vertical smartphone wallpaper"))
+        assertTrue(prompt.contains("centered figure, face in the upper half"))
+        assertTrue(prompt.contains("1boy, male, solo"))
     }
 }

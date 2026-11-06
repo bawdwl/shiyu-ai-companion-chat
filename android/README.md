@@ -22,7 +22,8 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 - 设置中按设备自动选择并下载 MeinaMix V12，显示进度、校验大小与 SHA-256。
 - 内置李白、宋知意、裴既明和萧承渊；删除顾清禾、江昭谌、许澄与旧实验角色。
 - API Key 使用 Android Keystore；聊天、记忆、图片和状态保存在本机。
-- 聊天页直接定位最新消息，使用紧凑输入栏和整页键盘避让；可从菜单回退到任意一条用户发言之前，并清理后续派生记忆、Trace、后台任务和关系状态。
+- 聊天页使用固定全屏角色背景、默认仅显示最新角色回复，并提供独立历史开关；键盘弹出时消息和输入栏上移。输入栏包含“（）”动作快捷插入，并可从菜单回退到任意一条用户发言之前。
+- 生成图片统一保存为 `1080×1920` 手机竖屏背景；角色头像从竖图上部裁切。Local Dream 优先使用模型内 `768.patch`，云端图片请求 `768×1344`，方形回退图使用中心裁切而不是拉伸。
 
 ## 模型
 
@@ -70,7 +71,7 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 ## 当前验证
 
-- `0.18.4` 源码已通过 71 项 JVM 测试、Debug Lint 和 Debug APK 构建。
+- `0.18.4` 源码已通过 76 项 JVM 测试、Debug Lint 和 Debug APK 构建。
 - Debug Lint 为 0 errors、1 个既有 `android.media.ExifInterface` 警告。
 - 预编译 APK 仅作为 GitHub Release 附件分发，不提交到 Git：
   <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.0>

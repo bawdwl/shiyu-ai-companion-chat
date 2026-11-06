@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
+import android.os.Build
 import android.provider.OpenableColumns
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -119,23 +120,8 @@ class DreamAvatarGenerator(private val context: Context) {
                 if (it !== decoded) decoded.recycle()
             }
         }
-        val side = minOf(oriented.width, oriented.height)
-        val cropped = Bitmap.createBitmap(
-            oriented,
-            (oriented.width - side) / 2,
-            (oriented.height - side) / 2,
-            side,
-            side,
-        )
-        val outputBitmap = if (side > 1024) {
-            Bitmap.createScaledBitmap(cropped, 1024, 1024, true).also {
-                if (it !== cropped) cropped.recycle()
-                if (it !== oriented) oriented.recycle()
-            }
-        } else {
-            if (cropped !== oriented) oriented.recycle()
-            cropped
-        }
+        val outputBitmap = CharacterArtworkPolicy.toPortrait(oriented)
+        if (outputBitmap !== oriented) oriented.recycle()
         avatarDirectory.mkdirs()
         val safeId = characterId.replace(Regex("[^A-Za-z0-9._-]"), "_")
         val output = File(avatarDirectory, "$safeId-user.webp")
@@ -253,7 +239,17 @@ class DreamAvatarGenerator(private val context: Context) {
         }
         require(character.name.isNotBlank()) { "角色名称不能为空" }
         File(context.filesDir, DreamBackendService.BACKEND_ERROR_FILE).delete()
-        DreamBackendService.start(context, modelDirectory)
+        val generationSize = if (File(modelDirectory, "768.patch").isFile) {
+            768
+        } else {
+            512
+        }
+        DreamBackendService.start(
+            context,
+            modelDirectory,
+            generationSize,
+            generationSize,
+        )
         return withContext(Dispatchers.IO) {
             awaitBackend()
             val normalized = settings.normalized()
@@ -274,7 +270,8 @@ class DreamAvatarGenerator(private val context: Context) {
                 .put("cfg", normalized.cfg.toDouble())
                 .put("seed", normalized.seed)
                 .put("scheduler", normalized.scheduler)
-                .put("size", 512)
+                .put("width", generationSize)
+                .put("height", generationSize)
                 .put("show_diffusion_process", false)
                 .toString()
             val request = Request.Builder()
@@ -412,14 +409,20 @@ class DreamAvatarGenerator(private val context: Context) {
             pixels[index] = (0xff shl 24) or (red shl 16) or (green shl 8) or blue
         }
         val bitmap = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+        val portrait = CharacterArtworkPolicy.toPortrait(bitmap)
         return try {
             avatarDirectory.mkdirs()
             val safeId = characterId.replace(Regex("[^A-Za-z0-9._-]"), "_")
-            val output = File(avatarDirectory, "$safeId.jpg")
+            val output = File(avatarDirectory, "$safeId.webp")
             val temporary = File.createTempFile("dream-avatar-", ".tmp", avatarDirectory)
             try {
+                val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    Bitmap.CompressFormat.WEBP_LOSSY
+                } else {
+                    Bitmap.CompressFormat.WEBP
+                }
                 temporary.outputStream().buffered().use { stream ->
-                    check(bitmap.compress(Bitmap.CompressFormat.JPEG, 94, stream)) {
+                    check(portrait.compress(format, 92, stream)) {
                         "头像文件写入失败"
                     }
                 }
@@ -430,6 +433,7 @@ class DreamAvatarGenerator(private val context: Context) {
                 temporary.delete()
             }
         } finally {
+            portrait.recycle()
             bitmap.recycle()
         }
     }

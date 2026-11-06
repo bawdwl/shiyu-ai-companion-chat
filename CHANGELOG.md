@@ -3,11 +3,13 @@
 ## 2026-11-06 — Android `0.18.4` conversation layout and rollback
 
 - Entering a chat now positions directly at the newest message without the previous animated scroll from the start of the conversation.
-- The chat body now avoids the software keyboard as a whole, keeping the newest message above the composer while the screen is resized.
+- The full-screen character artwork now stays fixed at 100% opacity while the interactive layer avoids the software keyboard. The latest reply is anchored above the composer, so opening the keyboard moves the message but leaves the artwork in place.
+- The default chat view shows only the latest character reply. A dedicated “历史” control expands the complete conversation and changes to “收起” to return to the latest-only view.
 - The composer is compacted into a single-row layout with a 44dp text field and 48dp touch targets; the persistent provider disclosure line and excess vertical padding were removed.
-- The character portrait background opacity is now 30%.
+- Added a “（）” action shortcut. With no selection it inserts empty brackets and places the cursor between them; selected text is wrapped as “（选中内容）”.
 - Added “回退到之前的发言” from the chat overflow menu. Selecting any prior user message removes that turn and everything after it, including derived traces, structured/legacy memory, pending memory jobs, rolling summaries and later relationship-state transitions. The selected text is returned to the composer for editing.
-- Added deterministic rollback source-matching tests. Android JVM tests and the debug APK build pass.
+- Character artwork is now normalized to a 1080×1920 phone wallpaper. Local Dream uses its 768.patch when available, cloud generation requests 768×1344, and square fallback images are centre-cropped rather than stretched. Character avatars use the upper part of the portrait so the face remains visible.
+- Added deterministic rollback and artwork-crop tests. Android JVM tests and the debug APK build pass.
 
 ## 2026-11-06 — `v0.18.0` republish with Windows 0.18.0 / Android 0.18.3
 

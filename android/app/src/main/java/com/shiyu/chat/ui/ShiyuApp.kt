@@ -6,6 +6,7 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -46,6 +48,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
@@ -85,29 +88,39 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.shiyu.chat.data.CharacterEntity
 import com.shiyu.chat.data.ChatRepository
 import com.shiyu.chat.data.DreamGenerationSettings
+import com.shiyu.chat.data.insertActionBrackets
 import com.shiyu.chat.data.MemoryEntity
 import com.shiyu.chat.data.MessageEntity
 import com.shiyu.chat.data.MODEL_SOURCE_API
@@ -128,6 +141,7 @@ import java.io.File
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import kotlin.math.roundToInt
 
 private val DeepForest = Color(0xFF4E3A86)
 private val Forest = Color(0xFF7457C8)
@@ -805,9 +819,26 @@ private fun ChatScreen(
     var confirmDelete by remember(character.id) { mutableStateOf(false) }
     var showRollback by remember(character.id) { mutableStateOf(false) }
     var pendingRollback by remember(character.id) { mutableStateOf<MessageEntity?>(null) }
-    var draft by remember(character.id) { mutableStateOf("") }
+    var draft by remember(character.id) { mutableStateOf(TextFieldValue("")) }
+    val composerFocusRequester = remember { FocusRequester() }
+    var historyVisible by remember(character.id) { mutableStateOf(false) }
     val userMessages = remember(state.messages) {
         state.messages.filter { it.role == "user" }
+    }
+    val latestRoleMessage = remember(
+        state.messages,
+        state.streamingText,
+        state.busy,
+    ) {
+        if (state.busy) {
+            MessageEntity(
+                characterId = character.id,
+                role = "assistant",
+                content = state.streamingText.ifBlank { "正在回应…" },
+            )
+        } else {
+            state.messages.lastOrNull { it.role == "assistant" }
+        }
     }
     fun startRecording() {
         if (voiceBusy) return
@@ -816,10 +847,45 @@ private fun ChatScreen(
             val result = runCatching { withContext(Dispatchers.IO) { voice.recordAndRecognize() } }
             result.onSuccess { text ->
                 if (text.isBlank()) voiceStatus = "没有识别到语音，请重试"
-                else { draft = (draft + text).take(4096); voiceStatus = "识别完成，请检查后发送" }
+                else {
+                    val updated = (draft.text + text).take(4096)
+                    draft = TextFieldValue(
+                        text = updated,
+                        selection = TextRange(updated.length),
+                    )
+                    voiceStatus = "识别完成，请检查后发送"
+                }
             }.onFailure { voiceStatus = it.message ?: "语音识别失败" }
             recording = false; voiceBusy = false
         }
+    }
+    fun playMessage(message: MessageEntity) {
+        if (playingId == message.id) {
+            voice.stopPlayback()
+            voiceStatus = "已停止播放"
+            return
+        }
+        if (voiceBusy || message.content.isBlank()) return
+        voiceBusy = true
+        playingId = message.id
+        voiceStatus = "正在生成语音…"
+        voice.preparePlayback()
+        voiceScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    voice.speak(speechOnlyText(message.content), speaker)
+                }
+            }.onFailure {
+                voiceStatus = it.message ?: "语音播放失败"
+            }
+            voiceBusy = false
+            playingId = null
+            if (voiceStatus == "正在生成语音…") voiceStatus = null
+        }
+    }
+    fun insertActionBrackets() {
+        draft = insertActionBrackets(draft)
+        composerFocusRequester.requestFocus()
     }
     val microphone = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startRecording() else voiceStatus = "请允许使用麦克风后重试"
@@ -830,10 +896,16 @@ private fun ChatScreen(
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
     ) { imageUri = it }
+    val density = LocalDensity.current
+    val imeBottom = WindowInsets.ime.getBottom(density)
 
     var initialPositionApplied by remember(character.id) { mutableStateOf(false) }
-    LaunchedEffect(character.id, state.messages.isNotEmpty()) {
-        if (!initialPositionApplied && state.messages.isNotEmpty()) {
+    LaunchedEffect(character.id, state.messages.isNotEmpty(), historyVisible) {
+        if (
+            historyVisible &&
+            !initialPositionApplied &&
+            state.messages.isNotEmpty()
+        ) {
             listState.scrollToItem(state.messages.lastIndex)
             initialPositionApplied = true
         }
@@ -842,24 +914,51 @@ private fun ChatScreen(
         state.messages.size,
         state.busy,
         state.streamingText.length / 96,
+        historyVisible,
+        imeBottom,
     ) {
-        if (initialPositionApplied && state.messages.isNotEmpty()) {
+        if (historyVisible && state.messages.isNotEmpty()) {
+            if (imeBottom > 0 || !initialPositionApplied) {
+                withFrameNanos { }
+            }
             val lastItem = state.messages.lastIndex + if (state.busy) 1 else 0
             listState.scrollToItem(lastItem)
+            initialPositionApplied = true
         }
     }
 
-    Column(
+    Box(
         Modifier
             .fillMaxSize()
-            .statusBarsPadding()
-            .imePadding()
             .background(
                 Brush.verticalGradient(
                     listOf(Color(0xFFF3EDFF), CanvasMist, Color(0xFFFFF5F8)),
                 ),
             ),
     ) {
+        LocalAvatar(
+            path = character.avatarPath,
+            modifier = Modifier.fillMaxSize(),
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.Black.copy(alpha = 0.08f),
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.08f),
+                        ),
+                    ),
+                ),
+        )
+        Column(
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .imePadding(),
+        ) {
         Surface(
             color = Color.White.copy(alpha = 0.9f),
             shadowElevation = 1.dp,
@@ -969,19 +1068,6 @@ private fun ChatScreen(
         }
         HorizontalDivider(color = Hairline)
         Box(Modifier.weight(1f)) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.White.copy(alpha = 0.2f), CanvasMist.copy(alpha = 0.55f)),
-                        ),
-                    ),
-            )
-            LocalAvatar(
-                path = character.avatarPath,
-                modifier = Modifier.fillMaxSize().alpha(0.30f),
-            )
             if (state.messages.isEmpty() && state.streamingText.isEmpty()) {
                 Column(
                     Modifier.fillMaxSize().padding(30.dp),
@@ -1005,31 +1091,39 @@ private fun ChatScreen(
                         textAlign = TextAlign.Center,
                     )
                 }
+            } else if (!historyVisible) {
+                latestRoleMessage?.let { message ->
+                    LatestRoleMessage(
+                        character = character,
+                        message = message,
+                        playing = { playingId == message.id },
+                        onPlay = { playMessage(message) },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 16.dp, vertical = 18.dp),
+                    )
+                }
+                HistoryToggle(
+                    historyVisible = false,
+                    onClick = { historyVisible = true },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp),
+                )
             } else {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp, 20.dp, 16.dp, 24.dp),
+                    contentPadding = PaddingValues(16.dp, 64.dp, 16.dp, 24.dp),
                     verticalArrangement = Arrangement.spacedBy(18.dp),
                 ) {
                     items(state.messages, key = { it.id }) { message ->
-                        MessageBubble(character, message, onPlay = {
-                            if (playingId == message.id) {
-                                voice.stopPlayback()
-                                voiceStatus = "已停止播放"
-                            } else if (!voiceBusy) {
-                                voiceBusy = true
-                                playingId = message.id
-                                voiceStatus = "正在生成语音…"
-                                voice.preparePlayback()
-                                voiceScope.launch {
-                                    runCatching { withContext(Dispatchers.IO) { voice.speak(speechOnlyText(message.content), speaker) } }
-                                        .onFailure { voiceStatus = it.message ?: "语音播放失败" }
-                                    voiceBusy = false; playingId = null
-                                    if (voiceStatus == "正在生成语音…") voiceStatus = null
-                                }
-                            }
-                        }, playing = { playingId == message.id })
+                        MessageBubble(
+                            character,
+                            message,
+                            onPlay = { playMessage(message) },
+                            playing = { playingId == message.id },
+                        )
                     }
                     if (state.busy) {
                         item {
@@ -1044,6 +1138,13 @@ private fun ChatScreen(
                         }
                     }
                 }
+                HistoryToggle(
+                    historyVisible = true,
+                    onClick = { historyVisible = false },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp),
+                )
             }
         }
         Surface(
@@ -1123,6 +1224,18 @@ private fun ChatScreen(
                             tint = if (recording) MaterialTheme.colorScheme.error else InkMuted,
                         )
                     }
+                    IconButton(
+                        onClick = ::insertActionBrackets,
+                        modifier = Modifier.size(48.dp),
+                        enabled = !state.busy && !state.historyBusy,
+                    ) {
+                        Text(
+                            "（）",
+                            color = if (state.busy || state.historyBusy) InkMuted else Forest,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                     Surface(
                         modifier = Modifier
                             .weight(1f)
@@ -1133,10 +1246,20 @@ private fun ChatScreen(
                     ) {
                         BasicTextField(
                             value = draft,
-                            onValueChange = { draft = it.take(4096) },
+                            onValueChange = {
+                                val text = it.text.take(4096)
+                                draft = TextFieldValue(
+                                    text = text,
+                                    selection = TextRange(
+                                        it.selection.start.coerceAtMost(text.length),
+                                        it.selection.end.coerceAtMost(text.length),
+                                    ),
+                                )
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 44.dp, max = 96.dp)
+                                .focusRequester(composerFocusRequester)
                                 .padding(horizontal = 14.dp, vertical = 11.dp),
                             enabled = !state.busy && !state.historyBusy,
                             textStyle = MaterialTheme.typography.bodyMedium.copy(
@@ -1147,18 +1270,19 @@ private fun ChatScreen(
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                             keyboardActions = KeyboardActions(onSend = {
                                 if (
-                                    (draft.isNotBlank() || imageUri != null) &&
+                                    (draft.text.isNotBlank() || imageUri != null) &&
                                     !state.busy &&
                                     !state.historyBusy
                                 ) {
-                                    onSend(draft.trim(), imageUri)
-                                    draft = ""
+                                    onSend(draft.text.trim(), imageUri)
+                                    draft = TextFieldValue("")
                                     imageUri = null
+                                    historyVisible = false
                                 }
                             }),
                             decorationBox = { innerTextField ->
                                 Box {
-                                    if (draft.isBlank()) {
+                                    if (draft.text.isBlank()) {
                                         Text(
                                             "和${character.name}说点什么…",
                                             color = InkMuted,
@@ -1172,7 +1296,7 @@ private fun ChatScreen(
                         )
                     }
                     Spacer(Modifier.width(6.dp))
-                    val canSend = (draft.isNotBlank() || imageUri != null) &&
+                    val canSend = (draft.text.isNotBlank() || imageUri != null) &&
                         !state.busy &&
                         !state.historyBusy
                     IconButton(
@@ -1180,9 +1304,10 @@ private fun ChatScreen(
                             if (state.busy) {
                                 onStop()
                             } else if (canSend) {
-                                onSend(draft.trim(), imageUri)
-                                draft = ""
+                                onSend(draft.text.trim(), imageUri)
+                                draft = TextFieldValue("")
                                 imageUri = null
+                                historyVisible = false
                             }
                         },
                         modifier = Modifier
@@ -1207,6 +1332,7 @@ private fun ChatScreen(
                 }
             }
         }
+    }
     }
     if (showVoicePicker) {
         VoicePickerSheet(
@@ -1287,9 +1413,13 @@ private fun ChatScreen(
                     onClick = {
                         pendingRollback = null
                         onRollback(message.id) { restored ->
-                            draft = restored
+                            draft = TextFieldValue(
+                                text = restored,
+                                selection = TextRange(restored.length),
+                            )
                             voiceStatus = null
                             imageUri = null
+                            historyVisible = false
                         }
                     },
                 ) {
@@ -1313,6 +1443,96 @@ private fun ChatScreen(
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } },
         )
+    }
+}
+
+@Composable
+private fun LatestRoleMessage(
+    character: CharacterEntity,
+    message: MessageEntity,
+    playing: () -> Boolean,
+    onPlay: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = Color.White.copy(alpha = 0.94f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.72f)),
+        shadowElevation = 6.dp,
+    ) {
+        Column(Modifier.padding(horizontal = 17.dp, vertical = 15.dp)) {
+            Text(
+                character.name,
+                color = DeepForest,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(7.dp))
+            Text(
+                naturalMessageText(message.content, message.displayJson),
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 15.sp,
+                lineHeight = 23.sp,
+                maxLines = 12,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "最新回复",
+                    color = InkMuted,
+                    fontSize = 9.sp,
+                )
+                Spacer(Modifier.weight(1f))
+                if (message.id > 0 && message.content.isNotBlank()) {
+                    TextButton(onClick = onPlay) {
+                        Icon(
+                            if (playing()) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (playing()) "停止" else "朗读", fontSize = 10.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryToggle(
+    historyVisible: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 48.dp),
+        shape = CircleShape,
+        color = Color.Black.copy(alpha = 0.48f),
+        contentColor = Color.White,
+        shadowElevation = 2.dp,
+    ) {
+        Row(
+            Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Icon(
+                if (historyVisible) Icons.Default.Close else Icons.Default.History,
+                contentDescription = null,
+                modifier = Modifier.size(17.dp),
+            )
+            Text(
+                if (historyVisible) "收起" else "历史",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
     }
 }
 
@@ -1628,7 +1848,11 @@ private fun CharacterBadge(character: CharacterEntity, size: androidx.compose.ui
             ),
         contentAlignment = Alignment.Center,
     ) {
-        LocalAvatar(path = character.avatarPath, modifier = Modifier.fillMaxSize())
+        LocalAvatar(
+            path = character.avatarPath,
+            modifier = Modifier.fillMaxSize(),
+            cropFace = true,
+        )
         if (character.avatarPath == null || !File(character.avatarPath).isFile) {
             Text(character.name.take(1), color = Color.White, fontWeight = FontWeight.Bold)
         }
@@ -1636,7 +1860,11 @@ private fun CharacterBadge(character: CharacterEntity, size: androidx.compose.ui
 }
 
 @Composable
-private fun LocalAvatar(path: String?, modifier: Modifier = Modifier) {
+private fun LocalAvatar(
+    path: String?,
+    modifier: Modifier = Modifier,
+    cropFace: Boolean = false,
+) {
     val modified = path?.let { File(it).lastModified() } ?: 0L
     val bitmap = remember(path, modified) {
         path?.takeIf { File(it).isFile }?.let {
@@ -1644,12 +1872,33 @@ private fun LocalAvatar(path: String?, modifier: Modifier = Modifier) {
         }
     }
     if (bitmap != null) {
-        Image(
-            bitmap = bitmap.asImageBitmap(),
-            contentDescription = null,
-            modifier = modifier,
-            contentScale = ContentScale.Crop,
-        )
+        if (cropFace && bitmap.height > bitmap.width) {
+            val image = bitmap.asImageBitmap()
+            Canvas(modifier) {
+                val side = minOf(bitmap.width, bitmap.height)
+                val left = (bitmap.width - side) / 2
+                val preferredTop = (bitmap.height * 0.16f).roundToInt()
+                val top = preferredTop.coerceIn(0, bitmap.height - side)
+                drawImage(
+                    image = image,
+                    srcOffset = IntOffset(left, top),
+                    srcSize = IntSize(side, side),
+                    dstOffset = IntOffset.Zero,
+                    dstSize = IntSize(
+                        size.width.roundToInt(),
+                        size.height.roundToInt(),
+                    ),
+                    filterQuality = FilterQuality.High,
+                )
+            }
+        } else {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = null,
+                modifier = modifier,
+                contentScale = ContentScale.Crop,
+            )
+        }
     }
 }
 

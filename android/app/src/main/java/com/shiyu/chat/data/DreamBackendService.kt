@@ -37,7 +37,11 @@ class DreamBackendService : Service() {
     private var stopping = false
 
     private var desiredModelDir: String? = null
+    private var desiredWidth = DEFAULT_SIZE
+    private var desiredHeight = DEFAULT_SIZE
     private var servingModelDir: String? = null
+    private var servingWidth = 0
+    private var servingHeight = 0
     private var runtimeDir: File? = null
     private var idleStopJob: Job? = null
 
@@ -62,12 +66,20 @@ class DreamBackendService : Service() {
             return START_NOT_STICKY
         }
         desiredModelDir = File(modelDir).canonicalPath
+        desiredWidth = intent?.getIntExtra(EXTRA_WIDTH, DEFAULT_SIZE)
+            ?.coerceAtLeast(8) ?: DEFAULT_SIZE
+        desiredHeight = intent?.getIntExtra(EXTRA_HEIGHT, DEFAULT_SIZE)
+            ?.coerceAtLeast(8) ?: DEFAULT_SIZE
         backendErrorFile().delete()
         idleStopJob?.cancel()
         serviceScope.launch {
             runCatching {
                 prepareRuntimeAssets()
-                startBackend(desiredModelDir!!)
+                startBackend(
+                    desiredModelDir!!,
+                    desiredWidth,
+                    desiredHeight,
+                )
                 idleStopJob = launch {
                     delay(IDLE_STOP_MS)
                     updateNotification("本地生图引擎空闲，即将释放内存")
@@ -102,6 +114,8 @@ class DreamBackendService : Service() {
         }
         process = null
         servingModelDir = null
+        servingWidth = 0
+        servingHeight = 0
     }
 
     private fun prepareRuntimeAssets() {
@@ -130,7 +144,11 @@ class DreamBackendService : Service() {
         if (executable) target.setExecutable(true, true)
     }
 
-    private fun startBackend(modelDirectory: String) {
+    private fun startBackend(
+        modelDirectory: String,
+        width: Int,
+        height: Int,
+    ) {
         val modelDir = File(modelDirectory).canonicalFile
         require(modelDir.isDirectory) { "本地模型目录不存在" }
         val runtime = runtimeDir ?: error("QNN 运行目录未准备完成")
@@ -139,7 +157,12 @@ class DreamBackendService : Service() {
         require(executable.isFile) { "本地生图可执行引擎缺失" }
         require(executable.canExecute()) { "本地生图可执行引擎不可运行" }
 
-        if (process?.isAlive == true && servingModelDir == modelDir.path) {
+        if (
+            process?.isAlive == true &&
+            servingModelDir == modelDir.path &&
+            servingWidth == width &&
+            servingHeight == height
+        ) {
             updateNotification("本地生图引擎已就绪")
             return
         }
@@ -166,6 +189,13 @@ class DreamBackendService : Service() {
             File(filesDir, "safety_checker.mnn").absolutePath,
             "--no_img2img",
         )
+        if (width != DEFAULT_SIZE || height != DEFAULT_SIZE) {
+            val patch = File(modelDir, "${width}x$height.patch")
+                .takeIf(File::isFile)
+                ?: File(modelDir, "$width.patch").takeIf(File::isFile)
+                ?: error("模型缺少 ${width}x$height 分辨率补丁")
+            command += listOf("--patch", patch.absolutePath)
+        }
         if (File(modelDir, "V_PRED").isFile) command += "--use_v_pred"
 
         val libraryPath = listOf(
@@ -185,6 +215,8 @@ class DreamBackendService : Service() {
             .start()
         process = child
         servingModelDir = modelDir.path
+        servingWidth = width
+        servingHeight = height
         Log.i(TAG, "Started: ${command.joinToString(" ")}")
 
         Thread {
@@ -198,6 +230,8 @@ class DreamBackendService : Service() {
             }
             if (!stopping && process === child) {
                 servingModelDir = null
+                servingWidth = 0
+                servingHeight = 0
                 updateNotification("本地生图引擎已停止")
             }
         }.apply {
@@ -261,13 +295,23 @@ class DreamBackendService : Service() {
         private const val CHANNEL_ID = "dream_backend"
         private const val NOTIFICATION_ID = 2
         private const val EXTRA_MODEL_DIR = "model_dir"
+        private const val EXTRA_WIDTH = "width"
+        private const val EXTRA_HEIGHT = "height"
+        private const val DEFAULT_SIZE = 512
         private const val IDLE_STOP_MS = 10 * 60 * 1000L
         const val BACKEND_ERROR_FILE = "dream-backend-error.txt"
         const val PORT = 18081
 
-        fun start(context: Context, modelDir: File) {
+        fun start(
+            context: Context,
+            modelDir: File,
+            width: Int = DEFAULT_SIZE,
+            height: Int = DEFAULT_SIZE,
+        ) {
             val intent = Intent(context, DreamBackendService::class.java).apply {
                 putExtra(EXTRA_MODEL_DIR, modelDir.absolutePath)
+                putExtra(EXTRA_WIDTH, width)
+                putExtra(EXTRA_HEIGHT, height)
             }
             ContextCompat.startForegroundService(context, intent)
         }
