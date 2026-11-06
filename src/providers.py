@@ -413,7 +413,7 @@ class OpenCodeProvider(DeepSeekProvider):
         model: str = "deepseek-v4.1-flash",
         timeout_seconds: float = 120,
         transport: httpx.BaseTransport | None = None,
-        user_agent: str = "shiyu-chat/0.18.0",
+        user_agent: str = "shiyu-chat/0.18.3",
     ):
         super().__init__(
             api_key_provider,

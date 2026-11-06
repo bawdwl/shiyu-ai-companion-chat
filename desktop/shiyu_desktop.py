@@ -19,7 +19,7 @@ from pathlib import Path
 
 
 APP_NAME = "Shiyu"
-APP_VERSION = "0.18.0"
+APP_VERSION = "0.18.3"
 
 
 def application_root() -> Path:

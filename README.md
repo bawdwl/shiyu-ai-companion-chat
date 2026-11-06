@@ -16,14 +16,14 @@
 
 Windows EXE 的“基础版”不是完整研究环境。需要本地大模型、本地生图、高质量角色音色或完整语音识别时，请按下方 PC 源码流程安装对应运行库和模型权重。
 
-## 2026-11-06 `0.18.0` 本地测试版
+## 2026-11-06 `0.18.3` 本地测试版
 
 - Windows 修复 WebView2 窗口使用 PNG 图标导致程序静默退出的问题，改用 ICO，并增加日志文件占用时的启动回退。
 - Windows EXE 保持基础云端版定位，完整本地能力需要复现 PC 网页环境并自行下载模型。
 - Android 以稳定的 `0.17.0` 行为为基线，删除顾清禾及其聊天、记忆、状态、头像和音色数据；升级时自动清理旧角色。
-- Android 新建角色档案的生成请求、JSON 解析、外貌补全和审核流程恢复为 `v0.16.1` 相同实现；同时有 DeepSeek 与 OpenCode Key 时，档案生成优先使用 `v0.16.1` 发布版对应的 DeepSeek。
+- Android 新建角色档案直接移植了已验收 Windows `0.18.0` 备份中的生成提示、`1800/1200` Token 两阶段请求、12 个字段的 JSON 解析、缺失材料阈值和第二次补全流程；同时有 DeepSeek 与 OpenCode Key 时，档案生成优先使用该 PC 版本对应的 DeepSeek。
 - 宋知意和裴既明恢复为 LoRA 项目训练与推理时使用的逐字精简提示词；API 与本地 MNN 模式都使用同一份固定文本，不再拼接完整角色卡。逐字文本与来源哈希见 [固定角色提示词](docs/固定角色提示词_2026-11-06.md)。
-- 同时不再提供 `0.18.2`；PC 与 Android 本地测试统一使用 `0.18.0`，等待作者验收后发布。
+- PC 与 Android 本地测试统一使用 `0.18.3`，等待作者验收后发布。
 
 ## 2026-11-05 `0.18.0` PC 网页端同步
 
@@ -106,8 +106,8 @@ Windows EXE 的“基础版”不是完整研究环境。需要本地大模型�
 
 ## 快速使用 Windows EXE 基础版
 
-本地验收包为 `Shiyu-0.18.0-Windows-x64.zip`，解压后保持目录完整并运行
-`Shiyu-0.18.0-Windows-x64.exe`。Windows 10/11 需要 Microsoft Edge WebView2
+本地验收包为 `Shiyu-0.18.3-Windows-x64.zip`，解压后保持目录完整并运行
+`Shiyu-0.18.3-Windows-x64.exe`。Windows 10/11 需要 Microsoft Edge WebView2
 Runtime。首次启动后在设置中填写 DeepSeek 或 OpenCode Go API Key。
 
 EXE 不要求安装 Python、Conda、Node.js 或模型权重，适合直接体验云端角色聊天、角色生成、世界书和长期记忆。它不是完整的本地推理发行包。
@@ -181,9 +181,9 @@ PC 语音优先调用本机 CosyVoice 2 FastAPI；服务或角色参考音频不
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-- 版本：`0.18.0 / versionCode 32`
+- 版本：`0.18.3 / versionCode 33`
 - Room schema：11
-- APK SHA-256：`FE381DF559644C48DCE0442555FA167449F02C0A4FE2C532A58E5856E9D181D6`
+- APK SHA-256：`10717CF9A90C54C6920D95ECF4E951FCE4A89006A098D6C3991F67AC0A5F5BAA`
 - 安装后请在设置中填写自己的 OpenCode Go 或 DeepSeek Key。
 
 APK 包含本地语音运行库、VITS 中文语音模型、Qwen MNN 运行库和 Dream SD1.5/QNN 后端。本地 Qwen 与 MeinaMix V12 等模型权重不随 APK 分发，需要用户按应用设置中的说明导入。
@@ -241,7 +241,7 @@ cd android
 - PC 全量 Python 回归：296 项通过。
 - PC 前端状态测试：40 项通过。
 - React 生产构建通过。
-- Android JVM：66 项通过。
+- Android JVM：68 项通过。
 - Android debug APK 构建、真机覆盖安装和权限启动检查通过；本地 Dream 生图仍取决于设备 NPU 与导入模型。
 - 自然记忆冻结回放：结构化事实、摘要、混合检索和混合状态均为 90/90；仅最近消息为 23/90。
 - 一条合成案例的真实 API 端到端记忆链路通过；该结果不是准确率基准。

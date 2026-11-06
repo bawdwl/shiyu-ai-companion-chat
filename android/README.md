@@ -1,6 +1,6 @@
 # 拾语 Android
 
-当前版本：`0.18.0 / versionCode 32`，只提供一个完整安装包：
+当前版本：`0.18.3 / versionCode 33`，只提供一个完整安装包：
 
 - `com.shiyu.chat`：内置本地语音识别、角色朗读、MNN 和图片生成入口。
 
@@ -71,9 +71,9 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 - 64 项 JVM 单元测试通过。
 - Release Lint、Debug 构建和关闭 R8 的 Release 构建通过。
-- `0.18.0` 源码已通过 JVM 测试、Release Lint 和 APK 构建。
+- `0.18.3` 源码已通过 JVM 测试、Release Lint 和 APK 构建。
 - 预编译 APK 仅作为 GitHub Release 附件分发，不提交到 Git：
-  <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.0>
+  <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.3>
 
 ## 已知限制
 
