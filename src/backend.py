@@ -45,7 +45,11 @@ from character_cards import (build_generation_messages,card_to_runtime,normalize
                              parse_generated_card,retrieve_worldbook,build_enrichment_messages,
                              apply_enrichment,build_material_repair_messages,
                              missing_generated_materials)
-from product_characters import PRODUCT_CHARACTER_TAGS, seed_product_characters
+from product_characters import (
+    PRODUCT_CHARACTER_TAGS,
+    RETIRED_PRODUCT_CHARACTER_IDS,
+    seed_product_characters,
+)
 from prompt_pipeline import assemble_prompt
 from chat_trace import make_turn_trace
 from roleplay_response import tts_text_from_content
@@ -496,6 +500,17 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             if structured_memory
             else None
         )
+        for character_id in RETIRED_PRODUCT_CHARACTER_IDS:
+            try:
+                conversation=app.state.store.get_role_conversation(character_id)
+                if conversation:
+                    remove_session_images(conversation['id'],delete_records=False)
+                app.state.store.delete_character_card(character_id)
+                if app.state.structured_memory is not None:
+                    app.state.structured_memory.clear_scope(character_id)
+            except KeyError:
+                pass
+            remove_character_files(character_id)
         app.state.deepseek_provider=deepseek_provider or DeepSeekProvider(
             lambda: app.state.secret_store.get('deepseek_api_key'),
             base_url=os.environ.get('DEEPSEEK_BASE_URL','https://api.deepseek.com'),
@@ -573,7 +588,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
                 )
         app.state.structured_memory=None
 
-    app=FastAPI(title='Qwen3 IM Chat API',version='0.18.2',lifespan=lifespan)
+    app=FastAPI(title='Qwen3 IM Chat API',version='0.18.0',lifespan=lifespan)
 
     def is_loopback_client(request):
         host=request.client.host if request.client else ''
@@ -1647,7 +1662,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             raise HTTPException(409,'模型正在生成回答，请稍后再创建角色。')
         try:
             generation_messages=build_generation_messages(body.inspiration)
-            check_token_limits(selected,generation_messages,2400)
+            check_token_limits(selected,generation_messages,1800)
             session_id=f'character-generation-{uuid4()}'
             generation_overrides=provider_request_overrides(selected,session_id)
             if selected!='opencode':
@@ -1655,7 +1670,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             generated,generation_metrics=engine.reply(
                 generation_messages,
                 model_mode=local_mode_for_provider(selected,'base'),
-                max_new_tokens=2400,
+                max_new_tokens=1800,
                 generation_overrides=generation_overrides)
             record_provider_usage(selected,None,uuid4(),generation_metrics)
             card=parse_generated_card(generated,body.inspiration)
@@ -1663,14 +1678,14 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             if missing:
                 try:
                     repair_messages=build_material_repair_messages(card,body.inspiration)
-                    check_token_limits(selected,repair_messages,1800)
+                    check_token_limits(selected,repair_messages,1200)
                     repair_overrides=provider_request_overrides(selected,session_id)
                     if selected!='opencode':
                         repair_overrides['response_format']={'type':'json_object'}
                     repaired,repair_metrics=engine.reply(
                         repair_messages,
                         model_mode=local_mode_for_provider(selected,'base'),
-                        max_new_tokens=1800,
+                        max_new_tokens=1200,
                         generation_overrides=repair_overrides)
                     record_provider_usage(selected,None,uuid4(),repair_metrics)
                     card=apply_enrichment(card,repaired)
@@ -1930,7 +1945,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
                     app.state.structured_memory.clear_scope(character_id)
             except KeyError:
                 raise HTTPException(404,'自定义角色不存在。') from None
-            remove_character_asset_files(character_id)
+            remove_character_files(character_id)
             return {'deleted':True,'id':character_id}
 
     @app.get('/characters/{character_id}/voice-profile')
@@ -1996,14 +2011,11 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
 
     image_root=Path(db_path).resolve().parent/'chat-images'
     character_asset_root=Path(db_path).resolve().parent/'character-assets'
+    voice_profile_root=Path(db_path).resolve().parent/'voice-profiles'
 
-    def remove_character_asset_files(character_id):
-        root=(character_asset_root/character_id).resolve()
+    def remove_directory_contents(root):
+        root=Path(root).resolve()
         if not root.is_dir():
-            return
-        try:
-            root.relative_to(character_asset_root.resolve())
-        except ValueError:
             return
         for path in root.rglob('*'):
             if path.is_file():
@@ -2012,6 +2024,20 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             if path.is_dir():
                 path.rmdir()
         root.rmdir()
+
+    def remove_character_files(character_id):
+        asset_root=(character_asset_root/character_id).resolve()
+        try:
+            asset_root.relative_to(character_asset_root.resolve())
+        except ValueError:
+            return
+        remove_directory_contents(asset_root)
+        voice_root=(voice_profile_root/character_id).resolve()
+        try:
+            voice_root.relative_to(voice_profile_root.resolve())
+        except ValueError:
+            return
+        remove_directory_contents(voice_root)
 
     def remove_session_images(session_id,delete_records=True):
         images=app.state.store.list_images_for_session(session_id)
@@ -2176,7 +2202,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
         limits=token_limits()
         return JSONResponse(status_code=200 if ready else 503,content=dict(
             status='ready' if ready else 'model_unavailable',
-            app_version='0.18.2',
+            app_version='0.18.0',
             default_provider=default_provider,
             providers={
                 'deepseek':{'available':True,'configured':deepseek_ready,
@@ -2872,7 +2898,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
                 provider=selected)
             if app.state.structured_memory is not None:
                 app.state.structured_memory.clear_scope(character_id)
-            remove_character_asset_files(character_id)
+            remove_character_files(character_id)
             return ensure_character_opening(
                 result,character_id,runtime_characters(),selected
             )
@@ -3382,7 +3408,7 @@ if __name__=='__main__':
     parser.add_argument(
         '--seed-product-characters',
         action='store_true',
-        help='首次启动时写入五个可编辑、可删除的 PC 演示角色',
+        help='首次启动时写入四个可编辑、可删除的 PC 演示角色',
     )
     args=parser.parse_args()
     import uvicorn

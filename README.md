@@ -1,45 +1,34 @@
 # 拾语 SHIYU
 
-拾语是一套面向中文虚拟角色陪伴场景的 PC 与 Android 双端聊天应用。它包含可直接下载的 Windows 基础版 EXE、可完整复现的 PC 网页工程和 Android 客户端。角色卡、世界书、长期记忆、情绪关系状态与模型推理按运行设备分别组织。
+拾语是一套面向中文虚拟角色陪伴场景的 PC 与 Android 双端聊天应用。它把云端大模型、角色卡、世界书、长期记忆、情绪关系状态、语音输入和角色语音组织成一条可运行的聊天链路。
 
 当前主线使用 **OpenCode Go `deepseek-v4.1-flash`**，同时支持独立 DeepSeek Provider。API Key 由使用者在本机填写，不会写入源码、数据库快照或 Git 仓库。
 
-下载地址：[GitHub Releases `v0.18.2`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.2)
-
 ![拾语 PC 当前界面](docs/images/PC-0.18-home.png)
-
-PC 网页端和 Windows EXE 共用同一套 React 工作台、角色库、角色创建审核和长期
-记忆管理。
 
 ![拾语：AI 虚拟角色陪伴系统框架](docs/images/shiyu-ai-companion-architecture-2026-11-04.png)
 
 ### 三种运行形态
 
-- **Windows EXE 基础版**：解压即可运行，提供 DeepSeek / OpenCode Go 云端角色生成和聊天、五个内置角色、角色编辑与删除、世界书、长期记忆管理及云端图片输入。发布包不附带本地大语言模型、生图模型或完整本地语音模型。
+- **Windows EXE 基础版**：解压即可运行，提供 DeepSeek / OpenCode Go 云端角色生成和聊天、四个内置角色、角色编辑与删除、世界书、长期记忆管理及云端图片输入。发布包不附带本地大语言模型、生图模型或完整本地语音模型。
 - **PC 网页完整环境**：与 EXE 共用 React 和 FastAPI 核心，额外支持自行安装 MeinaMix V12、本地 Qwen/LoRA、BGE、CosyVoice 2、GPT-SoVITS、MeloTTS 和 Whisper 等完整实验链路。
-- **Android `0.18.2`**：除云端 API 外，可导入 MNN 大语言模型和 Local Dream SD1.5/QNN 生图模型；APK 内置本地语音识别与 VITS 角色语音运行库。模型权重按设置页要求由用户导入。
+- **Android**：除云端 API 外，可导入 MNN 大语言模型和 Local Dream SD1.5/QNN 生图模型；APK 内置本地语音识别与 VITS 角色语音运行库。模型权重按设置页要求由用户导入。
 
 Windows EXE 的“基础版”不是完整研究环境。需要本地大模型、本地生图、高质量角色音色或完整语音识别时，请按下方 PC 源码流程安装对应运行库和模型权重。
 
-## 2026-11-06 `0.18.2` 角色生成验收版
+## 2026-11-06 `0.18.0` 本地测试版
 
-- 世界书数量改由模型按角色复杂度决定，通常生成 2–10 条，普通角色保持精简。
-- 自动生成最多保留 10 条世界书，人工编辑仍可保存最多 30 条。
-- 云端角色档案不再规定简介、性格、说话方式和关系的推荐字数；模型按角色需要写完整，后端继续执行字段硬上限。
-- 宋知意和裴既明的固定 MNN 角色档案保持不变。
-- PC 与 Android 已同步，共同发布为 `0.18.2`。
-
-## 2026-11-06 `0.18.1` Windows 启动修复
-
-- 修复 Windows EXE 使用 PNG 作为 WebView2 窗口图标导致进程静默退出的问题，改用 Windows ICO。
-- Windows 安装包重新打包，发布文件名更新为 `Shiyu-0.18.1-Windows-x64.zip`。
-- README 首页换成当前 PC 界面截图，并保留项目系统架构图。
+- Windows 修复 WebView2 窗口使用 PNG 图标导致程序静默退出的问题，改用 ICO，并增加日志文件占用时的启动回退。
+- Windows EXE 保持基础云端版定位，完整本地能力需要复现 PC 网页环境并自行下载模型。
+- Android 以稳定的 `0.17.0` 行为为基线，删除顾清禾及其聊天、记忆、状态、头像和音色数据；升级时自动清理旧角色。
+- 宋知意和裴既明继续使用此前人工评测选定的固定精简角色提示，不根据自动补全结果改写。
+- 同时不再提供 `0.18.2`；PC 与 Android 本地测试统一使用 `0.18.0`，等待作者验收后发布。
 
 ## 2026-11-05 `0.18.0` PC 网页端同步
 
 - PC 网页端同步 Windows 桌面的角色库、三栏聊天工作台、角色详情和删除入口。
-- 首次启动通过一次性种子写入五个可编辑、可删除的演示角色：李白、宋知意、
-  裴既明、萧承渊、顾清禾。删除后不会在下次启动时重新出现，已有用户角色和
+- 首次启动通过一次性种子写入四个可编辑、可删除的演示角色：李白、宋知意、
+  裴既明、萧承渊。删除后不会在下次启动时重新出现，已有用户角色和
   对话不会被清理。
 - 网页设置页明确显示 MeinaMix V12 本地生图模型状态，以及 CosyVoice 2 角色
   语音链路状态；本地图片和提示词不会发送给云端图片 API。
@@ -71,7 +60,7 @@ Windows EXE 的“基础版”不是完整研究环境。需要本地大模型�
 
 ### 聊天与角色
 
-- 自定义角色和角色卡生成草稿；新数据目录首次启动写入五个可删除的 PC 演示角色。
+- 自定义角色和角色卡生成草稿；新数据目录首次启动写入四个可删除的 PC 演示角色。
 - 身份、背景、性格、说话方式、关系、互动边界和示例对话。
 - 关键词触发世界书，固定事实优先于聊天中的即兴内容。
 - 时代、知识截止、世界范围、允许/禁止知识与禁止词边界。
@@ -116,8 +105,8 @@ Windows EXE 的“基础版”不是完整研究环境。需要本地大模型�
 
 ## 快速使用 Windows EXE 基础版
 
-从 Releases 下载并解压 `Shiyu-0.18.2-Windows-x64.zip`，保持目录完整，运行
-`Shiyu-0.18.2-Windows-x64.exe`。Windows 10/11 需要 Microsoft Edge WebView2
+本地验收包为 `Shiyu-0.18.0-Windows-x64.zip`，解压后保持目录完整并运行
+`Shiyu-0.18.0-Windows-x64.exe`。Windows 10/11 需要 Microsoft Edge WebView2
 Runtime。首次启动后在设置中填写 DeepSeek 或 OpenCode Go API Key。
 
 EXE 不要求安装 Python、Conda、Node.js 或模型权重，适合直接体验云端角色聊天、角色生成、世界书和长期记忆。它不是完整的本地推理发行包。
@@ -191,12 +180,12 @@ PC 语音优先调用本机 CosyVoice 2 FastAPI；服务或角色参考音频不
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-- 版本：`0.18.2 / versionCode 32`
+- 版本：`0.18.0 / versionCode 32`
 - Room schema：11
-- APK SHA-256：`9A78DB500603AAFED8E714AF16AAC4F03760806C9F353EE3BB1FFC06B890A141`
+- APK SHA-256：`723C4A7E8F910D01D8EEE0254C02B428969BFFA6301D284362016CAA60220EC5`
 - 安装后请在设置中填写自己的 OpenCode Go 或 DeepSeek Key。
 
-APK 包含本地语音运行库、VITS 中文语音模型、Qwen MNN 运行库和 Dream SD1.5/QNN 后端。本地 Qwen 与 MeinaMix V12 等模型权重不随 APK 分发，需要用户按应用设置中的说明导入。模型和硬件支持范围分别遵循对应上游许可。
+APK 包含本地语音运行库、VITS 中文语音模型、Qwen MNN 运行库和 Dream SD1.5/QNN 后端。本地 Qwen 与 MeinaMix V12 等模型权重不随 APK 分发，需要用户按应用设置中的说明导入。
 
 ### 从源码构建 Android
 
@@ -223,7 +212,7 @@ android/app/build/outputs/apk/debug/app-debug.apk
 ## 数据与密钥
 
 - 仓库不包含 API Key、聊天数据库、个人录音、角色生成图片、模型权重或 LoRA Adapter。
-- Windows EXE 的 Key、数据库和日志默认位于 `%LOCALAPPDATA%\Shiyu`；完整 PC 网页工程的可配置数据默认位于 Git 忽略的 `outputs/`。
+- PC 的 Key、数据库和语音档案默认位于 Git 忽略的 `outputs/`。
 - Android 的 Key 使用 Android Keystore/EncryptedSharedPreferences。
 - 角色、消息、记忆和状态保存在各自设备的 Room 或 SQLite 中。
 - Windows EXE、PC 网页端和 Android 目前不会自动同步数据。
@@ -251,8 +240,8 @@ cd android
 - PC 全量 Python 回归：293 项通过。
 - PC 前端状态测试：40 项通过。
 - React 生产构建通过。
-- Android JVM 测试：64 项通过。
-- Android `0.18.2 / versionCode 32` arm64-v8a APK 构建和签名校验通过。
+- Android JVM：64 项通过。
+- Android debug APK 构建、真机覆盖安装和权限启动检查通过；本地 Dream 生图仍取决于设备 NPU 与导入模型。
 - 自然记忆冻结回放：结构化事实、摘要、混合检索和混合状态均为 90/90；仅最近消息为 23/90。
 - 一条合成案例的真实 API 端到端记忆链路通过；该结果不是准确率基准。
 - 固定角色质量评测仍为：基础条件 18/24，长期记忆条件 22/24。
@@ -272,7 +261,6 @@ cd android
 - 还没有完整浏览器 E2E、Android UI instrumentation 和长时间运行测试。
 - 当前主机干净环境验收不能替代另一台全新电脑的从零安装验收。
 - Windows EXE 不包含本地大语言模型、生图模型和完整本地语音权重。
-- Android 本地 MNN、Local Dream 生图和完整角色语音需要单独导入模型，并受设备架构、内存和 NPU 支持范围限制。
 - `src/backend.py` 与 Android `ChatRepository.kt` 仍偏大。
 
 ## 目录

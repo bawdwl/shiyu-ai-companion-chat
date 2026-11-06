@@ -1,29 +1,20 @@
 # Changelog
 
-## 2026-11-06 — PC and Android `0.18.2`
+## 2026-11-06 — `0.18.0` local validation build
 
-- Changed worldbook generation from a fixed three entries to a model-selected 2–10 entries based on character complexity.
-- Ordinary characters now receive 2–3 focused entries; characters with occupations, fixed locations or relationship networks receive 4–6; complex worlds and relationship histories may receive 6–10.
-- Kept the manual character-card worldbook capacity at 30 entries and capped automatic generation at 10 entries.
-- Removed recommended character-field length ranges from cloud character generation. The model now decides how much detail each field needs while the backend still enforces hard storage limits.
-- Kept the fixed MNN character profiles for Song Zhiyi and Pei Jiming unchanged.
-- Synced the same generation policy to Android and aligned both clients on release version `0.18.2`.
-- Clarified that the Windows EXE is a basic cloud build. Full PC local-model, local-image, semantic-memory and local-voice features require the source environment and separately downloaded model weights.
-- Replaced the README's old PC screenshot section with the current PC interface and the supplied system architecture figure.
+- Restored the stable Android `0.17.0` character behavior and removed the adaptive worldbook and character-length changes from `0.18.2`.
+- Removed Gu Qinghe from both PC and Android, including bundled portraits. Existing Gu Qinghe cards, conversations, memories, state, avatars and voice references are removed on upgrade.
+- Kept the manually selected, concise fixed local prompts for Song Zhiyi and Pei Jiming.
+- Restored the Windows WebView2 window with an ICO icon and resilient logging startup.
+- Clarified that the Windows EXE is a basic cloud build; full local model, image, semantic-memory and voice features require the source environment and separately downloaded weights.
+- Replaced the README's old PC screenshot section with the current PC interface and the supplied architecture figure.
 
 ### Verification
 
 - PC Python: 293 passed.
 - PC frontend state tests: 40 passed; React production build passed.
-- Windows EXE: visible `0.18.2` window, local service startup and `/health` checked.
-- Android: 64 JVM tests passed; `0.18.2 / versionCode 32` arm64-v8a debug APK built and its stable debug signature verified.
-
-## 2026-11-06 — Windows `0.18.1` launcher fix
-
-- Fixed the packaged Windows app exiting without a visible window when pywebview received the PNG icon.
-- Switched the WebView2 window icon to the Windows ICO asset.
-- Kept Android at `0.17.0`; no Android source or package changes.
-- Added the current PC interface and retained the system architecture image in the README.
+- Windows EXE: visible `0.18.0` local validation window, service startup and version check passed.
+- Android: 64 JVM tests passed; `0.18.0 / versionCode 32` arm64-v8a APK built and its stable debug signature verified.
 
 ## 2026-11-05 — PC web `0.18.0` sync
 

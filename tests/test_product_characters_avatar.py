@@ -9,7 +9,7 @@ from PIL import Image
 from backend import create_app
 
 
-EXPECTED_NAMES = ["李白", "宋知意", "裴既明", "萧承渊", "顾清禾"]
+EXPECTED_NAMES = ["李白", "宋知意", "裴既明", "萧承渊"]
 
 
 def png_bytes() -> bytes:
@@ -60,7 +60,28 @@ class ProductCharactersAndAvatarTests(unittest.TestCase):
                     row["name"]
                     for row in client.get("/characters").json()["characters"]
                 ]
-                self.assertCountEqual(names, ["李白", "裴既明", "萧承渊", "顾清禾"])
+                self.assertCountEqual(names, ["李白", "裴既明", "萧承渊"])
+
+    def test_retired_role_is_removed_with_its_saved_card(self):
+        with tempfile.TemporaryDirectory() as folder:
+            database = Path(folder) / "chat.sqlite3"
+            from storage import ChatStore
+            store = ChatStore(database)
+            store.save_character_card({
+                "id": "custom-gu-qinghe-v1",
+                "name": "顾清禾",
+                "tagline": "待删除角色",
+            })
+            app = create_app(
+                db_path=str(database),
+                default_provider="deepseek",
+                structured_memory=False,
+                seed_product_character_cards=True,
+            )
+            with TestClient(app) as client:
+                rows = client.get("/characters").json()["characters"]
+                self.assertNotIn("顾清禾", [row["name"] for row in rows])
+                self.assertEqual(len(rows), 4)
 
     def test_local_diffusers_avatar_generation_contract(self):
         class Generator:

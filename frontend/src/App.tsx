@@ -61,7 +61,6 @@ const PORTRAITS: Record<string, string> = {
   "custom-lora-song-zhiyi-v1": "/ui/media/portraits/song-zhiyi.jpg",
   "custom-pei-jiming-v1": "/ui/media/portraits/pei-jiming.jpg",
   "custom-xiao-chengyuan-v1": "/ui/media/portraits/xiao-chengyuan.webp",
-  "custom-gu-qinghe-v1": "/ui/media/portraits/gu-qinghe.webp",
 };
 
 function characterPortrait(character: Character | null | undefined) {
@@ -2481,13 +2480,10 @@ function CreateCharacterModal({
       const body = await response.json();
       if (!response.ok) throw new ApiError(response.status, body.detail ?? body);
       setCard(body.card);
-      const worldbookCount = Array.isArray(body.card.worldbook)
-        ? body.card.worldbook.length
-        : 0;
       const missing = [
         !String(body.card.appearance ?? "").trim() ? "外貌描述" : "",
         !String(body.card.appearance_prompt ?? "").trim() ? "英文生图提示词" : "",
-        worldbookCount < 2 ? "至少 2 条世界书" : "",
+        !Array.isArray(body.card.worldbook) || body.card.worldbook.length === 0 ? "世界书" : "",
       ].filter(Boolean);
       setStatus(
         missing.length
@@ -2715,9 +2711,6 @@ function CreateCharacterModal({
       </section>
 
       <h3 className="form-section-title">世界书</h3>
-      <p className="field-hint">
-        生成数量由模型按角色复杂度决定，通常 2–10 条；每轮最多命中 4 条。普通角色保持精简，复杂世界观再增加。
-      </p>
       <section className="worldbook-editor-list">
         {card.worldbook.length === 0 && (
           <div className="worldbook-empty">

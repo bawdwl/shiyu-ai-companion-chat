@@ -1,6 +1,6 @@
 # 拾语 Android
 
-当前版本：`0.17.0 / versionCode 31`，只提供一个完整安装包：
+当前版本：`0.18.0 / versionCode 32`，只提供一个完整安装包：
 
 - `com.shiyu.chat`：内置本地语音识别、角色朗读、MNN 和图片生成入口。
 
@@ -20,7 +20,7 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
   去重后提供女声 1、男声 1、女声 2、男声 2 四个选项，支持试听和按角色保存。
 - 千问图片 API 与内置 Local Dream SD1.5/QNN 生图。
 - 设置中按设备自动选择并下载 MeinaMix V12，显示进度、校验大小与 SHA-256。
-- 内置李白、宋知意、裴既明、萧承渊和顾清禾；删除江昭谌、许澄与旧实验角色。
+- 内置李白、宋知意、裴既明和萧承渊；删除顾清禾、江昭谌、许澄与旧实验角色。
 - API Key 使用 Android Keystore；聊天、记忆、图片和状态保存在本机。
 
 ## 模型
@@ -71,9 +71,9 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 - 64 项 JVM 单元测试通过。
 - Release Lint、Debug 构建和关闭 R8 的 Release 构建通过。
-- `0.17.0` 源码已通过 64 项 JVM 测试、Release Lint 和 APK 构建。
+- `0.18.0` 源码已通过 JVM 测试、Release Lint 和 APK 构建。
 - 预编译 APK 仅作为 GitHub Release 附件分发，不提交到 Git：
-  <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.17.0>
+  <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.0>
 
 ## 已知限制
 

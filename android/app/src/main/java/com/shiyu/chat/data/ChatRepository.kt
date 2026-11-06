@@ -250,26 +250,6 @@ class ChatRepository(
             custom = false,
             modelSource = MODEL_SOURCE_API,
         ),
-        CharacterEntity(
-            id = GU_QINGHE_CHARACTER_ID,
-            name = "顾清禾",
-            tag = "建筑系学姐 · 冷静慢热",
-            description = "临江大学建筑系大三学生，21岁，身高约175厘米。独立冷静，观察力强，慢热。与用户因下课相撞和图纸讨论结识，关系从误会开始，逐渐发展。",
-            personality = "独立、冷静、观察力强、慢热；被误认为难以接近。熟悉后有不动声色的冷幽默。不公开嘲弄用户，也不每一轮反问。",
-            speechStyle = "语气平静，用词准确，偶尔带点冷幽默。不啰嗦，但关键处会解释清楚。",
-            relationship = "用户与她下课相撞，她以为用户来表白；结果用户指出她校园改造图纸中的动线错误，由此认识。目前是刚认识的同学关系。",
-            appearance = "女性，21岁，脸型清瘦，下颌线分明，眼睛狭长，瞳色深褐，常带审视的平静目光；黑色长发，常低马尾；身高约175厘米，身形高挑偏瘦；穿深灰针织开衫、白衬衫和黑色直筒裤，背画筒，手腕戴细表，神态冷淡寡言。",
-            appearancePrompt = "1girl, female, solo, 21 year old East Asian student, tall slim, narrow gray-brown eyes, long black hair, low ponytail, gray cardigan, white shirt, art tube, architecture studio",
-            greeting = "（被人流挤得后退半步，先扶稳肩上的画筒，才抬眼看向你）你不是来表白的？（略一点头）那就好。不过你手里这张校园平面图……西侧门两年前就封了。谁给你的？",
-            characterKind = "现代大学生",
-            era = "21世纪初",
-            knowledgeCutoff = "2024年",
-            forbiddenKnowledge = "未来事件、建筑系专业机密、他人隐私",
-            forbiddenTerms = "表白,喜欢,爱",
-            worldbookJson = GU_QINGHE_WORLDBOOK,
-            custom = false,
-            modelSource = MODEL_SOURCE_API,
-        ),
     )
 
     fun cloudProvider(): String {
@@ -606,11 +586,11 @@ class ChatRepository(
                     "content",
                     "Create a detailed visual appearance profile from the supplied character. " +
                         "Return one JSON object only with string fields appearance_zh and " +
-                        "appearance_prompt. Write appearance_zh as completely as the character " +
-                        "requires, without padding, and explicitly include apparent gender, apparent age, face shape, eyes, " +
+                        "appearance_prompt. appearance_zh must be 80 to 220 Chinese characters " +
+                        "and explicitly include apparent gender, apparent age, face shape, eyes, " +
                         "hair, build, height when known, clothing, accessories, expression and " +
                         "one common setting. appearance_prompt must be one comma-separated English " +
-                        "SD1.5 tag line that fits within 77 CLIP tokens. $subjectRule Do not include " +
+                        "SD1.5 tag line with 18 to 30 concise tags. $subjectRule Do not include " +
                         "quality, camera or art-style tags. Never include contradictory gender " +
                         "words. Preserve distinctive details from the profile.",
                 ),
@@ -630,7 +610,7 @@ class ChatRepository(
         addUsage(usage.promptTokens + usage.completionTokens)
         val json = parseJsonObject(raw)
         val chinese = json.optString("appearance_zh").trim().take(700)
-        require(chinese.isNotEmpty()) { "模型没有生成中文外貌描述" }
+        require(chinese.length >= 20) { "模型没有生成完整的中文外貌描述" }
         return DreamAppearanceProfile(
             chinese = chinese,
             english = normalizeEnglishAppearancePrompt(json.optString("appearance_prompt")),
@@ -2021,21 +2001,15 @@ class ChatRepository(
             canLearnFromUser（布尔）, allowEverydayInvention（布尔）。
             固定身份必须尊重用户输入。历史人物要写清时代截止和时代外知识。
             角色可以创造普通日常细节，不能改变核心身份。
-            各字段按角色实际需要写完整、具体，以能支持稳定角色扮演为准；
-            不要为了凑字数重复、堆砌标签或复述同一设定，系统会执行字段存储硬上限。
-            appearance 必须填写，描述角色可见外貌，
+            appearance 必须填写，用 80 到 220 个中文字符描述角色可见外貌，
             明确写出性别与 apparent age，并覆盖脸型、眼睛、发型与发色、身高/身形、
             服装、配饰和常见神态；如果用户没有写外貌，可以创作与身份、性别和时代一致的视觉细节。
             appearancePrompt 是仅供本地 Dream/SD1.5 生图使用的视觉提示词，
             重点写年龄、性别、脸型、眼睛、发型、服装、配饰和常见神态；
             必须以 "1boy, male, solo,"、"1girl, female, solo," 或 "solo," 开头；
-            只写可见外貌和简单场景，不要写画质、镜头或艺术风格，
-            生成后必须能压缩进 77 Token 的 CLIP 窗口，不要输出到聊天正文。
-            worldbook 条数由你根据角色复杂度判断，通常为 2 至 10 条，不要为了凑数重复主卡：
-            普通日常角色用 2 至 3 条；有明显职业、组织、固定地点或关系网络的用 4 至 6 条；
-            历史、架空世界观、复杂人际关系或多段关键经历的用 6 至 10 条。
-            每条只补充按需触发的稳定设定，关键词必须具体、彼此有区分，并能在聊天中自然触发。
-            greeting 是保存角色后立即发送给用户的第一条角色聊天消息：
+            只写可见外貌和简单场景，控制在 20 到 35 个英文单词，
+            不要写画质、镜头或艺术风格，不要输出到聊天正文。
+            greeting 是保存角色后立即发送给用户的第一条角色聊天消息，约100到300字：
             写清一个具体场景，由角色主动开口，最多用一到两处中文括号嵌入自然动作或神态，
             再留下一个能自然接话的剧情钩子。不要写“你好，我是……”资料介绍，
             不要列字段，不要加 Markdown 标题，不要默认输出内心独白、好感度或数值。
@@ -2047,7 +2021,7 @@ class ChatRepository(
             opencodeClient.completeWithUsage(
                 key,
                 messages,
-                2400,
+                1200,
                 "shiyu-character-studio-${UUID.randomUUID()}",
                 json = true,
             ).first
@@ -2066,7 +2040,7 @@ class ChatRepository(
             personality = json.optString("personality").take(500),
             speechStyle = json.optString("speechStyle").take(500),
             relationship = json.optString("relationship").take(400),
-            appearance = json.optString("appearance").take(1200),
+            appearance = json.optString("appearance").take(600),
             appearancePrompt = normalizeOptionalAppearancePrompt(
                 json.optString("appearancePrompt"),
             ),
@@ -2076,13 +2050,7 @@ class ChatRepository(
             knowledgeCutoff = json.optString("knowledgeCutoff").take(120),
             forbiddenKnowledge = json.optString("forbiddenKnowledge").take(1200),
             forbiddenTerms = terms.joinToString(","),
-            worldbookJson = json.optJSONArray("worldbook")?.let { entries ->
-                JSONArray().also { limited ->
-                    for (index in 0 until minOf(entries.length(), 10)) {
-                        limited.put(entries.get(index))
-                    }
-                }.toString()
-            } ?: "[]",
+            worldbookJson = json.optJSONArray("worldbook")?.toString() ?: "[]",
             canLearnFromUser = json.optBoolean("canLearnFromUser", true),
             allowEverydayInvention = json.optBoolean("allowEverydayInvention", true),
             custom = true,
@@ -2352,24 +2320,20 @@ class ChatRepository(
         private const val PEI_JIMING_CHARACTER_ID = "builtin-pei-jiming-v1"
         private const val LI_BAI_CHARACTER_ID = "custom-abe15766-bc3"
         private const val XIAO_CHENGYUAN_CHARACTER_ID = "custom-87ca8d73-043"
-        private const val GU_QINGHE_CHARACTER_ID = "custom-9d00d120-aa0"
         private val BUILT_IN_CHARACTER_IDS = setOf(
             SONG_ZHIYI_CHARACTER_ID,
             PEI_JIMING_CHARACTER_ID,
             LI_BAI_CHARACTER_ID,
             XIAO_CHENGYUAN_CHARACTER_ID,
-            GU_QINGHE_CHARACTER_ID,
         )
         private val FORCED_AVATAR_REFRESH_IDS = setOf(
             XIAO_CHENGYUAN_CHARACTER_ID,
-            GU_QINGHE_CHARACTER_ID,
         )
         private val DEFAULT_AVATAR_ASSETS = mapOf(
             SONG_ZHIYI_CHARACTER_ID to "song-zhiyi.webp",
             PEI_JIMING_CHARACTER_ID to "pei-jiming.webp",
             LI_BAI_CHARACTER_ID to "li-bai.webp",
             XIAO_CHENGYUAN_CHARACTER_ID to "xiao-chengyuan.webp",
-            GU_QINGHE_CHARACTER_ID to "gu-qinghe.webp",
         )
         private const val SONG_ZHIYI_DESCRIPTION =
             "20 岁女性，是用户同校低一年级的学妹，视觉传达设计专业，家在泉州，目前在厦门读大学。"
@@ -2421,12 +2385,6 @@ class ChatRepository(
               {"title":"萧承渊的日常","keywords":["批奏","起居","习惯"],"content":"萧承渊习惯深夜批阅奏章，常忘却时辰；晨起很早，不喜旁人近身服侍。他对亲近者会放缓语速，但仍保持克制。","priority":2}
             ]
         """.trimIndent()
-        private val GU_QINGHE_WORLDBOOK = """
-            [
-              {"title":"临江大学","keywords":["临江大学","校园","学校"],"content":"临江大学是一所综合性大学，建筑系在工科楼。校园西侧门两年前因施工封闭，东侧门是主要出入口。","priority":8},
-              {"title":"建筑系","keywords":["建筑系","图纸","动线","设计"],"content":"建筑系课程注重设计实践，学生常需绘制平面图、分析动线。顾清禾擅长空间规划，对细节敏锐。","priority":7}
-            ]
-        """.trimIndent()
         private val SONG_ZHIYI_TRAINING_SYSTEM_PROMPT = """
             你是宋知意，20 岁女性，是用户同校低一年级的学妹，视觉传达设计专业，家在泉州，目前在厦门读大学。
             你表面活泼、嘴快、有点鬼点子，实际温柔、体贴、敏感，也有自己的判断。
@@ -2456,6 +2414,8 @@ class ChatRepository(
             "builtin-li-bai-v1",
             "builtin-jiang-zhaochen-v1",
             "custom-d2b69a3a-84e",
+            "custom-9d00d120-aa0",
+            "custom-gu-qinghe-v1",
         )
         private const val KEY_DELETED_BUILTIN_CHARACTERS = "deleted_builtin_characters_v1"
         private const val KEY_BUILTIN_AVATAR_SEED_VERSION = "builtin_avatar_seed_version"

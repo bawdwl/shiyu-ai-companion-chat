@@ -6,7 +6,7 @@ Windows 桌面版把同一套 FastAPI 后端和 React 界面放进 WebView2 窗�
 Windows EXE 是**基础云端版**，主要提供：
 
 - DeepSeek / OpenCode Go 云端角色生成和聊天；
-- 五个内置角色及新建、编辑、删除；
+- 四个内置角色及新建、编辑、删除；
 - 角色卡、世界书、知识边界和自定义头像；
 - 长期记忆自动整理、检索和人工管理；
 - 云端视觉模型的图片输入；
@@ -18,10 +18,10 @@ Windows EXE 是**基础云端版**，主要提供：
 
 ## 使用发布包
 
-1. 下载并解压 `Shiyu-0.18.2-Windows-x64.zip`。
-2. 保持目录结构完整，运行 `Shiyu-0.18.2-Windows-x64.exe`。
+1. 下载并解压 `Shiyu-0.18.0-Windows-x64.zip`。
+2. 保持目录结构完整，运行 `Shiyu-0.18.0-Windows-x64.exe`。
 3. 打开“应用设置”，填写 DeepSeek 或 OpenCode Go API Key。
-4. 首次启动会创建五个演示角色，可直接聊天或编辑。
+4. 首次启动会创建四个演示角色，可直接聊天或编辑。
 
 发布包不包含 API Key、聊天数据库、个人图片或录音，也不包含 Qwen、LoRA、
 Stable Diffusion、Whisper 或 TTS 权重。
@@ -73,7 +73,7 @@ python desktop/build_desktop.py
 输出目录：
 
 ```text
-release/windows/Shiyu-0.18.2-Windows-x64/
+release/windows/Shiyu-0.18.0-Windows-x64/
 ```
 
 构建使用 PyInstaller `onedir`。分发时必须保留整个目录，只发送主 `.exe` 会在

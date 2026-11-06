@@ -499,6 +499,7 @@ class ChatStore:
             db.execute('DELETE FROM long_term_memories WHERE character_id=?',(character_id,))
             db.execute('DELETE FROM state_transitions WHERE character_id=?',(character_id,))
             db.execute('DELETE FROM character_assets WHERE character_id=?',(character_id,))
+            db.execute('DELETE FROM voice_profiles WHERE character_id=?',(character_id,))
             cursor=db.execute('DELETE FROM character_cards WHERE id=?',(character_id,))
             if cursor.rowcount == 0:
                 raise KeyError(character_id)
