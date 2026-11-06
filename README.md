@@ -4,6 +4,8 @@
 
 当前主线使用 **OpenCode Go `deepseek-v4.1-flash`**，同时支持独立 DeepSeek Provider。API Key 由使用者在本机填写，不会写入源码、数据库快照或 Git 仓库。
 
+发布地址：[GitHub Release `v0.18.0`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.0)
+
 ![拾语 PC 当前界面](docs/images/PC-0.18-home.png)
 
 ![拾语：AI 虚拟角色陪伴系统框架](docs/images/shiyu-ai-companion-architecture-2026-11-04.png)
@@ -16,14 +18,14 @@
 
 Windows EXE 的“基础版”不是完整研究环境。需要本地大模型、本地生图、高质量角色音色或完整语音识别时，请按下方 PC 源码流程安装对应运行库和模型权重。
 
-## 2026-11-06 `0.18.3` 本地测试版
+## 2026-11-06 `0.18.0` 正式再发布
 
 - Windows 修复 WebView2 窗口使用 PNG 图标导致程序静默退出的问题，改用 ICO，并增加日志文件占用时的启动回退。
 - Windows EXE 保持基础云端版定位，完整本地能力需要复现 PC 网页环境并自行下载模型。
 - Android 以稳定的 `0.17.0` 行为为基线，删除顾清禾及其聊天、记忆、状态、头像和音色数据；升级时自动清理旧角色。
 - Android 新建角色档案直接移植了已验收 Windows `0.18.0` 备份中的生成提示、`1800/1200` Token 两阶段请求、12 个字段的 JSON 解析、缺失材料阈值和第二次补全流程；同时有 DeepSeek 与 OpenCode Key 时，档案生成优先使用该 PC 版本对应的 DeepSeek。
 - 宋知意和裴既明恢复为 LoRA 项目训练与推理时使用的逐字精简提示词；API 与本地 MNN 模式都使用同一份固定文本，不再拼接完整角色卡。逐字文本与来源哈希见 [固定角色提示词](docs/固定角色提示词_2026-11-06.md)。
-- PC 与 Android 本地测试统一使用 `0.18.3`，等待作者验收后发布。
+- Windows 使用已验收的 `0.18.0` 备份、Android 使用 `0.18.3`。
 
 ## 2026-11-05 `0.18.0` PC 网页端同步
 
@@ -106,8 +108,8 @@ Windows EXE 的“基础版”不是完整研究环境。需要本地大模型�
 
 ## 快速使用 Windows EXE 基础版
 
-本地验收包为 `Shiyu-0.18.3-Windows-x64.zip`，解压后保持目录完整并运行
-`Shiyu-0.18.3-Windows-x64.exe`。Windows 10/11 需要 Microsoft Edge WebView2
+Windows 发布包为 `Shiyu-0.18.0-Windows-x64.zip`，解压后保持目录完整并运行
+`Shiyu-0.18.0-Windows-x64.exe`。Windows 10/11 需要 Microsoft Edge WebView2
 Runtime。首次启动后在设置中填写 DeepSeek 或 OpenCode Go API Key。
 
 EXE 不要求安装 Python、Conda、Node.js 或模型权重，适合直接体验云端角色聊天、角色生成、世界书和长期记忆。它不是完整的本地推理发行包。

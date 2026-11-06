@@ -73,7 +73,7 @@ android/app/build/outputs/apk/debug/app-debug.apk
 - Release Lint、Debug 构建和关闭 R8 的 Release 构建通过。
 - `0.18.3` 源码已通过 JVM 测试、Release Lint 和 APK 构建。
 - 预编译 APK 仅作为 GitHub Release 附件分发，不提交到 Git：
-  <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.3>
+  <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.0>
 
 ## 已知限制
 

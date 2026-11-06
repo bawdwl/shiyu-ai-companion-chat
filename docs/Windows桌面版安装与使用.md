@@ -18,8 +18,8 @@ Windows EXE 是**基础云端版**，主要提供：
 
 ## 使用发布包
 
-1. 下载并解压 `Shiyu-0.18.3-Windows-x64.zip`。
-2. 保持目录结构完整，运行 `Shiyu-0.18.3-Windows-x64.exe`。
+1. 下载并解压 `Shiyu-0.18.0-Windows-x64.zip`。
+2. 保持目录结构完整，运行 `Shiyu-0.18.0-Windows-x64.exe`。
 3. 打开“应用设置”，填写 DeepSeek 或 OpenCode Go API Key。
 4. 首次启动会创建四个演示角色，可直接聊天或编辑。
 
@@ -73,7 +73,7 @@ python desktop/build_desktop.py
 输出目录：
 
 ```text
-release/windows/Shiyu-0.18.3-Windows-x64/
+release/windows/Shiyu-0.18.0-Windows-x64/
 ```
 
 构建使用 PyInstaller `onedir`。分发时必须保留整个目录，只发送主 `.exe` 会在

@@ -408,7 +408,7 @@ class OpenCodeBackendTests(unittest.TestCase):
             self.requests[-1]["headers"]["x-opencode-session"], sid
         )
         self.assertEqual(
-            self.requests[-1]["headers"]["user-agent"], "shiyu-chat/0.18.3"
+            self.requests[-1]["headers"]["user-agent"], "shiyu-chat/0.18.0"
         )
         usage = self.client.get("/health").json()["opencode_usage"]
         self.assertEqual(usage["total_tokens"], 14)

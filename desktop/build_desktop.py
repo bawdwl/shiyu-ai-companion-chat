@@ -1,7 +1,7 @@
 """Build a self-contained Windows onedir distribution.
 
 Model weights, API keys, databases, and user images are never bundled. The
-result should be distributed as the complete ``Shiyu-0.18.3-Windows-x64``
+result should be distributed as the complete ``Shiyu-0.18.0-Windows-x64``
 folder (or its zip), not as the loose executable.
 """
 
@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "release" / "windows"
 BUILD = ROOT / "build" / "desktop"
-NAME = "Shiyu-0.18.3-Windows-x64"
+NAME = "Shiyu-0.18.0-Windows-x64"
 
 
 def run(command: list[str], *, cwd: Path = ROOT) -> None:

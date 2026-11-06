@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-11-06 — `0.18.3` local validation build
+## 2026-11-06 — `v0.18.0` republish with Windows 0.18.0 / Android 0.18.3
 
 - Restored the stable Android `0.17.0` character behavior and removed the adaptive worldbook and character-length changes from `0.18.2`.
 - Replaced the Android character-studio prompt and completion flow with the accepted Windows `0.18.0` backup implementation: 1323-character generation prompt, 510-character repair prompt, `1800/1200` token limits, full field parsing and the same missing-material thresholds. Character generation prefers a configured DeepSeek key as the accepted desktop build did; normal chat can still use OpenCode.
@@ -14,7 +14,7 @@
 
 - PC Python: 296 passed.
 - PC frontend state tests: 40 passed; React production build passed.
-- Windows EXE: visible `0.18.3` local validation window, service startup and version check passed.
+- Windows EXE: the author-approved `0.18.0` backup is packaged unchanged.
 - Android: 68 JVM tests passed; `0.18.3 / versionCode 33` arm64-v8a APK built and its stable debug signature verified.
 
 ## 2026-11-05 — PC web `0.18.0` sync
