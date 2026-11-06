@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-11-06 — Android `0.18.6` compact chat overlay and full image controls
+## 2026-11-06 — Android `0.18.7` full-screen workspaces and generation progress
 
 - Entering a chat now positions directly at the newest message without the previous animated scroll from the start of the conversation.
 - The full-screen character artwork now stays fixed at 100% opacity while the interactive layer avoids the software keyboard. The latest reply is anchored above the composer, so opening the keyboard moves the message but leaves the artwork in place.
@@ -14,6 +14,9 @@
 - Local Dream defaults now use 1024×1024 when the model contains its 1024 patch, 50 steps, CFG 7, and DPM++ 2M SDE with Karras. Settings expose 512/768/1024 resolution, all five scheduler families, and the supported Karras variant; LCM correctly disables Karras.
 - The default positive preset is reduced to `masterpiece, best quality, anime illustration, three-quarter upper body, {appearance}` so most of the 77-token CLIP window remains available for the character's actual appearance.
 - New characters now request 140–320 Chinese characters of distinctive visual detail and 30–50 English appearance tags. The home cards no longer overlay role tags or cloud/local model badges, and the chat composer no longer shows a name-based placeholder.
+- Long-term memory, character editing, Trace, rollback, voice selection and artwork cropping now use fixed full-screen pages with a persistent top-left back button instead of swipe-dismissable bottom sheets.
+- Image generation reports real Local Dream step progress as a percentage; cloud generation reports request, download and save stages.
+- Reset conversation now requires a destructive confirmation dialog. Home-screen character artwork is aligned to the top of the card so faces are less likely to be cropped.
 - Room schema is now 13 with a lossless 12→13 migration. Added deterministic rollback, artwork-crop and action-bracket tests. Android JVM tests and the debug APK build pass.
 
 ## 2026-11-06 — `v0.18.0` republish with Windows 0.18.0 / Android 0.18.3

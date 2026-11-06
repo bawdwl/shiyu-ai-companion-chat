@@ -119,6 +119,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.shiyu.chat.data.CharacterEntity
@@ -160,6 +162,59 @@ private val InkMuted = Color(0xFF746F80)
 private val Hairline = Color(0xFFEAE4F2)
 private val Apricot = Color(0xFFF8E8EF)
 private val LilacMist = Color(0xFFF3EFFF)
+
+@Composable
+private fun FullScreenPage(
+    title: String,
+    onBack: () -> Unit,
+    content: @Composable (Modifier) -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onBack,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = Color(0xFFFDFBFF),
+        ) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding(),
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(58.dp)
+                        .padding(horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回",
+                            tint = DeepForest,
+                        )
+                    }
+                    Text(
+                        title,
+                        modifier = Modifier.weight(1f),
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                HorizontalDivider(color = Hairline)
+                content(Modifier.fillMaxWidth().weight(1f))
+            }
+        }
+    }
+}
 
 @Composable
 fun ShiyuApp(repository: ChatRepository) {
@@ -313,6 +368,9 @@ fun ShiyuApp(repository: ChatRepository) {
         EditCharacterDialog(
             character = editingCharacter,
             avatarBusy = state.avatarBusy,
+            imageGenerationActive = state.imageGenerationActive,
+            imageGenerationProgress = state.imageGenerationProgress,
+            imageGenerationLabel = state.imageGenerationLabel,
             avatarModelReady = state.avatarModelReady,
             imageApiConfigured = state.imageApiConfigured,
             localModelReady = state.localModelReady,
@@ -701,6 +759,7 @@ private fun CharacterCard(
                 LocalAvatar(
                     path = backgroundPath,
                     modifier = Modifier.fillMaxSize(),
+                    cropTop = true,
                 )
             } else {
                 Text(
@@ -809,6 +868,7 @@ private fun ChatScreen(
     }
     var showVoicePicker by remember(character.id) { mutableStateOf(false) }
     var confirmDelete by remember(character.id) { mutableStateOf(false) }
+    var confirmReset by remember(character.id) { mutableStateOf(false) }
     var showRollback by remember(character.id) { mutableStateOf(false) }
     var pendingRollback by remember(character.id) { mutableStateOf<MessageEntity?>(null) }
     var draft by remember(character.id) { mutableStateOf(TextFieldValue("")) }
@@ -1039,7 +1099,7 @@ private fun ChatScreen(
                             leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
                             onClick = {
                                 menu = false
-                                onReset()
+                                confirmReset = true
                             },
                         )
                         androidx.compose.material3.DropdownMenuItem(
@@ -1416,6 +1476,34 @@ private fun ChatScreen(
             },
         )
     }
+    if (confirmReset) {
+        AlertDialog(
+            onDismissRequest = { confirmReset = false },
+            shape = RoundedCornerShape(22.dp),
+            containerColor = Color(0xFFFDFBFF),
+            title = { Text("重置和${character.name}的对话？") },
+            text = {
+                Text(
+                    "这会删除当前角色的全部聊天、长期记忆、内部状态、语音记录和生成图片，无法恢复。角色档案本身会保留。",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmReset = false
+                        onReset()
+                    },
+                ) {
+                    Text("确认重置", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmReset = false }) {
+                    Text("取消")
+                }
+            },
+        )
+    }
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
@@ -1515,19 +1603,14 @@ private fun RollbackPickerSheet(
     onDismiss: () -> Unit,
     onSelect: (MessageEntity) -> Unit,
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = Color(0xFFFDFBFF),
-        shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
-    ) {
+    FullScreenPage(
+        title = "回退对话",
+        onBack = onDismiss,
+    ) { modifier ->
         Column(
-            Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.72f)
-                .navigationBarsPadding()
+            modifier
                 .padding(horizontal = 18.dp),
         ) {
-            Text("回退对话", fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
             Text(
                 "选择一句话，回到它发出之前。该消息及之后的内容会从聊天、记忆和状态中删除，所选文字会放回输入框。",
                 modifier = Modifier.padding(top = 5.dp, bottom = 12.dp),
@@ -1628,19 +1711,14 @@ private fun VoicePickerSheet(
                 id.toString() == query.trim()
         }
     }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = Color(0xFFFDFBFF),
-        shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
-    ) {
+    FullScreenPage(
+        title = "选择角色音色",
+        onBack = onDismiss,
+    ) { modifier ->
         Column(
-            Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.88f)
-                .navigationBarsPadding()
+            modifier
                 .padding(horizontal = 18.dp),
         ) {
-            Text("选择角色音色", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
             Text(
                 "VITS 中文模型提供 4 个不同的可用声部：女声 1、男声 1、女声 2、男声 2。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1836,6 +1914,7 @@ private fun LocalAvatar(
     path: String?,
     modifier: Modifier = Modifier,
     cropFace: Boolean = false,
+    cropTop: Boolean = false,
 ) {
     val modified = path?.let { File(it).lastModified() } ?: 0L
     val bitmap = remember(path, modified) {
@@ -1869,6 +1948,7 @@ private fun LocalAvatar(
                 contentDescription = null,
                 modifier = modifier,
                 contentScale = ContentScale.Crop,
+                alignment = if (cropTop) Alignment.TopCenter else Alignment.Center,
             )
         }
     }
@@ -2535,6 +2615,9 @@ private fun CreateCharacterDialog(
 private fun EditCharacterDialog(
     character: CharacterEntity,
     avatarBusy: Boolean,
+    imageGenerationActive: Boolean,
+    imageGenerationProgress: Float,
+    imageGenerationLabel: String,
     avatarModelReady: Boolean,
     imageApiConfigured: Boolean,
     localModelReady: Boolean,
@@ -2610,20 +2693,16 @@ private fun EditCharacterDialog(
         pendingImportArtwork = uri
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = Color(0xFFFDFBFF),
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-    ) {
+    FullScreenPage(
+        title = "编辑${character.name}",
+        onBack = onDismiss,
+    ) { modifier ->
         LazyColumn(
-            Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.9f),
+            modifier,
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                Text("编辑角色档案", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     "认知边界会进入每次模型请求。正式修改保存在本机。",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2718,6 +2797,7 @@ private fun EditCharacterDialog(
                             LocalAvatar(
                                 path = backgroundPath ?: avatarPath,
                                 modifier = Modifier.fillMaxSize(),
+                                cropTop = true,
                             )
                             CharacterBadge(
                                 character.copy(avatarPath = avatarPath),
@@ -2758,6 +2838,23 @@ private fun EditCharacterDialog(
                             ) {
                                 Text(if (avatarBusy) "生成中…" else "云端生成竖屏图")
                             }
+                        }
+                        if (imageGenerationActive) {
+                            val percent = (
+                                imageGenerationProgress.coerceIn(0f, 1f) * 100
+                                ).roundToInt()
+                            Text(
+                                "$imageGenerationLabel · $percent%",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Forest,
+                            )
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = {
+                                    imageGenerationProgress.coerceIn(0f, 1f)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
                         }
                         OutlinedButton(
                             onClick = { avatarPicker.launch("image/*") },
@@ -2923,27 +3020,18 @@ private fun ArtworkCropDialog(
         }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = Color(0xFFFDFBFF),
-        shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
-    ) {
+    FullScreenPage(
+        title = when {
+            selectingBackground -> "裁剪聊天背景"
+            avatarOnly -> "选择角色头像"
+            else -> "选择角色头像"
+        },
+        onBack = onDismiss,
+    ) { modifier ->
         Column(
-            Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.92f)
-                .navigationBarsPadding()
+            modifier
                 .padding(horizontal = 18.dp),
         ) {
-            Text(
-                when {
-                    selectingBackground -> "裁剪聊天背景"
-                    avatarOnly -> "选择角色头像"
-                    else -> "选择角色头像"
-                },
-                fontSize = 23.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
             Text(
                 when {
                     selectingBackground ->
@@ -3007,7 +3095,6 @@ private fun ArtworkCropDialog(
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                TextButton(onClick = onDismiss) { Text("取消") }
                 Button(
                     enabled = bitmap != null,
                     onClick = {
@@ -3189,18 +3276,13 @@ private fun TraceSheet(
     traces: List<TurnTraceEntity>,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = Color(0xFFFDFBFF),
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-    ) {
+    FullScreenPage(
+        title = "调试 Trace",
+        onBack = onDismiss,
+    ) { modifier ->
         Column(
-            Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.86f)
-                .padding(horizontal = 18.dp),
+            modifier.padding(horizontal = 18.dp),
         ) {
-            Text("调试 Trace", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
             Text(
                 "仅保存模型、Prompt 哈希、记忆 ID、状态、Token 与耗时，不保存 API Key 或完整 Prompt。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -3277,18 +3359,13 @@ private fun MemorySheet(
     var editing by remember { mutableStateOf<MemoryEntity?>(null) }
     var deleting by remember { mutableStateOf<MemoryEntity?>(null) }
     var editedText by remember { mutableStateOf("") }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = Color(0xFFFDFBFF),
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-    ) {
+    FullScreenPage(
+        title = "${character.name}的长期记忆",
+        onBack = onDismiss,
+    ) { modifier ->
         Column(
-            Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.72f)
-                .padding(20.dp),
+            modifier.padding(20.dp),
         ) {
-            Text("${character.name}的长期记忆", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
             Text(
                 "结构化事实会在聊天后由后台自动整理，不需要逐条确认。删除一项事实会同时移除它的历史版本；你也可以直接在对话中更正。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

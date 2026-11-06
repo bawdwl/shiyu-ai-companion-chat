@@ -42,6 +42,9 @@ data class ShiyuUiState(
     val busy: Boolean = false,
     val historyBusy: Boolean = false,
     val avatarBusy: Boolean = false,
+    val imageGenerationActive: Boolean = false,
+    val imageGenerationProgress: Float = 0f,
+    val imageGenerationLabel: String = "",
     val memoryBusy: Boolean = false,
     val avatarModelReady: Boolean = false,
     val avatarModelBytes: Long = 0L,
@@ -678,13 +681,22 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
     }
 
     fun generateCloudAvatar(character: CharacterEntity, onComplete: (CharacterEntity) -> Unit) {
-        _state.value = _state.value.copy(avatarBusy = true, status = "正在通过千问 AI 平台生成角色头像…")
+        _state.value = _state.value.copy(
+            avatarBusy = true,
+            imageGenerationActive = true,
+            imageGenerationProgress = 0f,
+            imageGenerationLabel = "千问图片生成",
+            status = "正在通过千问 AI 平台生成角色头像…",
+        )
         generateAvatar(character, cloud = true, onComplete)
     }
 
     fun generateLocalAvatar(character: CharacterEntity, onComplete: (CharacterEntity) -> Unit) {
         _state.value = _state.value.copy(
             avatarBusy = true,
+            imageGenerationActive = true,
+            imageGenerationProgress = 0f,
+            imageGenerationLabel = "Local Dream 生成",
             status = "正在用手机 NPU 运行 MeinaMix V12 生成角色头像…",
         )
         generateAvatar(character, cloud = false, onComplete)
@@ -699,12 +711,22 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
             try {
                 repository.saveCharacter(character)
                 val updated = if (cloud) {
-                    repository.generateCloudAvatar(character)
+                    repository.generateCloudAvatar(character) { progress ->
+                        _state.value = _state.value.copy(
+                            imageGenerationProgress = progress,
+                        )
+                    }
                 } else {
-                    repository.generateLocalAvatar(character)
+                    repository.generateLocalAvatar(character) { progress ->
+                        _state.value = _state.value.copy(
+                            imageGenerationProgress = progress,
+                        )
+                    }
                 }
                 _state.value = _state.value.copy(
                     avatarBusy = false,
+                    imageGenerationActive = false,
+                    imageGenerationProgress = 1f,
                     selected = if (_state.value.selected?.id == updated.id) updated else _state.value.selected,
                     status = "角色头像已保存",
                 )
@@ -712,6 +734,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
             } catch (error: Exception) {
                 _state.value = _state.value.copy(
                     avatarBusy = false,
+                    imageGenerationActive = false,
                     status = error.message ?: "角色头像生成失败",
                 )
             }

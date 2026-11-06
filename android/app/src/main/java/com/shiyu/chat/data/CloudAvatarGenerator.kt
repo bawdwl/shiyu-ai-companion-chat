@@ -24,8 +24,13 @@ class CloudAvatarGenerator(private val context: Context) {
         .followRedirects(false).followSslRedirects(false).build()
     private val downloads = api.newBuilder().readTimeout(60, TimeUnit.SECONDS).build()
 
-    suspend fun generate(character: CharacterEntity, apiKey: String): String = withContext(Dispatchers.IO) {
+    suspend fun generate(
+        character: CharacterEntity,
+        apiKey: String,
+        onProgress: (Float) -> Unit = {},
+    ): String = withContext(Dispatchers.IO) {
         require(apiKey.isNotBlank()) { "请先在设置中填写千问 AI 平台 API Key" }
+        onProgress(0.05f)
         val description = listOf(
             character.appearance,
             character.description,
@@ -54,6 +59,7 @@ class CloudAvatarGenerator(private val context: Context) {
             .header("Authorization", "Bearer $apiKey")
             .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
             .build()
+        onProgress(0.15f)
         val imageUrl = api.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
@@ -66,6 +72,7 @@ class CloudAvatarGenerator(private val context: Context) {
             (0 until content.length()).mapNotNull { content.optJSONObject(it)?.optString("image")?.takeIf(String::isNotBlank) }
                 .firstOrNull() ?: error("千问 AI 平台没有返回图片地址；请查看千问 AI 平台账单后再重试")
         }
+        onProgress(0.70f)
         val url = imageUrl.toHttpUrlOrNull() ?: error("千问 AI 平台返回的图片地址无效")
         require(url.isHttps && url.port == 443 && url.username.isEmpty() && url.password.isEmpty() &&
             url.host.startsWith("dashscope-") && url.host.endsWith(".aliyuncs.com")) { "千问 AI 平台返回的图片地址不受支持" }
@@ -82,6 +89,7 @@ class CloudAvatarGenerator(private val context: Context) {
             }
             buffer.readByteArray()
         }
+        onProgress(0.90f)
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
         require(options.outWidth in 1..4096 && options.outHeight in 1..4096) { "图片已生成，但格式无效；请勿重复点击以免再次计费" }
@@ -105,6 +113,7 @@ class CloudAvatarGenerator(private val context: Context) {
             bitmap.recycle()
         }
         output.absolutePath
+            .also { onProgress(1f) }
     }
 
     companion object { private const val MAX_IMAGE_BYTES = 15L * 1024 * 1024 }

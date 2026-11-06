@@ -505,10 +505,17 @@ class ChatRepository(
         avatarGenerator.deleteModel()
     }
 
-    suspend fun generateCloudAvatar(character: CharacterEntity): CharacterEntity {
+    suspend fun generateCloudAvatar(
+        character: CharacterEntity,
+        onProgress: (Float) -> Unit = {},
+    ): CharacterEntity {
         val key = secrets.getString("bailian_image_api_key", null)
             ?: error("请先在设置中填写千问 AI 平台 API Key")
-        val backgroundPath = cloudAvatarGenerator.generate(character, key)
+        val backgroundPath = cloudAvatarGenerator.generate(
+            character,
+            key,
+            onProgress,
+        )
         val avatarPath = avatarGenerator.createAvatarFromBackground(
             character.id,
             backgroundPath,
@@ -559,7 +566,10 @@ class ChatRepository(
         return updated
     }
 
-    suspend fun generateLocalAvatar(character: CharacterEntity): CharacterEntity {
+    suspend fun generateLocalAvatar(
+        character: CharacterEntity,
+        onProgress: (Float) -> Unit = {},
+    ): CharacterEntity {
         check(avatarGenerator.isModelReady()) {
             "请先在应用设置中导入 Local Dream 兼容的 SD1.5 NPU 模型 ZIP"
         }
@@ -567,6 +577,7 @@ class ChatRepository(
         val backgroundPath = avatarGenerator.generate(
             resolved,
             dreamGenerationSettings(),
+            onProgress,
         )
         val avatarPath = avatarGenerator.createAvatarFromBackground(
             resolved.id,

@@ -299,6 +299,7 @@ class DreamAvatarGenerator(private val context: Context) {
     suspend fun generate(
         character: CharacterEntity,
         settings: DreamGenerationSettings,
+        onProgress: (Float) -> Unit = {},
     ): String {
         check(isModelReady()) {
             "请先在设置中导入 Local Dream 兼容的 SD1.5 NPU 模型 ZIP"
@@ -322,6 +323,7 @@ class DreamAvatarGenerator(private val context: Context) {
         )
         return withContext(Dispatchers.IO) {
             awaitBackend()
+            onProgress(0f)
             val normalized = normalizedSettings
             val prompt = compactCommaPromptToLimit(
                 normalized.buildPrompt(character),
@@ -370,7 +372,21 @@ class DreamAvatarGenerator(private val context: Context) {
                         "error" -> throw IOException(
                             event.optString("message", "本地生图失败"),
                         )
-                        "complete" -> return@withContext saveRawRgb(event, character.id)
+                        "progress" -> {
+                            val step = event.optInt("step", 0)
+                            val total = event.optInt("total_steps", 0)
+                            if (total > 0) {
+                                onProgress(
+                                    (step.toFloat() / total)
+                                        .coerceIn(0f, 0.99f),
+                                )
+                            }
+                        }
+                        "complete" -> {
+                            val path = saveRawRgb(event, character.id)
+                            onProgress(1f)
+                            return@withContext path
+                        }
                     }
                 }
             }
