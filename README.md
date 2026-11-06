@@ -21,6 +21,7 @@ Windows EXE 的“基础版”不是完整研究环境。需要本地大模型�
 - Windows 修复 WebView2 窗口使用 PNG 图标导致程序静默退出的问题，改用 ICO，并增加日志文件占用时的启动回退。
 - Windows EXE 保持基础云端版定位，完整本地能力需要复现 PC 网页环境并自行下载模型。
 - Android 以稳定的 `0.17.0` 行为为基线，删除顾清禾及其聊天、记忆、状态、头像和音色数据；升级时自动清理旧角色。
+- Android 新建角色档案的生成请求、JSON 解析、外貌补全和审核流程恢复为 `v0.16.1` 相同实现；同时有 DeepSeek 与 OpenCode Key 时，档案生成优先使用 `v0.16.1` 发布版对应的 DeepSeek。
 - 宋知意和裴既明恢复为 LoRA 项目训练与推理时使用的逐字精简提示词；API 与本地 MNN 模式都使用同一份固定文本，不再拼接完整角色卡。逐字文本与来源哈希见 [固定角色提示词](docs/固定角色提示词_2026-11-06.md)。
 - 同时不再提供 `0.18.2`；PC 与 Android 本地测试统一使用 `0.18.0`，等待作者验收后发布。
 
@@ -182,7 +183,7 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 - 版本：`0.18.0 / versionCode 32`
 - Room schema：11
-- APK SHA-256：`BCCCD353774FFC4438936E9EFE1B5FF2741B48EFA617118076F6DD63208472AE`
+- APK SHA-256：`FE381DF559644C48DCE0442555FA167449F02C0A4FE2C532A58E5856E9D181D6`
 - 安装后请在设置中填写自己的 OpenCode Go 或 DeepSeek Key。
 
 APK 包含本地语音运行库、VITS 中文语音模型、Qwen MNN 运行库和 Dream SD1.5/QNN 后端。本地 Qwen 与 MeinaMix V12 等模型权重不随 APK 分发，需要用户按应用设置中的说明导入。

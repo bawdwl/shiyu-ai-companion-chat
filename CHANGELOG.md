@@ -3,6 +3,7 @@
 ## 2026-11-06 — `0.18.0` local validation build
 
 - Restored the stable Android `0.17.0` character behavior and removed the adaptive worldbook and character-length changes from `0.18.2`.
+- Restored the Android new-character generation request, parser, visual-material completion and review flow to the `v0.16.1` implementation. Character generation prefers a configured DeepSeek key, matching the public `v0.16.1` build behavior, while normal chat can still use OpenCode.
 - Removed Gu Qinghe from both PC and Android, including bundled portraits. Existing Gu Qinghe cards, conversations, memories, state, avatars and voice references are removed on upgrade.
 - Restored the exact concise system prompts from the LoRA training and selected adapter directories for Song Zhiyi and Pei Jiming. Both API and local MNN modes now use those fixed prompts instead of a concatenated full card.
 - Restored the Windows WebView2 window with an ICO icon and resilient logging startup.
