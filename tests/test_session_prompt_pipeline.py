@@ -8,7 +8,9 @@ from fastapi.testclient import TestClient
 from backend import create_app
 from character_cards import normalize_card, card_to_runtime
 from characters import CHARACTERS
+from fixed_character_prompts import FIXED_CHARACTER_PROMPTS
 from prompt_pipeline import assemble_prompt, reduce_repeated_history
+from product_characters import DEFAULT_PRODUCT_CARDS
 from session_memory import refresh_memory, select_memory, retrieve_covered_history
 from storage import ChatStore
 from stream_job import GenerationStopped
@@ -22,6 +24,31 @@ class SummaryEngine:
 
 
 class SessionMemoryTests(unittest.TestCase):
+    def test_fixed_lora_characters_use_exact_training_prompt_for_every_provider(self):
+        for character_id, expected in FIXED_CHARACTER_PROMPTS.items():
+            card = next(
+                item for item in DEFAULT_PRODUCT_CARDS
+                if item["id"] == character_id
+            )
+            runtime = card_to_runtime(normalize_card(card))
+            history = [
+                dict(id=1, role="user", content="你好"),
+                dict(id=2, role="assistant", content="你好。"),
+            ]
+            messages, trace = assemble_prompt(
+                dict(character_id=character_id, messages=history),
+                "继续聊",
+                {**CHARACTERS, character_id: runtime},
+            )
+            self.assertEqual(messages[0], {"role": "system", "content": expected})
+            self.assertEqual(messages[1:], [
+                {"role": "user", "content": "你好"},
+                {"role": "assistant", "content": "你好。"},
+                {"role": "user", "content": "继续聊"},
+            ])
+            self.assertEqual(trace["prompt_mode"], "fixed_training")
+            self.assertEqual(trace["worldbook_ids"], [])
+
     def test_excluded_history_does_not_consume_retrieval_limit(self):
         rows = []
         for i in range(5):

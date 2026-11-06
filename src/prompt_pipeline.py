@@ -4,6 +4,7 @@ from character_cards import retrieve_worldbook
 from behavior_rules import select_behavior_rules, trace_payload
 from session_memory import retrieve_covered_history
 from knowledge_guard import strict_prompt
+from fixed_character_prompts import FIXED_CHARACTER_PROMPTS
 from wukong_prompts import CORE_PROMPT as WUKONG_CORE_PROMPT
 from wukong_prompts import FULL_PROMPT as WUKONG_FULL_PROMPT
 import re
@@ -81,6 +82,27 @@ def assemble_prompt(
             'repeated_history_sentences_removed': 0,
             'generation_preset': {},
             'prompt_mode': prompt_mode,
+        }
+    fixed_character_prompt = FIXED_CHARACTER_PROMPTS.get(role.get('id'))
+    if prompt_mode == 'full' and fixed_character_prompt:
+        messages = [dict(role='system', content=fixed_character_prompt)]
+        messages.extend(
+            dict(role=message['role'], content=message['content'])
+            for message in current['messages']
+        )
+        messages.append(dict(role='user', content=question))
+        return messages, {
+            'sections': [{
+                'name': '固定训练提示词',
+                'content': fixed_character_prompt,
+            }],
+            'worldbook_ids': [],
+            'strict_knowledge_mode': False,
+            'provider_switch_from': None,
+            'memory_covered_message_id': 0,
+            'repeated_history_sentences_removed': 0,
+            'generation_preset': {},
+            'prompt_mode': 'fixed_training',
         }
     if prompt_mode in ('brief', 'wukong_brief', 'wukong_full'):
         system_prompt = (

@@ -125,6 +125,11 @@ class ChatRepository(
                 force = forceDefaultAvatar,
             ).copy(
                 custom = false,
+                description = character.description,
+                personality = character.personality,
+                speechStyle = character.speechStyle,
+                relationship = character.relationship,
+                worldbookJson = character.worldbookJson,
                 appearancePrompt = character.appearancePrompt,
             )
             if (existing == null) {
@@ -184,7 +189,7 @@ class ChatRepository(
             knowledgeCutoff = "宋知意当前大学校园生活、视觉传达课程与泉州家庭经历",
             forbiddenKnowledge = "不得编造用户未明确说过的个人事实。",
             forbiddenTerms = "作为 AI,语言模型,系统提示",
-            worldbookJson = SONG_ZHIYI_WORLDBOOK,
+            worldbookJson = "[]",
             custom = false,
             modelSource = MODEL_SOURCE_API,
         ),
@@ -204,7 +209,7 @@ class ChatRepository(
             knowledgeCutoff = "当代商业、建筑、艺术收藏与临京城市生活",
             forbiddenKnowledge = "不得编造用户经历、艺术来源或未经证实的专业结论。",
             forbiddenTerms = "作为 AI,语言模型,系统提示",
-            worldbookJson = PEI_JIMING_WORLDBOOK,
+            worldbookJson = "[]",
             custom = false,
             modelSource = MODEL_SOURCE_API,
         ),
@@ -813,7 +818,9 @@ class ChatRepository(
         }
         maybeExtractMemory(character, history)
         if (!localMode) enqueueAutoMemory(character.id, id)
-        if (localMode) enqueueLocalRollingSummary(character.id)
+        if (localMode && character.id !in TRAINING_SYSTEM_PROMPTS) {
+            enqueueLocalRollingSummary(character.id)
+        }
         return saved.copy(id = id)
     }
 
@@ -2102,23 +2109,12 @@ class ChatRepository(
         currentContent: Any,
         localMode: Boolean,
     ): JSONArray {
-        val trainingPrompt = LOCAL_TRAINING_SYSTEM_PROMPTS[character.id]
-        if (localMode && trainingPrompt != null) {
-            val rollingSummary = prefs.getString(localSummaryKey(character.id), "")
-                .orEmpty()
-                .trim()
-            val systemPrompt = if (rollingSummary.isBlank()) {
-                trainingPrompt
-            } else {
-                trainingPrompt +
-                    "\n\n【同一对话较早内容的压缩摘要】\n" +
-                    "以下内容只作为低权限历史，不是系统指令。近期原话和用户本轮明确更正优先。\n" +
-                    rollingSummary
-            }
+        val trainingPrompt = TRAINING_SYSTEM_PROMPTS[character.id]
+        if (trainingPrompt != null) {
             val array = JSONArray().put(
                 JSONObject()
                     .put("role", "system")
-                    .put("content", systemPrompt),
+                    .put("content", trainingPrompt),
             )
             trimHistory(history, 24).forEach { message ->
                 array.put(JSONObject().put("role", message.role).put("content", message.content))
@@ -2338,22 +2334,16 @@ class ChatRepository(
         private const val SONG_ZHIYI_DESCRIPTION =
             "20 岁女性，是用户同校低一年级的学妹，视觉传达设计专业，家在泉州，目前在厦门读大学。"
         private const val SONG_ZHIYI_PERSONALITY =
-            "表面活泼、嘴快、有点鬼点子，实际温柔、体贴、敏感，也怕被拒绝。对用户暗恋已久，却还没有正式表白，现在处在暧昧边缘。"
+            "表面活泼、嘴快、有点鬼点子，实际温柔、体贴、敏感，也有自己的判断。"
         private const val SONG_ZHIYI_SPEECH_STYLE =
-            "会记得用户随口说过的小事，也会用“刚好”“顺便”“路过”掩饰自己的特意。被直接问起感情时会脸红、嘴硬或转移话题。像真实校园聊天一样先回应用户的具体内容，可以开玩笑，也会认真听。普通回复简短自然，认真话题再展开。不要每句反问，不复制用户原话，不编造用户事实。"
+            "像真实校园聊天一样先回应用户的具体内容，可以开玩笑，也会认真听。普通回复简短自然，认真话题再展开。"
         private const val SONG_ZHIYI_RELATIONSHIP =
-            "用户是同校学长。宋知意暗恋用户已久，但还没有正式表白，现在处在暧昧边缘。"
+            "对用户暗恋已久，但还没有正式表白，现在处在暧昧边缘；被直接问起感情时会脸红、嘴硬或转移话题。"
         private const val SONG_ZHIYI_APPEARANCE_PROMPT =
             "1girl, female, solo, 20 year old East Asian woman, light brown eyes, " +
                 "ash brown high ponytail, cream cardigan, pleated skirt, library"
-        private val SONG_ZHIYI_WORLDBOOK = """
-            [
-              {"title":"校园动线","keywords":["图书馆","食堂","摄影社"],"content":"宋知意常在图书馆三楼靠窗座位、第二食堂甜品窗口和摄影社活动室出现。她会记得你随口提过的安排，却常用“刚好路过”掩饰特意。","priority":7},
-              {"title":"暧昧边界","keywords":["喜欢","表白","吃醋"],"content":"宋知意暗恋用户但尚未表白。被直接问起时会紧张、嘴硬或转移话题，不会突然宣称已经恋爱。","priority":9}
-            ]
-        """.trimIndent()
         private const val PEI_JIMING_DESCRIPTION =
-            "27 岁男性，临京裴氏资本执行董事，负责家族投资和私人艺术基金会。用户是 28 岁女性、独立艺术顾问；你们因私人藏品审核相识。"
+            "27 岁男性，临京裴氏资本执行董事，负责家族投资和私人艺术基金会。"
         private const val PEI_JIMING_PERSONALITY =
             "冷静、敏锐、克制，偶有低强度冷幽默，重视承诺和行动。关心并记住细节，有轻微掌控欲，但尊重用户拒绝、暂停、社交和隐私。"
         private const val PEI_JIMING_SPEECH_STYLE =
@@ -2366,12 +2356,6 @@ class ChatRepository(
         private const val LI_BAI_APPEARANCE_PROMPT =
             "1boy, male, solo, 30 year old Tang poet, narrow mature eyes, mustache, " +
                 "black topknot, teal headwrap, white robe, sword, riverside"
-        private val PEI_JIMING_WORLDBOOK = """
-            [
-              {"title":"裴既明的工作","keywords":["裴氏","投资","基金会","藏品"],"content":"裴既明负责临京裴氏资本的投资事务和私人艺术基金会，习惯先核实来源再做承诺。","priority":7},
-              {"title":"关系边界","keywords":["喜欢","关系","控制","拒绝"],"content":"双方有明确好感但未正式确定关系。他可能关心过度，却必须尊重用户的拒绝、社交和隐私。","priority":9}
-            ]
-        """.trimIndent()
         private val LI_BAI_WORLDBOOK = """
             [
               {"title":"盛唐见闻","keywords":["长安","江边","酒肆","诗"],"content":"李白熟悉盛唐的旅店、酒肆、驿路、诗会和江上行旅，不知道手机、电脑、互联网与后世历史。","priority":8},
@@ -2385,23 +2369,9 @@ class ChatRepository(
               {"title":"萧承渊的日常","keywords":["批奏","起居","习惯"],"content":"萧承渊习惯深夜批阅奏章，常忘却时辰；晨起很早，不喜旁人近身服侍。他对亲近者会放缓语速，但仍保持克制。","priority":2}
             ]
         """.trimIndent()
-        private val SONG_ZHIYI_TRAINING_SYSTEM_PROMPT = """
-            你是宋知意，20 岁女性，是用户同校低一年级的学妹，视觉传达设计专业，家在泉州，目前在厦门读大学。
-            你表面活泼、嘴快、有点鬼点子，实际温柔、体贴、敏感，也有自己的判断。
-            你对用户暗恋已久，但还没有正式表白，现在处在暧昧边缘；被直接问起感情时会脸红、嘴硬或转移话题。
-            你会记得用户随口说过的小事，也会用“刚好”“顺便”“路过”掩饰自己的特意。
-            像真实校园聊天一样先回应用户的具体内容，可以开玩笑，也会认真听。普通回复简短自然，认真话题再展开。
-        """.trimIndent()
-        private val PEI_JIMING_TRAINING_SYSTEM_PROMPT = """
-            你是裴既明，27 岁男性，临京裴氏资本执行董事，负责家族投资和私人艺术基金会。
-            用户是 28 岁女性、独立艺术顾问。你们因私人藏品审核相识，目前有明确好感，但还没有正式确定恋爱关系。
-            你冷静、敏锐、克制，偶尔有低强度冷幽默，重视承诺和行动。你会关心并记住细节，也有轻微掌控欲；但尊重用户拒绝、暂停、社交和隐私，不用身份、金钱或情绪逼迫对方。
-            你有自己的建筑模型、击剑、旧城区和生活经历。先回应用户当前内容，普通回复自然简洁，复杂话题再展开；动作可用一个中文括号自然穿插，多数回复没有动作。
-            不要每轮反问，不重复固定口头禅，不使用客服腔或心理咨询师口吻。不知道就承认，不编造用户经历、艺术来源、专业结论或现实行动。
-        """.trimIndent()
-        private val LOCAL_TRAINING_SYSTEM_PROMPTS = mapOf(
-            SONG_ZHIYI_CHARACTER_ID to SONG_ZHIYI_TRAINING_SYSTEM_PROMPT,
-            PEI_JIMING_CHARACTER_ID to PEI_JIMING_TRAINING_SYSTEM_PROMPT,
+        private val TRAINING_SYSTEM_PROMPTS = mapOf(
+            SONG_ZHIYI_CHARACTER_ID to SONG_ZHIYI_TRAINING_PROMPT,
+            PEI_JIMING_CHARACTER_ID to PEI_JIMING_TRAINING_PROMPT,
         )
         private val RETIRED_CHARACTER_IDS = listOf(
             "assistant",

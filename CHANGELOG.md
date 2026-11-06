@@ -4,17 +4,17 @@
 
 - Restored the stable Android `0.17.0` character behavior and removed the adaptive worldbook and character-length changes from `0.18.2`.
 - Removed Gu Qinghe from both PC and Android, including bundled portraits. Existing Gu Qinghe cards, conversations, memories, state, avatars and voice references are removed on upgrade.
-- Kept the manually selected, concise fixed local prompts for Song Zhiyi and Pei Jiming.
+- Restored the exact concise system prompts from the LoRA training and selected adapter directories for Song Zhiyi and Pei Jiming. Both API and local MNN modes now use those fixed prompts instead of a concatenated full card.
 - Restored the Windows WebView2 window with an ICO icon and resilient logging startup.
 - Clarified that the Windows EXE is a basic cloud build; full local model, image, semantic-memory and voice features require the source environment and separately downloaded weights.
 - Replaced the README's old PC screenshot section with the current PC interface and the supplied architecture figure.
 
 ### Verification
 
-- PC Python: 293 passed.
+- PC Python: 296 passed.
 - PC frontend state tests: 40 passed; React production build passed.
 - Windows EXE: visible `0.18.0` local validation window, service startup and version check passed.
-- Android: 64 JVM tests passed; `0.18.0 / versionCode 32` arm64-v8a APK built and its stable debug signature verified.
+- Android: 66 JVM tests passed; `0.18.0 / versionCode 32` arm64-v8a APK built and its stable debug signature verified.
 
 ## 2026-11-05 — PC web `0.18.0` sync
 

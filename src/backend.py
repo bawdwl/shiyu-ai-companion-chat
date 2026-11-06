@@ -1124,6 +1124,10 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
         store=app.state.structured_memory
         trace['structured_memory_ids']=[]
         trace['structured_memory_chars']=0
+        if trace.get('prompt_mode')=='fixed_training':
+            trace['memory_retrieval_mode']='fixed_prompt'
+            trace['internal_state_description']='不注入（固定训练提示词）'
+            return
         if store is None or not messages or messages[0].get('role')!='system':
             return
         memory=memory or {}
