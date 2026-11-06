@@ -17,6 +17,7 @@
 - Long-term memory, character editing, Trace, rollback, voice selection and artwork cropping now use fixed full-screen pages with a persistent top-left back button instead of swipe-dismissable bottom sheets.
 - Image generation reports real Local Dream step progress as a percentage; cloud generation reports request, download and save stages.
 - Reset conversation now requires a destructive confirmation dialog. Home-screen character artwork is aligned to the top of the card so faces are less likely to be cropped.
+- Full-screen workspaces reserve the Android navigation/gesture safe area and add bottom content space, so final buttons remain reachable. Character thumbnails now decode off the main thread with a bounded bitmap cache, removing card-composition jank during downward scrolling.
 - Room schema is now 13 with a lossless 12→13 migration. Added deterministic rollback, artwork-crop and action-bracket tests. Android JVM tests and the debug APK build pass.
 
 ## 2026-11-06 — `v0.18.0` republish with Windows 0.18.0 / Android 0.18.3

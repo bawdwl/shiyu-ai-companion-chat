@@ -185,7 +185,7 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 - 当前源码：`0.18.7 / versionCode 37`
 - Room schema：13
-- 当前 Debug APK SHA-256：`D06F5254A031A87F6D62764C0BAE14ACDE6984C1B734F2BEBC0DA27C65B13BF3`
+- 当前 Debug APK SHA-256：`E81E541A5284A4CAE054A28DD2B12E0EBA11CDD41F9BB2F7FC06BE4865DFAF5E`
 - 安装后请在设置中填写自己的 OpenCode Go 或 DeepSeek Key。
 
 APK 包含本地语音运行库、VITS 中文语音模型、Qwen MNN 运行库和 Dream SD1.5/QNN 后端。本地 Qwen 与 MeinaMix V12 等模型权重不随 APK 分发，需要用户按应用设置中的说明导入。

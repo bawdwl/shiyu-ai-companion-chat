@@ -5,6 +5,7 @@ import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
 import android.Manifest
+import android.util.LruCache
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -162,6 +163,12 @@ private val InkMuted = Color(0xFF746F80)
 private val Hairline = Color(0xFFEAE4F2)
 private val Apricot = Color(0xFFF8E8EF)
 private val LilacMist = Color(0xFFF3EFFF)
+private val artworkBitmapCache = object : LruCache<String, android.graphics.Bitmap>(
+    40 * 1024 * 1024,
+) {
+    override fun sizeOf(key: String, value: android.graphics.Bitmap): Int =
+        value.allocationByteCount
+}
 
 @Composable
 private fun FullScreenPage(
@@ -184,7 +191,7 @@ private fun FullScreenPage(
                 Modifier
                     .fillMaxSize()
                     .statusBarsPadding()
-                    .navigationBarsPadding(),
+                    .imePadding(),
             ) {
                 Row(
                     Modifier
@@ -211,6 +218,7 @@ private fun FullScreenPage(
                 }
                 HorizontalDivider(color = Hairline)
                 content(Modifier.fillMaxWidth().weight(1f))
+                Spacer(Modifier.fillMaxWidth().navigationBarsPadding())
             }
         }
     }
@@ -1917,19 +1925,24 @@ private fun LocalAvatar(
     cropTop: Boolean = false,
 ) {
     val modified = path?.let { File(it).lastModified() } ?: 0L
-    val bitmap = remember(path, modified) {
-        path?.takeIf { File(it).isFile }?.let {
-            runCatching { BitmapFactory.decodeFile(it) }.getOrNull()
+    val maxDimension = if (cropFace) 640 else 2048
+    var bitmap by remember(path, modified, maxDimension) {
+        mutableStateOf<android.graphics.Bitmap?>(null)
+    }
+    LaunchedEffect(path, modified, maxDimension) {
+        bitmap = withContext(Dispatchers.IO) {
+            loadCachedArtwork(path, modified, maxDimension)
         }
     }
-    if (bitmap != null) {
-        if (cropFace && bitmap.height > bitmap.width) {
-            val image = bitmap.asImageBitmap()
+    val loadedBitmap = bitmap
+    if (loadedBitmap != null) {
+        if (cropFace && loadedBitmap.height > loadedBitmap.width) {
+            val image = loadedBitmap.asImageBitmap()
             Canvas(modifier) {
-                val side = minOf(bitmap.width, bitmap.height)
-                val left = (bitmap.width - side) / 2
-                val preferredTop = (bitmap.height * 0.16f).roundToInt()
-                val top = preferredTop.coerceIn(0, bitmap.height - side)
+                val side = minOf(loadedBitmap.width, loadedBitmap.height)
+                val left = (loadedBitmap.width - side) / 2
+                val preferredTop = (loadedBitmap.height * 0.16f).roundToInt()
+                val top = preferredTop.coerceIn(0, loadedBitmap.height - side)
                 drawImage(
                     image = image,
                     srcOffset = IntOffset(left, top),
@@ -1944,7 +1957,7 @@ private fun LocalAvatar(
             }
         } else {
             Image(
-                bitmap = bitmap.asImageBitmap(),
+                bitmap = loadedBitmap.asImageBitmap(),
                 contentDescription = null,
                 modifier = modifier,
                 contentScale = ContentScale.Crop,
@@ -1952,6 +1965,32 @@ private fun LocalAvatar(
             )
         }
     }
+}
+
+private fun loadCachedArtwork(
+    path: String?,
+    modified: Long,
+    maxDimension: Int,
+): android.graphics.Bitmap? {
+    val file = path?.let(::File)?.takeIf(File::isFile) ?: return null
+    val key = "${file.absolutePath}|$modified|$maxDimension"
+    artworkBitmapCache.get(key)?.let { return it }
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(file.absolutePath, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1
+    while (
+        bounds.outWidth / sample > maxDimension ||
+        bounds.outHeight / sample > maxDimension
+    ) {
+        sample *= 2
+    }
+    val bitmap = BitmapFactory.decodeFile(
+        file.absolutePath,
+        BitmapFactory.Options().apply { inSampleSize = sample },
+    ) ?: return null
+    artworkBitmapCache.put(key, bitmap)
+    return bitmap
 }
 
 @Composable
@@ -2061,14 +2100,18 @@ private fun SettingsDialog(
     ) { uri ->
         uri?.let(onImportLocalModel)
     }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(22.dp),
-        containerColor = Color(0xFFFDFBFF),
-        tonalElevation = 0.dp,
-        title = { Text("应用设置") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    FullScreenPage(
+        title = "应用设置",
+        onBack = onDismiss,
+    ) { pageModifier ->
+        Column(pageModifier) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -2539,29 +2582,38 @@ private fun SettingsDialog(
                 )
                 }
             }
-        },
-        confirmButton = {
-            Button(onClick = {
-                if (openCodeKey.isNotBlank()) onSaveOpenCodeKey(openCodeKey)
-                if (deepSeekKey.isNotBlank()) onSaveKey(deepSeekKey)
-                if (imageKey.isNotBlank()) onSaveImageKey(imageKey)
-                onSaveDreamSettings(
-                    DreamGenerationSettings(
-                        positiveTemplate = dreamPositive,
-                        negativePrompt = dreamNegative,
-                        steps = dreamSteps.toIntOrNull() ?: 25,
-                        cfg = dreamCfg.toFloatOrNull() ?: 7.0f,
-                        scheduler = dreamScheduler,
-                        seed = dreamSeed.toLongOrNull() ?: 20261102L,
-                        resolution = dreamResolution.toIntOrNull() ?: 1024,
-                    ),
-                )
-                onSaveLimits(requestLimit.toIntOrNull() ?: 12_000, dailyLimit.toIntOrNull() ?: 200_000)
-                onDismiss()
-            }) { Text("保存") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
+            HorizontalDivider()
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onDismiss) { Text("取消") }
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = {
+                    if (openCodeKey.isNotBlank()) onSaveOpenCodeKey(openCodeKey)
+                    if (deepSeekKey.isNotBlank()) onSaveKey(deepSeekKey)
+                    if (imageKey.isNotBlank()) onSaveImageKey(imageKey)
+                    onSaveDreamSettings(
+                        DreamGenerationSettings(
+                            positiveTemplate = dreamPositive,
+                            negativePrompt = dreamNegative,
+                            steps = dreamSteps.toIntOrNull() ?: 50,
+                            cfg = dreamCfg.toFloatOrNull() ?: 7.0f,
+                            scheduler = dreamScheduler,
+                            seed = dreamSeed.toLongOrNull() ?: 20261102L,
+                            resolution = dreamResolution.toIntOrNull() ?: 1024,
+                        ),
+                    )
+                    onSaveLimits(
+                        requestLimit.toIntOrNull() ?: 12_000,
+                        dailyLimit.toIntOrNull() ?: 200_000,
+                    )
+                    onDismiss()
+                }) { Text("保存") }
+            }
+        }
+    }
 }
 
 @Composable
@@ -2572,14 +2624,15 @@ private fun CreateCharacterDialog(
     onManual: () -> Unit,
 ) {
     var idea by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(22.dp),
-        containerColor = Color(0xFFFDFBFF),
-        tonalElevation = 0.dp,
-        title = { Text("创建角色", fontSize = 24.sp) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    FullScreenPage(
+        title = "创建角色",
+        onBack = onDismiss,
+    ) { modifier ->
+        Column(modifier.padding(20.dp)) {
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Text(
                     "写下身份、时代、关系和不能知道的内容。生成结果是草稿，请后续检查。",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2598,16 +2651,31 @@ private fun CreateCharacterDialog(
                     Text("不调用 API，手动创建空白角色")
                 }
             }
-        },
-        confirmButton = {
-            Button(enabled = idea.isNotBlank() && !busy, onClick = { onCreate(idea) }) {
-                if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
-                else Icon(Icons.Default.AutoAwesome, contentDescription = null)
-                Text(if (busy) " 生成中" else " 生成草稿")
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onDismiss) { Text("取消") }
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    enabled = idea.isNotBlank() && !busy,
+                    onClick = { onCreate(idea) },
+                ) {
+                    if (busy) {
+                        CircularProgressIndicator(
+                            Modifier.size(18.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null)
+                    }
+                    Text(if (busy) " 生成中" else " 生成草稿")
+                }
             }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
