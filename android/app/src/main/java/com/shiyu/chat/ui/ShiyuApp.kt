@@ -203,6 +203,20 @@ private enum class CharacterEditorOrigin {
 }
 
 @Composable
+private fun BottomBarSafePage(
+    bottomBarHeight: androidx.compose.ui.unit.Dp,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .padding(bottom = bottomBarHeight),
+    ) {
+        content()
+    }
+}
+
+@Composable
 private fun FullScreenPage(
     title: String,
     onBack: () -> Unit,
@@ -327,15 +341,6 @@ fun ShiyuApp(repository: ChatRepository) {
         containerColor = Color.Transparent,
     ) { padding ->
         val bottomBarPadding = padding.calculateBottomPadding()
-        val contentBottomPadding = if (
-            !fullScreenChat &&
-            !homeComposerFocused &&
-            activeTab != RootTab.HOME
-        ) {
-            bottomBarPadding
-        } else {
-            0.dp
-        }
         Box(
             Modifier
                 .fillMaxSize()
@@ -343,8 +348,7 @@ fun ShiyuApp(repository: ChatRepository) {
                     Brush.verticalGradient(
                         listOf(LilacMist, CanvasMist, Color(0xFFFFF4F8)),
                     ),
-                )
-                .padding(bottom = contentBottomPadding),
+                ),
         ) {
             val fullScreenCharacter = state.selected
             if (fullScreenChat && fullScreenCharacter != null) {
@@ -422,91 +426,99 @@ fun ShiyuApp(repository: ChatRepository) {
                                 )
                             },
                         )
-                        RootTab.MESSAGES -> ConversationMessagesPage(
-                            state = state,
-                            onChat = { character ->
-                                pendingCharacter = null
-                                chatReturnTab = RootTab.MESSAGES
-                                fullScreenChat = true
-                                vm.select(character)
-                            },
-                        )
-                        RootTab.CREATE -> CreateCharacterDialog(
-                            busy = state.busy,
-                            embedded = true,
-                            onDismiss = { navigateToTab(RootTab.HOME) },
-                            onCreate = { idea ->
-                                vm.generateCharacter(idea) { character ->
-                                    pendingCharacter = character
+                        RootTab.MESSAGES -> BottomBarSafePage(bottomBarPadding) {
+                            ConversationMessagesPage(
+                                state = state,
+                                onChat = { character ->
+                                    pendingCharacter = null
+                                    chatReturnTab = RootTab.MESSAGES
+                                    fullScreenChat = true
+                                    vm.select(character)
+                                },
+                            )
+                        }
+                        RootTab.CREATE -> BottomBarSafePage(bottomBarPadding) {
+                            CreateCharacterDialog(
+                                busy = state.busy,
+                                embedded = true,
+                                onDismiss = { navigateToTab(RootTab.HOME) },
+                                onCreate = { idea ->
+                                    vm.generateCharacter(idea) { character ->
+                                        pendingCharacter = character
+                                        characterEditorOrigin = CharacterEditorOrigin.CREATE
+                                        showEdit = true
+                                    }
+                                },
+                                onManual = {
+                                    pendingCharacter = CharacterEntity(
+                                        id = "custom-" + UUID.randomUUID().toString().take(12),
+                                        name = "新角色",
+                                        tag = "原创角色",
+                                        description = "等待补完的人物",
+                                        personality = "",
+                                        speechStyle = "",
+                                        relationship = "初次交谈",
+                                        appearance = "",
+                                        appearancePrompt = "",
+                                        greeting = "",
+                                        era = "原创世界",
+                                        knowledgeCutoff = "",
+                                        forbiddenKnowledge = "",
+                                        forbiddenTerms = "",
+                                        custom = true,
+                                    )
                                     characterEditorOrigin = CharacterEditorOrigin.CREATE
                                     showEdit = true
-                                }
-                            },
-                            onManual = {
-                                pendingCharacter = CharacterEntity(
-                                    id = "custom-" + UUID.randomUUID().toString().take(12),
-                                    name = "新角色",
-                                    tag = "原创角色",
-                                    description = "等待补完的人物",
-                                    personality = "",
-                                    speechStyle = "",
-                                    relationship = "初次交谈",
-                                    appearance = "",
-                                    appearancePrompt = "",
-                                    greeting = "",
-                                    era = "原创世界",
-                                    knowledgeCutoff = "",
-                                    forbiddenKnowledge = "",
-                                    forbiddenTerms = "",
-                                    custom = true,
-                                )
-                                characterEditorOrigin = CharacterEditorOrigin.CREATE
-                                showEdit = true
-                            },
-                        )
-                        RootTab.MANAGEMENT -> CharacterManagementPage(
-                            characters = state.characters,
-                            busy = state.busy || state.avatarBusy,
-                            onChat = { character ->
-                                pendingCharacter = null
-                                chatReturnTab = RootTab.MANAGEMENT
-                                fullScreenChat = true
-                                vm.select(character)
-                            },
-                            onEdit = { character ->
-                                pendingCharacter = character
-                                characterEditorOrigin = CharacterEditorOrigin.MANAGEMENT
-                                showEdit = true
-                            },
-                            onMemory = { character ->
-                                managementMemoryCharacterId = character.id
-                                vm.select(character, ensureOpening = false)
-                                showMemory = true
-                            },
-                            onReset = vm::resetManagedCharacter,
-                            onDelete = vm::deleteManagedCharacter,
-                            onCreate = { navigateToTab(RootTab.CREATE) },
-                        )
-                        RootTab.SETTINGS -> SettingsDialog(
-                            state = state,
-                            embedded = true,
-                            onDismiss = { navigateToTab(RootTab.HOME) },
-                            onSaveKey = vm::saveApiKey,
-                            onRemoveKey = vm::removeApiKey,
-                            onSaveOpenCodeKey = vm::saveOpenCodeApiKey,
-                            onRemoveOpenCodeKey = vm::removeOpenCodeApiKey,
-                            onProviderChange = vm::setCloudProvider,
-                            onSaveLimits = vm::saveLimits,
-                            onSaveImageKey = vm::saveImageApiKey,
-                            onRemoveImageKey = vm::removeImageApiKey,
-                            onSaveDreamSettings = vm::saveDreamGenerationSettings,
-                            onImportAvatarModel = vm::importAvatarModel,
-                            onDeleteAvatarModel = vm::deleteAvatarModel,
-                            onImportLocalModel = vm::importLocalModel,
-                            onDeleteLocalModel = vm::deleteLocalModel,
-                            onDownloadLocalModel = vm::downloadLocalModel,
-                            onDownloadDreamModel = vm::downloadDreamModel,
-                        )
+                                },
+                            )
+                        }
+                        RootTab.MANAGEMENT -> BottomBarSafePage(bottomBarPadding) {
+                            CharacterManagementPage(
+                                characters = state.characters,
+                                busy = state.busy || state.avatarBusy,
+                                onChat = { character ->
+                                    pendingCharacter = null
+                                    chatReturnTab = RootTab.MANAGEMENT
+                                    fullScreenChat = true
+                                    vm.select(character)
+                                },
+                                onEdit = { character ->
+                                    pendingCharacter = character
+                                    characterEditorOrigin = CharacterEditorOrigin.MANAGEMENT
+                                    showEdit = true
+                                },
+                                onMemory = { character ->
+                                    managementMemoryCharacterId = character.id
+                                    vm.select(character, ensureOpening = false)
+                                    showMemory = true
+                                },
+                                onReset = vm::resetManagedCharacter,
+                                onDelete = vm::deleteManagedCharacter,
+                                onCreate = { navigateToTab(RootTab.CREATE) },
+                            )
+                        }
+                        RootTab.SETTINGS -> BottomBarSafePage(bottomBarPadding) {
+                            SettingsDialog(
+                                state = state,
+                                embedded = true,
+                                onDismiss = { navigateToTab(RootTab.HOME) },
+                                onSaveKey = vm::saveApiKey,
+                                onRemoveKey = vm::removeApiKey,
+                                onSaveOpenCodeKey = vm::saveOpenCodeApiKey,
+                                onRemoveOpenCodeKey = vm::removeOpenCodeApiKey,
+                                onProviderChange = vm::setCloudProvider,
+                                onSaveLimits = vm::saveLimits,
+                                onSaveImageKey = vm::saveImageApiKey,
+                                onRemoveImageKey = vm::removeImageApiKey,
+                                onSaveDreamSettings = vm::saveDreamGenerationSettings,
+                                onImportAvatarModel = vm::importAvatarModel,
+                                onDeleteAvatarModel = vm::deleteAvatarModel,
+                                onImportLocalModel = vm::importLocalModel,
+                                onDeleteLocalModel = vm::deleteLocalModel,
+                                onDownloadLocalModel = vm::downloadLocalModel,
+                                onDownloadDreamModel = vm::downloadDreamModel,
+                            )
+                        }
                     }
                 }
             }
@@ -1874,28 +1886,7 @@ private fun ChatScreen(
         HorizontalDivider(color = Color.White.copy(alpha = 0.14f))
         Box(Modifier.weight(1f)) {
             if (state.messages.isEmpty() && state.streamingText.isEmpty()) {
-                Column(
-                    Modifier.fillMaxSize().padding(30.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    CharacterBadge(character, 82.dp)
-                    Spacer(Modifier.height(20.dp))
-                    Text(
-                        "和${character.name}的故事，从此刻开始",
-                        fontSize = 22.sp,
-                        lineHeight = 29.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        character.description,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 21.sp,
-                        textAlign = TextAlign.Center,
-                    )
-                }
+                Box(Modifier.fillMaxSize())
             } else if (!historyVisible) {
                 latestRoleMessage?.let { message ->
                     LatestRoleMessage(
