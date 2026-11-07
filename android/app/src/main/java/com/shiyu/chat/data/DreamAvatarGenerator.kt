@@ -134,11 +134,12 @@ class DreamAvatarGenerator(private val context: Context) {
         }
         avatarDirectory.mkdirs()
         val safeId = characterId.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        val revision = "${System.currentTimeMillis()}-${System.nanoTime()}"
         val backgroundOutput = File(
             avatarDirectory,
-            "$safeId-background.webp",
+            "$safeId-background-$revision.webp",
         )
-        val avatarOutput = File(avatarDirectory, "$safeId-avatar.webp")
+        val avatarOutput = File(avatarDirectory, "$safeId-avatar-$revision.webp")
         var portrait: Bitmap? = null
         var avatar: Bitmap? = null
         try {
@@ -417,6 +418,9 @@ class DreamAvatarGenerator(private val context: Context) {
             "$safeId-user.webp",
             "$safeId-default.webp",
         ).forEach { deleteAvatar(File(avatarDirectory, it).absolutePath) }
+        avatarDirectory.listFiles()
+            ?.filter { it.isFile && it.name.startsWith("$safeId-") }
+            ?.forEach { deleteAvatar(it.absolutePath) }
     }
 
     private suspend fun awaitBackend() {

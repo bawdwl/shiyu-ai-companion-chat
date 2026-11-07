@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -32,6 +33,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -40,6 +42,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -64,7 +67,9 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
@@ -95,6 +100,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -113,9 +119,12 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -183,7 +192,14 @@ private enum class RootTab(val label: String) {
     HOME("首页"),
     MESSAGES("消息"),
     CREATE("创建"),
+    MANAGEMENT("角色"),
     SETTINGS("设置"),
+}
+
+private enum class CharacterEditorOrigin {
+    CREATE,
+    CHAT,
+    MANAGEMENT,
 }
 
 @Composable
@@ -244,14 +260,51 @@ private fun FullScreenPage(
 fun ShiyuApp(repository: ChatRepository) {
     val vm: ShiyuViewModel = viewModel(factory = ShiyuViewModelFactory(repository))
     val state by vm.state.collectAsStateWithLifecycle()
+    val rootTabs = RootTab.entries
+    val rootPagerState = rememberPagerState(
+        initialPage = RootTab.HOME.ordinal,
+        pageCount = { rootTabs.size },
+    )
     var activeTab by remember { mutableStateOf(RootTab.HOME) }
     var chatReturnTab by remember { mutableStateOf(RootTab.HOME) }
     var homeCharacterId by rememberSaveable { mutableStateOf<String?>(null) }
+    var fullScreenChat by remember { mutableStateOf(false) }
+    var homeComposerFocused by remember { mutableStateOf(false) }
     var showMemory by remember { mutableStateOf(false) }
     var showTrace by remember { mutableStateOf(false) }
     var showEdit by remember { mutableStateOf(false) }
+    var characterEditorOrigin by remember {
+        mutableStateOf(CharacterEditorOrigin.CREATE)
+    }
+    var managementMemoryCharacterId by remember {
+        mutableStateOf<String?>(null)
+    }
     var pendingCharacter by remember { mutableStateOf<CharacterEntity?>(null) }
     val snackbar = remember { SnackbarHostState() }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    fun navigateToTab(tab: RootTab) {
+        activeTab = tab
+        homeComposerFocused = false
+        focusManager.clearFocus()
+        keyboardController?.hide()
+    }
+
+    LaunchedEffect(activeTab) {
+        val target = activeTab.ordinal
+        if (rootPagerState.currentPage != target) {
+            rootPagerState.scrollToPage(target)
+        }
+    }
+
+    LaunchedEffect(rootPagerState.settledPage) {
+        val settledTab = rootTabs[rootPagerState.settledPage]
+        activeTab = settledTab
+        homeComposerFocused = false
+        focusManager.clearFocus()
+        keyboardController?.hide()
+    }
 
     LaunchedEffect(state.status) {
         state.status?.let {
@@ -263,16 +316,26 @@ fun ShiyuApp(repository: ChatRepository) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            if (state.selected == null) {
+            if (!fullScreenChat && !homeComposerFocused) {
                 RootBottomBar(
                     current = activeTab,
-                    onSelect = { activeTab = it },
+                    onSelect = ::navigateToTab,
                 )
             }
         },
         contentWindowInsets = WindowInsets(0),
         containerColor = Color.Transparent,
     ) { padding ->
+        val bottomBarPadding = padding.calculateBottomPadding()
+        val contentBottomPadding = if (
+            !fullScreenChat &&
+            !homeComposerFocused &&
+            activeTab != RootTab.HOME
+        ) {
+            bottomBarPadding
+        } else {
+            0.dp
+        }
         Box(
             Modifier
                 .fillMaxSize()
@@ -281,89 +344,18 @@ fun ShiyuApp(repository: ChatRepository) {
                         listOf(LilacMist, CanvasMist, Color(0xFFFFF4F8)),
                     ),
                 )
-                .padding(padding),
+                .padding(bottom = contentBottomPadding),
         ) {
-            if (state.selected == null) {
-                when (activeTab) {
-                    RootTab.HOME -> CharacterDiscoveryPager(
-                        state = state,
-                        preferredCharacterId = homeCharacterId,
-                        onCharacterChanged = { homeCharacterId = it },
-                        onCreate = { activeTab = RootTab.CREATE },
-                        onChat = { character ->
-                            homeCharacterId = character.id
-                            pendingCharacter = null
-                            chatReturnTab = RootTab.HOME
-                            vm.select(character)
-                        },
-                    )
-                    RootTab.MESSAGES -> ConversationMessagesPage(
-                        state = state,
-                        onChat = { character ->
-                            pendingCharacter = null
-                            chatReturnTab = RootTab.MESSAGES
-                            vm.select(character)
-                        },
-                    )
-                    RootTab.CREATE -> CreateCharacterDialog(
-                        busy = state.busy,
-                        embedded = true,
-                        onDismiss = { activeTab = RootTab.HOME },
-                        onCreate = { idea ->
-                            vm.generateCharacter(idea) { character ->
-                                pendingCharacter = character
-                                showEdit = true
-                            }
-                        },
-                        onManual = {
-                            pendingCharacter = CharacterEntity(
-                                id = "custom-" + UUID.randomUUID().toString().take(12),
-                                name = "新角色",
-                                tag = "原创角色",
-                                description = "等待补完的人物",
-                                personality = "",
-                                speechStyle = "",
-                                relationship = "初次交谈",
-                                appearance = "",
-                                appearancePrompt = "",
-                                greeting = "",
-                                era = "原创世界",
-                                knowledgeCutoff = "",
-                                forbiddenKnowledge = "",
-                                forbiddenTerms = "",
-                                custom = true,
-                            )
-                            showEdit = true
-                        },
-                    )
-                    RootTab.SETTINGS -> SettingsDialog(
-                        state = state,
-                        embedded = true,
-                        onDismiss = { activeTab = RootTab.HOME },
-                        onSaveKey = vm::saveApiKey,
-                        onRemoveKey = vm::removeApiKey,
-                        onSaveOpenCodeKey = vm::saveOpenCodeApiKey,
-                        onRemoveOpenCodeKey = vm::removeOpenCodeApiKey,
-                        onProviderChange = vm::setCloudProvider,
-                        onSaveLimits = vm::saveLimits,
-                        onSaveImageKey = vm::saveImageApiKey,
-                        onRemoveImageKey = vm::removeImageApiKey,
-                        onSaveDreamSettings = vm::saveDreamGenerationSettings,
-                        onImportAvatarModel = vm::importAvatarModel,
-                        onDeleteAvatarModel = vm::deleteAvatarModel,
-                        onImportLocalModel = vm::importLocalModel,
-                        onDeleteLocalModel = vm::deleteLocalModel,
-                        onDownloadLocalModel = vm::downloadLocalModel,
-                        onDownloadDreamModel = vm::downloadDreamModel,
-                    )
-                }
-            } else {
+            val fullScreenCharacter = state.selected
+            if (fullScreenChat && fullScreenCharacter != null) {
                 ChatScreen(
+                    character = fullScreenCharacter,
                     state = state,
                     onBack = {
                         pendingCharacter = null
+                        fullScreenChat = false
                         vm.closeCharacter()
-                        activeTab = chatReturnTab
+                        navigateToTab(chatReturnTab)
                     },
                     onSend = vm::send,
                     onStop = vm::stop,
@@ -371,12 +363,152 @@ fun ShiyuApp(repository: ChatRepository) {
                     onTrace = { showTrace = true },
                     onEdit = {
                         pendingCharacter = null
+                        characterEditorOrigin = CharacterEditorOrigin.CHAT
                         showEdit = true
                     },
                     onRollback = vm::rollbackToUserMessage,
                     onReset = vm::reset,
-                    onDelete = vm::deleteCharacter,
+                    onDelete = {
+                        fullScreenChat = false
+                        navigateToTab(chatReturnTab)
+                        vm.deleteCharacter()
+                    },
                 )
+            } else {
+                HorizontalPager(
+                    state = rootPagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    beyondViewportPageCount = 0,
+                ) { page ->
+                    when (rootTabs[page]) {
+                        RootTab.HOME -> CharacterDiscoveryPager(
+                            state = state,
+                            preferredCharacterId = homeCharacterId,
+                            onCharacterActivated = { character ->
+                                homeCharacterId = character.id
+                                homeComposerFocused = false
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                                if (state.selected?.id != character.id) {
+                                    vm.select(character)
+                                }
+                            },
+                            onCreate = { navigateToTab(RootTab.CREATE) },
+                            chatContent = { character ->
+                                ChatScreen(
+                                    character = character,
+                                    state = state,
+                                    onBack = null,
+                                    onComposerFocusChange = {
+                                        homeComposerFocused = true
+                                    },
+                                    composerBottomInset = if (homeComposerFocused) {
+                                        0.dp
+                                    } else {
+                                        bottomBarPadding
+                                    },
+                                    onSend = vm::send,
+                                    onStop = vm::stop,
+                                    onMemory = { showMemory = true },
+                                    onTrace = { showTrace = true },
+                                    onEdit = {
+                                        pendingCharacter = null
+                                        characterEditorOrigin = CharacterEditorOrigin.CHAT
+                                        showEdit = true
+                                    },
+                                    onRollback = vm::rollbackToUserMessage,
+                                    onReset = vm::reset,
+                                    onDelete = vm::deleteCharacter,
+                                )
+                            },
+                        )
+                        RootTab.MESSAGES -> ConversationMessagesPage(
+                            state = state,
+                            onChat = { character ->
+                                pendingCharacter = null
+                                chatReturnTab = RootTab.MESSAGES
+                                fullScreenChat = true
+                                vm.select(character)
+                            },
+                        )
+                        RootTab.CREATE -> CreateCharacterDialog(
+                            busy = state.busy,
+                            embedded = true,
+                            onDismiss = { navigateToTab(RootTab.HOME) },
+                            onCreate = { idea ->
+                                vm.generateCharacter(idea) { character ->
+                                    pendingCharacter = character
+                                    characterEditorOrigin = CharacterEditorOrigin.CREATE
+                                    showEdit = true
+                                }
+                            },
+                            onManual = {
+                                pendingCharacter = CharacterEntity(
+                                    id = "custom-" + UUID.randomUUID().toString().take(12),
+                                    name = "新角色",
+                                    tag = "原创角色",
+                                    description = "等待补完的人物",
+                                    personality = "",
+                                    speechStyle = "",
+                                    relationship = "初次交谈",
+                                    appearance = "",
+                                    appearancePrompt = "",
+                                    greeting = "",
+                                    era = "原创世界",
+                                    knowledgeCutoff = "",
+                                    forbiddenKnowledge = "",
+                                    forbiddenTerms = "",
+                                    custom = true,
+                                )
+                                characterEditorOrigin = CharacterEditorOrigin.CREATE
+                                showEdit = true
+                            },
+                        )
+                        RootTab.MANAGEMENT -> CharacterManagementPage(
+                            characters = state.characters,
+                            busy = state.busy || state.avatarBusy,
+                            onChat = { character ->
+                                pendingCharacter = null
+                                chatReturnTab = RootTab.MANAGEMENT
+                                fullScreenChat = true
+                                vm.select(character)
+                            },
+                            onEdit = { character ->
+                                pendingCharacter = character
+                                characterEditorOrigin = CharacterEditorOrigin.MANAGEMENT
+                                showEdit = true
+                            },
+                            onMemory = { character ->
+                                managementMemoryCharacterId = character.id
+                                vm.select(character, ensureOpening = false)
+                                showMemory = true
+                            },
+                            onReset = vm::resetManagedCharacter,
+                            onDelete = vm::deleteManagedCharacter,
+                            onCreate = { navigateToTab(RootTab.CREATE) },
+                        )
+                        RootTab.SETTINGS -> SettingsDialog(
+                            state = state,
+                            embedded = true,
+                            onDismiss = { navigateToTab(RootTab.HOME) },
+                            onSaveKey = vm::saveApiKey,
+                            onRemoveKey = vm::removeApiKey,
+                            onSaveOpenCodeKey = vm::saveOpenCodeApiKey,
+                            onRemoveOpenCodeKey = vm::removeOpenCodeApiKey,
+                            onProviderChange = vm::setCloudProvider,
+                            onSaveLimits = vm::saveLimits,
+                            onSaveImageKey = vm::saveImageApiKey,
+                            onRemoveImageKey = vm::removeImageApiKey,
+                            onSaveDreamSettings = vm::saveDreamGenerationSettings,
+                            onImportAvatarModel = vm::importAvatarModel,
+                            onDeleteAvatarModel = vm::deleteAvatarModel,
+                            onImportLocalModel = vm::importLocalModel,
+                            onDeleteLocalModel = vm::deleteLocalModel,
+                            onDownloadLocalModel = vm::downloadLocalModel,
+                            onDownloadDreamModel = vm::downloadDreamModel,
+                        )
+                    }
+                }
             }
         }
     }
@@ -387,7 +519,14 @@ fun ShiyuApp(repository: ChatRepository) {
             memories = state.memories,
             structuredMemories = state.structuredMemories,
             memoryBusy = state.memoryBusy,
-            onDismiss = { showMemory = false },
+            onDismiss = {
+                showMemory = false
+                if (managementMemoryCharacterId != null) {
+                    managementMemoryCharacterId = null
+                    vm.closeCharacter()
+                    activeTab = RootTab.MANAGEMENT
+                }
+            },
             onDelete = vm::deleteMemory,
             onEdit = vm::editMemory,
             onDeleteStructured = vm::deleteStructuredMemory,
@@ -450,8 +589,20 @@ fun ShiyuApp(repository: ChatRepository) {
                 vm.saveCharacter(updated) {
                     showEdit = false
                     pendingCharacter = null
-                    chatReturnTab = RootTab.HOME
-                    vm.select(updated)
+                    homeCharacterId = updated.id
+                    when (characterEditorOrigin) {
+                        CharacterEditorOrigin.CREATE -> {
+                            chatReturnTab = RootTab.HOME
+                            fullScreenChat = false
+                            navigateToTab(RootTab.HOME)
+                            vm.select(updated)
+                        }
+                        CharacterEditorOrigin.CHAT -> vm.select(updated)
+                        CharacterEditorOrigin.MANAGEMENT -> {
+                            fullScreenChat = false
+                            navigateToTab(RootTab.MANAGEMENT)
+                        }
+                    }
                 }
             },
         )
@@ -463,9 +614,9 @@ fun ShiyuApp(repository: ChatRepository) {
 private fun CharacterDiscoveryPager(
     state: ShiyuUiState,
     preferredCharacterId: String?,
-    onCharacterChanged: (String) -> Unit,
+    onCharacterActivated: (CharacterEntity) -> Unit,
     onCreate: () -> Unit,
-    onChat: (CharacterEntity) -> Unit,
+    chatContent: @Composable (CharacterEntity) -> Unit,
 ) {
     if (state.characters.isEmpty()) {
         Box(
@@ -479,20 +630,31 @@ private fun CharacterDiscoveryPager(
     val count = state.characters.size
     val randomOffset = remember(count) { Random.nextInt(count) }
     val preferredIndex = state.characters.indexOfFirst { it.id == preferredCharacterId }
-    val initialPage = Int.MAX_VALUE / 2 -
-        (Int.MAX_VALUE / 2 % count) +
+    val pageAnchor = Int.MAX_VALUE / 2 - (Int.MAX_VALUE / 2 % count)
+    val initialPage = pageAnchor +
         if (preferredIndex >= 0) preferredIndex else randomOffset
     val pagerState = rememberPagerState(
         initialPage = initialPage,
         pageCount = { Int.MAX_VALUE },
     )
+    LaunchedEffect(pagerState, preferredCharacterId, count) {
+        val requestedIndex = state.characters.indexOfFirst {
+            it.id == preferredCharacterId
+        }
+        if (
+            requestedIndex >= 0 &&
+            Math.floorMod(pagerState.currentPage, count) != requestedIndex
+        ) {
+            pagerState.scrollToPage(pageAnchor + requestedIndex)
+        }
+    }
     LaunchedEffect(pagerState, state.characters) {
         snapshotFlow { pagerState.settledPage }
             .collect { page ->
                 val character = state.characters[
                     Math.floorMod(page, state.characters.size)
                 ]
-                onCharacterChanged(character.id)
+                onCharacterActivated(character)
             }
     }
     VerticalPager(
@@ -503,7 +665,8 @@ private fun CharacterDiscoveryPager(
         val character = state.characters[Math.floorMod(page, count)]
         CharacterDiscoveryPage(
             character = character,
-            onChat = { onChat(character) },
+            active = state.selected?.id == character.id,
+            chatContent = { chatContent(character) },
         )
     }
 }
@@ -511,98 +674,29 @@ private fun CharacterDiscoveryPager(
 @Composable
 private fun CharacterDiscoveryPage(
     character: CharacterEntity,
-    onChat: () -> Unit,
+    active: Boolean,
+    chatContent: @Composable () -> Unit,
 ) {
+    if (active) {
+        chatContent()
+        return
+    }
     val background = character.backgroundPath?.takeIf { File(it).isFile }
         ?: character.avatarPath
-    Box(Modifier.fillMaxSize().background(Color(0xFF17131E))) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFFF3EDFF), CanvasMist, Color(0xFFFFF5F8)),
+                ),
+            ),
+    ) {
         LocalAvatar(
             path = background,
             modifier = Modifier.fillMaxSize(),
             cropTop = true,
         )
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color.Black.copy(alpha = 0.12f),
-                            Color.Transparent,
-                            Color(0xEC0F1013),
-                        ),
-                    ),
-                ),
-        )
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "拾语",
-                color = Color.White,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp,
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                "上滑遇见下一位",
-                color = Color.White.copy(alpha = 0.72f),
-                fontSize = 10.sp,
-            )
-        }
-        Column(
-            Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 22.dp),
-        ) {
-            Text(
-                character.name,
-                color = Color.White,
-                fontSize = 30.sp,
-                lineHeight = 36.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.height(8.dp))
-            Surface(
-                shape = RoundedCornerShape(999.dp),
-                color = Color.White.copy(alpha = 0.15f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-            ) {
-                Text(
-                    character.tag.ifBlank { "原创角色" },
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    color = Color.White.copy(alpha = 0.92f),
-                    fontSize = 11.sp,
-                )
-            }
-            Spacer(Modifier.height(12.dp))
-            Text(
-                character.description.ifBlank { "进入这段尚未写完的故事" },
-                color = Color.White.copy(alpha = 0.8f),
-                fontSize = 13.sp,
-                lineHeight = 20.sp,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(18.dp))
-            Button(
-                onClick = onChat,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = RoundedCornerShape(999.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF77D5FF),
-                    contentColor = Color(0xFF14242C),
-                ),
-            ) {
-                Text("和 TA 聊天", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            }
-        }
     }
 }
 
@@ -698,6 +792,306 @@ private fun formatConversationTime(timestamp: Long): String =
     SimpleDateFormat("M/d HH:mm", Locale.CHINA).format(Date(timestamp))
 
 @Composable
+private fun CharacterManagementPage(
+    characters: List<CharacterEntity>,
+    busy: Boolean,
+    onChat: (CharacterEntity) -> Unit,
+    onEdit: (CharacterEntity) -> Unit,
+    onMemory: (CharacterEntity) -> Unit,
+    onReset: (CharacterEntity) -> Unit,
+    onDelete: (CharacterEntity) -> Unit,
+    onCreate: () -> Unit,
+) {
+    var resetTarget by remember { mutableStateOf<CharacterEntity?>(null) }
+    var deleteTarget by remember { mutableStateOf<CharacterEntity?>(null) }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            top = 16.dp,
+            end = 16.dp,
+            bottom = 24.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "角色管理",
+                        fontSize = 27.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        "统一管理角色档案、长期记忆与对话状态",
+                        modifier = Modifier.padding(top = 3.dp),
+                        color = InkMuted,
+                        fontSize = 11.sp,
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = LilacMist,
+                ) {
+                    Text(
+                        "${characters.size} 位角色",
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                        color = DeepForest,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+        }
+        if (characters.isEmpty()) {
+            item {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.White.copy(alpha = 0.78f),
+                    shape = RoundedCornerShape(22.dp),
+                    border = BorderStroke(1.dp, Hairline),
+                ) {
+                    Column(
+                        Modifier.padding(horizontal = 24.dp, vertical = 38.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Icon(
+                            Icons.Default.People,
+                            contentDescription = null,
+                            tint = Forest,
+                            modifier = Modifier.size(30.dp),
+                        )
+                        Text(
+                            "还没有可以管理的角色",
+                            modifier = Modifier.padding(top = 12.dp),
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Button(
+                            onClick = onCreate,
+                            modifier = Modifier.padding(top = 14.dp),
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("创建角色")
+                        }
+                    }
+                }
+            }
+        }
+        items(characters, key = CharacterEntity::id) { character ->
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Color.White.copy(alpha = 0.84f),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, Hairline),
+                shadowElevation = 1.dp,
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CharacterBadge(character, 66.dp)
+                        Spacer(Modifier.width(13.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                character.name,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                character.tag.ifBlank { "原创角色" },
+                                modifier = Modifier.padding(top = 3.dp),
+                                color = Forest,
+                                fontSize = 10.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                if (character.modelSource == MODEL_SOURCE_LOCAL_MNN) {
+                                    "本地 MNN"
+                                } else {
+                                    "云端 API"
+                                },
+                                modifier = Modifier.padding(top = 2.dp),
+                                color = InkMuted,
+                                fontSize = 9.sp,
+                            )
+                        }
+                        FilledTonalButton(
+                            onClick = { onChat(character) },
+                            enabled = !busy,
+                            modifier = Modifier.heightIn(min = 44.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.ChatBubbleOutline,
+                                contentDescription = null,
+                                modifier = Modifier.size(17.dp),
+                            )
+                            Spacer(Modifier.width(5.dp))
+                            Text("聊天")
+                        }
+                    }
+                    Text(
+                        character.description.ifBlank { "角色简介暂时为空，可进入档案补充。" },
+                        modifier = Modifier.padding(top = 12.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    HorizontalDivider(Modifier.padding(vertical = 12.dp), color = Hairline)
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        CharacterManagementAction(
+                            label = "档案",
+                            color = Forest,
+                            enabled = !busy,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onEdit(character) },
+                        ) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        CharacterManagementAction(
+                            label = "记忆",
+                            color = Color(0xFF5879C9),
+                            enabled = !busy,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onMemory(character) },
+                        ) {
+                            Icon(
+                                Icons.Default.Memory,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        CharacterManagementAction(
+                            label = "重置",
+                            color = Color(0xFF9A6A2F),
+                            enabled = !busy,
+                            modifier = Modifier.weight(1f),
+                            onClick = { resetTarget = character },
+                        ) {
+                            Icon(
+                                Icons.Default.RestartAlt,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        CharacterManagementAction(
+                            label = "删除",
+                            color = MaterialTheme.colorScheme.error,
+                            enabled = !busy,
+                            modifier = Modifier.weight(1f),
+                            onClick = { deleteTarget = character },
+                        ) {
+                            Icon(
+                                Icons.Default.DeleteOutline,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    resetTarget?.let { character ->
+        AlertDialog(
+            onDismissRequest = { resetTarget = null },
+            title = { Text("重置 ${character.name} 的对话？") },
+            text = {
+                Text("聊天记录、长期记忆、内部状态和已生成的对话图片会被清除；角色档案保留，头像与背景恢复默认。")
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !busy,
+                    onClick = {
+                        resetTarget = null
+                        onReset(character)
+                    },
+                ) {
+                    Text("确认重置")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { resetTarget = null }) {
+                    Text("取消")
+                }
+            },
+        )
+    }
+    deleteTarget?.let { character ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("删除 ${character.name}？") },
+            text = { Text("角色档案、全部对话、长期记忆、状态和角色图片都会永久删除，无法撤销。") },
+            confirmButton = {
+                TextButton(
+                    enabled = !busy,
+                    onClick = {
+                        deleteTarget = null
+                        onDelete(character)
+                    },
+                ) {
+                    Text("确认删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) {
+                    Text("取消")
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun CharacterManagementAction(
+    label: String,
+    color: Color,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    icon: @Composable () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.heightIn(min = 54.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = color.copy(alpha = if (enabled) 0.09f else 0.04f),
+        contentColor = if (enabled) color else color.copy(alpha = 0.35f),
+    ) {
+        Column(
+            Modifier.padding(vertical = 7.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            icon()
+            Text(
+                label,
+                modifier = Modifier.padding(top = 2.dp),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+    }
+}
+
+@Composable
 private fun RootBottomBar(
     current: RootTab,
     onSelect: (RootTab) -> Unit,
@@ -715,71 +1109,52 @@ private fun RootBottomBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
         ) {
-            listOf<RootTab?>(
-                RootTab.HOME,
-                RootTab.MESSAGES,
-                RootTab.CREATE,
-                null,
-                RootTab.SETTINGS,
-            ).forEach { tab ->
-                if (tab == null) {
-                    Box(
-                        Modifier.weight(1f).height(48.dp),
-                        contentAlignment = Alignment.Center,
+            RootTab.entries.forEach { tab ->
+                val selected = current == tab
+                Surface(
+                    onClick = { onSelect(tab) },
+                    color = if (selected) Forest.copy(alpha = 0.34f) else Color.Transparent,
+                    contentColor = if (selected) {
+                        Color(0xFF9EE7FF)
+                    } else {
+                        Color.White.copy(alpha = 0.65f)
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 7.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Box(
-                            Modifier
-                                .size(5.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.16f)),
-                        )
-                    }
-                } else {
-                    val selected = current == tab
-                    Surface(
-                        onClick = { onSelect(tab) },
-                        color = if (selected) Forest.copy(alpha = 0.34f) else Color.Transparent,
-                        contentColor = if (selected) {
-                            Color(0xFF9EE7FF)
-                        } else {
-                            Color.White.copy(alpha = 0.65f)
-                        },
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Column(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 7.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            if (tab == RootTab.CREATE) {
-                                Box(
-                                    Modifier
-                                        .size(38.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF77D5FF)),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        Icons.Default.Add,
-                                        contentDescription = "创建角色",
-                                        tint = Color(0xFF14242C),
-                                    )
-                                }
-                            } else {
+                        if (tab == RootTab.CREATE) {
+                            Box(
+                                Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF77D5FF)),
+                                contentAlignment = Alignment.Center,
+                            ) {
                                 Icon(
-                                    when (tab) {
-                                        RootTab.HOME -> Icons.Default.Home
-                                        RootTab.MESSAGES -> Icons.Default.ChatBubbleOutline
-                                        RootTab.SETTINGS -> Icons.Default.Settings
-                                        RootTab.CREATE -> Icons.Default.Add
-                                    },
-                                    contentDescription = tab.label,
-                                    modifier = Modifier.size(21.dp),
+                                    Icons.Default.Add,
+                                    contentDescription = "创建角色",
+                                    tint = Color(0xFF14242C),
                                 )
-                                Text(tab.label, fontSize = 9.sp)
                             }
+                        } else {
+                            Icon(
+                                when (tab) {
+                                    RootTab.HOME -> Icons.Default.Home
+                                    RootTab.MESSAGES -> Icons.Default.ChatBubbleOutline
+                                    RootTab.MANAGEMENT -> Icons.Default.People
+                                    RootTab.SETTINGS -> Icons.Default.Settings
+                                    RootTab.CREATE -> Icons.Default.Add
+                                },
+                                contentDescription = tab.label,
+                                modifier = Modifier.size(21.dp),
+                            )
+                            Text(tab.label, fontSize = 9.sp)
                         }
                     }
                 }
@@ -1209,8 +1584,11 @@ private fun CharacterCard(
 
 @Composable
 private fun ChatScreen(
+    character: CharacterEntity,
     state: ShiyuUiState,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
+    onComposerFocusChange: () -> Unit = {},
+    composerBottomInset: androidx.compose.ui.unit.Dp = 0.dp,
     onSend: (String, Uri?) -> Unit,
     onStop: () -> Unit,
     onMemory: () -> Unit,
@@ -1220,7 +1598,6 @@ private fun ChatScreen(
     onReset: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val character = state.selected ?: return
     val voiceContext = LocalContext.current
     val voice = remember { LocalVoice(voiceContext.applicationContext) }
     val voiceScope = rememberCoroutineScope()
@@ -1359,6 +1736,7 @@ private fun ChatScreen(
             path = character.backgroundPath?.takeIf { File(it).isFile }
                 ?: character.avatarPath,
             modifier = Modifier.fillMaxSize(),
+            cropTop = true,
         )
         Column(
             Modifier
@@ -1374,12 +1752,16 @@ private fun ChatScreen(
                 Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "返回",
-                        tint = Color.White,
-                    )
+                if (onBack != null) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回",
+                            tint = Color.White,
+                        )
+                    }
+                } else {
+                    Spacer(Modifier.width(8.dp))
                 }
                 CharacterBadge(character, 38.dp)
                 Spacer(Modifier.width(9.dp))
@@ -1569,177 +1951,235 @@ private fun ChatScreen(
                 )
             }
         }
-        Surface(
-            color = Color.White.copy(alpha = 0.97f),
-            shadowElevation = 3.dp,
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .then(
+                    if (composerBottomInset > 0.dp) {
+                        Modifier
+                    } else {
+                        Modifier.navigationBarsPadding()
+                    },
+                )
+                .padding(
+                    start = 12.dp,
+                    end = 12.dp,
+                    bottom = 8.dp + composerBottomInset,
+                ),
         ) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-            ) {
-                val transientVoiceStatus = voiceStatus ?: when {
-                    recording -> "录音中，点击停止后识别"
-                    voiceBusy -> "语音处理中…"
-                    else -> null
-                }
-                transientVoiceStatus?.let {
-                    Text(
-                        it,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                imageUri?.let { uri ->
-                    Row(
-                        Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        UriImage(
-                            uri,
-                            Modifier
-                                .size(54.dp)
-                                .clip(RoundedCornerShape(10.dp)),
-                        )
-                        TextButton(onClick = { imageUri = null }) {
-                            Text("移除图片")
-                        }
-                    }
-                }
+            val transientVoiceStatus = voiceStatus ?: when {
+                recording -> "录音中，点击停止后识别"
+                voiceBusy -> "语音处理中…"
+                else -> null
+            }
+            transientVoiceStatus?.let {
+                Text(
+                    it,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    color = Color.White.copy(alpha = 0.82f),
+                    fontSize = 10.sp,
+                )
+            }
+            imageUri?.let { uri ->
                 Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Bottom,
+                    Modifier
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.Black.copy(alpha = 0.38f))
+                        .padding(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(
-                        onClick = { picker.launch("image/*") },
-                        modifier = Modifier.size(48.dp),
-                        enabled = character.modelSource != MODEL_SOURCE_LOCAL_MNN &&
-                            !state.busy &&
-                            !state.historyBusy,
-                    ) {
-                        Icon(
-                            Icons.Default.Image,
-                            contentDescription = "上传图片",
-                            tint = InkMuted,
-                        )
+                    UriImage(
+                        uri,
+                        Modifier
+                            .size(54.dp)
+                            .clip(RoundedCornerShape(10.dp)),
+                    )
+                    TextButton(onClick = { imageUri = null }) {
+                        Text("移除图片", color = Color.White)
                     }
-                    IconButton(
-                        onClick = {
-                            if (recording) {
-                                voice.recording = false
-                                recording = false
-                                voiceStatus = "正在识别…"
-                            } else if (!voiceBusy && !state.busy && !state.historyBusy) {
-                                microphone.launch(Manifest.permission.RECORD_AUDIO)
-                            }
+                }
+            }
+            val hasComposerContent = draft.text.isNotBlank() || imageUri != null
+            val canSend = hasComposerContent &&
+                !state.busy &&
+                !state.historyBusy
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                color = Color(0xC43E3749),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+                shadowElevation = 5.dp,
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    BasicTextField(
+                        value = draft,
+                        onValueChange = {
+                            val text = it.text.take(4096)
+                            draft = TextFieldValue(
+                                text = text,
+                                selection = TextRange(
+                                    it.selection.start.coerceAtMost(text.length),
+                                    it.selection.end.coerceAtMost(text.length),
+                                ),
+                            )
                         },
-                        modifier = Modifier.size(48.dp),
-                        enabled = recording || (!voiceBusy && !state.busy && !state.historyBusy),
-                    ) {
-                        Icon(
-                            if (recording) Icons.Default.Stop else Icons.Default.Mic,
-                            contentDescription = if (recording) "结束录音" else "语音输入",
-                            tint = if (recording) MaterialTheme.colorScheme.error else InkMuted,
-                        )
-                    }
-                    IconButton(
-                        onClick = ::insertActionBrackets,
-                        modifier = Modifier.size(48.dp),
-                        enabled = !state.busy && !state.historyBusy,
-                    ) {
-                        Text(
-                            "（）",
-                            color = if (state.busy || state.historyBusy) InkMuted else Forest,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                    Surface(
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 44.dp, max = 96.dp),
-                        shape = RoundedCornerShape(21.dp),
-                        color = Color(0xFFF7F5FA),
-                        border = BorderStroke(1.dp, Hairline),
-                    ) {
-                        BasicTextField(
-                            value = draft,
-                            onValueChange = {
-                                val text = it.text.take(4096)
-                                draft = TextFieldValue(
-                                    text = text,
-                                    selection = TextRange(
-                                        it.selection.start.coerceAtMost(text.length),
-                                        it.selection.end.coerceAtMost(text.length),
-                                    ),
-                                )
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 44.dp, max = 96.dp)
-                                .focusRequester(composerFocusRequester)
-                                .padding(horizontal = 14.dp, vertical = 11.dp),
-                            enabled = !state.busy && !state.historyBusy,
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                color = MaterialTheme.colorScheme.onSurface,
-                                lineHeight = 20.sp,
-                            ),
-                            cursorBrush = SolidColor(Forest),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                            keyboardActions = KeyboardActions(onSend = {
-                                if (
-                                    (draft.text.isNotBlank() || imageUri != null) &&
-                                    !state.busy &&
-                                    !state.historyBusy
-                                ) {
-                                    onSend(draft.text.trim(), imageUri)
-                                    draft = TextFieldValue("")
-                                    imageUri = null
-                                    historyVisible = false
-                                }
-                            }),
-                            decorationBox = { innerTextField ->
-                                innerTextField()
-                            },
-                        )
-                    }
-                    Spacer(Modifier.width(6.dp))
-                    val canSend = (draft.text.isNotBlank() || imageUri != null) &&
-                        !state.busy &&
-                        !state.historyBusy
-                    IconButton(
-                        onClick = {
-                            if (state.busy) {
-                                onStop()
-                            } else if (canSend) {
+                            .heightIn(min = 44.dp, max = 96.dp)
+                            .focusRequester(composerFocusRequester)
+                            .onFocusChanged {
+                                if (it.isFocused) onComposerFocusChange()
+                            }
+                            .padding(horizontal = 12.dp, vertical = 11.dp),
+                        enabled = !state.busy && !state.historyBusy,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            color = Color.White,
+                            lineHeight = 20.sp,
+                        ),
+                        cursorBrush = SolidColor(Color.White),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = {
+                            if (canSend) {
                                 onSend(draft.text.trim(), imageUri)
                                 draft = TextFieldValue("")
                                 imageUri = null
                                 historyVisible = false
                             }
+                        }),
+                        decorationBox = { innerTextField ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (draft.text.isEmpty()) {
+                                    Text(
+                                        "自由输入…",
+                                        color = Color.White.copy(alpha = 0.58f),
+                                        fontSize = 14.sp,
+                                    )
+                                }
+                                innerTextField()
+                            }
                         },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(
-                                when {
-                                    state.busy -> MaterialTheme.colorScheme.error
-                                    canSend -> Forest
-                                    else -> Hairline
-                                },
-                            ),
-                        enabled = state.busy || canSend,
+                    )
+                    IconButton(
+                        onClick = ::insertActionBrackets,
+                        modifier = Modifier.size(44.dp),
+                        enabled = !state.busy && !state.historyBusy,
                     ) {
-                        Icon(
-                            if (state.busy) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send,
-                            contentDescription = if (state.busy) "停止生成" else "发送",
-                            tint = if (state.busy || canSend) Color.White else InkMuted,
-                            modifier = Modifier.size(20.dp),
+                        Text(
+                            "（）",
+                            color = Color.White.copy(
+                                alpha = if (state.busy || state.historyBusy) 0.34f else 0.9f,
+                            ),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
                         )
+                    }
+                    if (!hasComposerContent && !state.busy) {
+                        IconButton(
+                            onClick = {
+                                if (recording) {
+                                    voice.recording = false
+                                    recording = false
+                                    voiceStatus = "正在识别…"
+                                } else if (
+                                    !voiceBusy &&
+                                    !state.busy &&
+                                    !state.historyBusy
+                                ) {
+                                    microphone.launch(Manifest.permission.RECORD_AUDIO)
+                                }
+                            },
+                            modifier = Modifier.size(44.dp),
+                            enabled = recording || (
+                                !voiceBusy &&
+                                !state.busy &&
+                                !state.historyBusy
+                            ),
+                        ) {
+                            Icon(
+                                if (recording) Icons.Default.Stop else Icons.Default.Mic,
+                                contentDescription = if (recording) {
+                                    "结束录音"
+                                } else {
+                                    "语音输入"
+                                },
+                                tint = if (recording) {
+                                    Color(0xFFFFB4AB)
+                                } else {
+                                    Color.White.copy(alpha = 0.88f)
+                                },
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        IconButton(
+                            onClick = { picker.launch("image/*") },
+                            modifier = Modifier.size(44.dp),
+                            enabled = character.modelSource != MODEL_SOURCE_LOCAL_MNN &&
+                                !state.busy &&
+                                !state.historyBusy,
+                        ) {
+                            Icon(
+                                Icons.Default.Image,
+                                contentDescription = "上传图片",
+                                tint = Color.White.copy(
+                                    alpha = if (
+                                        character.modelSource == MODEL_SOURCE_LOCAL_MNN
+                                    ) {
+                                        0.34f
+                                    } else {
+                                        0.88f
+                                    },
+                                ),
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                    if (state.busy || hasComposerContent) {
+                        IconButton(
+                            onClick = {
+                                if (state.busy) {
+                                    onStop()
+                                } else if (canSend) {
+                                    onSend(draft.text.trim(), imageUri)
+                                    draft = TextFieldValue("")
+                                    imageUri = null
+                                    historyVisible = false
+                                }
+                            },
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (state.busy) {
+                                        Color(0xFFFFB4AB)
+                                    } else {
+                                        Color.White.copy(alpha = 0.92f)
+                                    },
+                                ),
+                            enabled = state.busy || canSend,
+                        ) {
+                            Icon(
+                                if (state.busy) {
+                                    Icons.Default.Stop
+                                } else {
+                                    Icons.AutoMirrored.Filled.Send
+                                },
+                                contentDescription = if (state.busy) {
+                                    "停止生成"
+                                } else {
+                                    "发送"
+                                },
+                                tint = Color(0xFF2A2334),
+                                modifier = Modifier.size(19.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -3109,6 +3549,45 @@ private fun EditCharacterDialog(
     var generatedArtwork by remember(character.id) {
         mutableStateOf<String?>(null)
     }
+    var editSection by remember(character.id) { mutableIntStateOf(0) }
+    val artworkContext = LocalContext.current
+    val avatarFramePrefs = remember {
+        artworkContext.getSharedPreferences(
+            "character_avatar_frames",
+            android.content.Context.MODE_PRIVATE,
+        )
+    }
+    var avatarFrameCenterX by remember(character.id) {
+        mutableFloatStateOf(avatarFramePrefs.getFloat("${character.id}:x", 0.5f))
+    }
+    var avatarFrameCenterY by remember(character.id) {
+        mutableFloatStateOf(avatarFramePrefs.getFloat("${character.id}:y", 0.18f))
+    }
+    var avatarFrameDiameter by remember(character.id) {
+        mutableFloatStateOf(avatarFramePrefs.getFloat("${character.id}:diameter", 0.24f))
+    }
+    fun rememberAvatarFrame(
+        sourceWidth: Int,
+        sourceHeight: Int,
+        backgroundSelection: ArtworkCropSelection,
+        avatarSelection: ArtworkCropSelection,
+    ) {
+        if (sourceWidth <= 0 || sourceHeight <= 0) return
+        val frame = CharacterArtworkPolicy.avatarFrame(
+            sourceWidth,
+            sourceHeight,
+            backgroundSelection,
+            avatarSelection,
+        )
+        avatarFrameCenterX = frame.centerX
+        avatarFrameCenterY = frame.centerY
+        avatarFrameDiameter = frame.diameterRatio
+        avatarFramePrefs.edit()
+            .putFloat("${character.id}:x", frame.centerX)
+            .putFloat("${character.id}:y", frame.centerY)
+            .putFloat("${character.id}:diameter", frame.diameterRatio)
+            .apply()
+    }
     fun editedCharacter() = character.copy(
         name = name.trim().ifBlank { character.name },
         tag = tag.trim(),
@@ -3152,6 +3631,38 @@ private fun EditCharacterDialog(
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Sage.copy(alpha = 0.72f))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Button(
+                        onClick = { editSection = 0 },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (editSection == 0) DeepForest else Color.Transparent,
+                            contentColor = if (editSection == 0) Color.White else DeepForest,
+                        ),
+                    ) {
+                        Text("背景与头像")
+                    }
+                    Button(
+                        onClick = { editSection = 1 },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (editSection == 1) DeepForest else Color.Transparent,
+                            contentColor = if (editSection == 1) Color.White else DeepForest,
+                        ),
+                    ) {
+                        Text("角色档案")
+                    }
+                }
+            }
+            if (editSection == 1) {
             item {
                 Text(
                     "认知边界会进入每次模型请求。正式修改保存在本机。",
@@ -3222,6 +3733,8 @@ private fun EditCharacterDialog(
                     }
                 }
             }
+            }
+            if (editSection == 0) {
             item {
                 Surface(
                     color = Sage.copy(alpha = 0.55f),
@@ -3232,28 +3745,44 @@ private fun EditCharacterDialog(
                         verticalArrangement = Arrangement.spacedBy(9.dp),
                     ) {
                         Text("角色背景与头像", fontWeight = FontWeight.SemiBold)
-                        Box(
+                        BoxWithConstraints(
                             Modifier
                                 .fillMaxWidth()
-                                .height(180.dp)
+                                .aspectRatio(9f / 16f)
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(
                                     Brush.linearGradient(
                                         listOf(Color(0xFFEDE7FA), Color(0xFF8B72C9)),
                                     ),
                                 ),
-                            contentAlignment = Alignment.Center,
                         ) {
                             LocalAvatar(
                                 path = backgroundPath ?: avatarPath,
                                 modifier = Modifier.fillMaxSize(),
                                 cropTop = true,
                             )
-                            CharacterBadge(
-                                character.copy(avatarPath = avatarPath),
-                                92.dp,
+                            val diameter = minOf(
+                                maxHeight * avatarFrameDiameter,
+                                maxWidth * 0.9f,
+                            )
+                            val frameX = (
+                                maxWidth * avatarFrameCenterX - diameter / 2
+                                ).coerceIn(0.dp, maxWidth - diameter)
+                            val frameY = (
+                                maxHeight * avatarFrameCenterY - diameter / 2
+                                ).coerceIn(0.dp, maxHeight - diameter)
+                            Box(
+                                Modifier
+                                    .offset(x = frameX, y = frameY)
+                                    .size(diameter)
+                                    .border(3.dp, Color.White, CircleShape),
                             )
                         }
+                        Text(
+                            "白色圆形框就是当前头像区域；背景按完整 9:16 比例显示。",
+                            fontSize = 9.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                         Text(
                             if (avatarModelReady) {
                                 "本地 Dream 生图模型已就绪，可在手机 NPU 上离线生成；也可以切换千问图片 API。"
@@ -3318,6 +3847,8 @@ private fun EditCharacterDialog(
                     }
                 }
             }
+            }
+            if (editSection == 1) {
             item { OutlinedTextField(name, { name = it }, label = { Text("名字") }, modifier = Modifier.fillMaxWidth()) }
             item { OutlinedTextField(tag, { tag = it }, label = { Text("标签") }, modifier = Modifier.fillMaxWidth()) }
             item { OutlinedTextField(description, { description = it }, label = { Text("简介") }, minLines = 2, modifier = Modifier.fillMaxWidth()) }
@@ -3398,6 +3929,7 @@ private fun EditCharacterDialog(
                     ) { Text("保存档案") }
                 }
             }
+            }
         }
     }
     pendingImportArtwork?.let { uri ->
@@ -3405,7 +3937,18 @@ private fun EditCharacterDialog(
             sourceUri = uri,
             avatarOnly = false,
             onDismiss = { pendingImportArtwork = null },
-            onApply = { backgroundSelection, avatarSelection ->
+            onApply = {
+                    backgroundSelection,
+                    avatarSelection,
+                    sourceWidth,
+                    sourceHeight,
+                ->
+                rememberAvatarFrame(
+                    sourceWidth,
+                    sourceHeight,
+                    backgroundSelection,
+                    avatarSelection,
+                )
                 pendingImportArtwork = null
                 onImportArtwork(
                     editedCharacter(),
@@ -3421,7 +3964,18 @@ private fun EditCharacterDialog(
             sourcePath = path,
             avatarOnly = true,
             onDismiss = { generatedArtwork = null },
-            onApply = { _, avatarSelection ->
+            onApply = {
+                    backgroundSelection,
+                    avatarSelection,
+                    sourceWidth,
+                    sourceHeight,
+                ->
+                rememberAvatarFrame(
+                    sourceWidth,
+                    sourceHeight,
+                    backgroundSelection,
+                    avatarSelection,
+                )
                 val base = editedCharacter().copy(backgroundPath = path)
                 generatedArtwork = null
                 onApplyAvatarCrop(base, avatarSelection)
@@ -3437,7 +3991,12 @@ private fun ArtworkCropDialog(
     sourcePath: String? = null,
     avatarOnly: Boolean,
     onDismiss: () -> Unit,
-    onApply: (ArtworkCropSelection, ArtworkCropSelection) -> Unit,
+    onApply: (
+        ArtworkCropSelection,
+        ArtworkCropSelection,
+        Int,
+        Int,
+    ) -> Unit,
 ) {
     val context = LocalContext.current
     val sourceKey = sourceUri?.toString() ?: sourcePath.orEmpty()
@@ -3571,6 +4130,8 @@ private fun ArtworkCropDialog(
                                 onApply(
                                     backgroundSelection,
                                     avatarSelection,
+                                    bitmap?.width ?: 0,
+                                    bitmap?.height ?: 0,
                                 )
                             }
                         },

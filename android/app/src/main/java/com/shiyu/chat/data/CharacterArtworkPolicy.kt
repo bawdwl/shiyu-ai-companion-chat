@@ -26,6 +26,12 @@ data class ArtworkCropSelection(
     )
 }
 
+data class AvatarFrame(
+    val centerX: Float,
+    val centerY: Float,
+    val diameterRatio: Float,
+)
+
 internal object CharacterArtworkPolicy {
     const val OUTPUT_WIDTH = 1080
     const val OUTPUT_HEIGHT = 1920
@@ -64,6 +70,31 @@ internal object CharacterArtworkPolicy {
 
     fun sourceCrop(width: Int, height: Int): ArtworkCrop =
         crop(width, height, ASPECT_RATIO, DEFAULT_BACKGROUND)
+
+    fun avatarFrame(
+        width: Int,
+        height: Int,
+        backgroundSelection: ArtworkCropSelection = DEFAULT_BACKGROUND,
+        avatarSelection: ArtworkCropSelection = DEFAULT_AVATAR,
+    ): AvatarFrame {
+        val background = crop(width, height, ASPECT_RATIO, backgroundSelection)
+        val avatar = crop(width, height, 1.0, avatarSelection)
+        return AvatarFrame(
+            centerX = (
+                (avatar.left + avatar.width / 2f) - background.left
+                ) / background.width,
+            centerY = (
+                (avatar.top + avatar.height / 2f) - background.top
+                ) / background.height,
+            diameterRatio = avatar.height.toFloat() / background.height,
+        ).let {
+            it.copy(
+                centerX = it.centerX.coerceIn(0f, 1f),
+                centerY = it.centerY.coerceIn(0f, 1f),
+                diameterRatio = it.diameterRatio.coerceIn(0.08f, 0.92f),
+            )
+        }
+    }
 
     fun toPortrait(
         source: Bitmap,

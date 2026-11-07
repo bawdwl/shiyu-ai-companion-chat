@@ -43,4 +43,18 @@ class CharacterArtworkPolicyTest {
         assertEquals(1080, crop.height)
         assertEquals(0, crop.top)
     }
+
+    @Test
+    fun portraitAvatarFrameMapsIntoFullWallpaperCrop() {
+        val frame = CharacterArtworkPolicy.avatarFrame(
+            width = 1080,
+            height = 1920,
+            backgroundSelection = CharacterArtworkPolicy.DEFAULT_BACKGROUND,
+            avatarSelection = CharacterArtworkPolicy.DEFAULT_AVATAR,
+        )
+
+        assertEquals(0.5f, frame.centerX, 0.0001f)
+        assertEquals(0.28125f, frame.centerY, 0.0001f)
+        assertEquals(0.5625f, frame.diameterRatio, 0.0001f)
+    }
 }

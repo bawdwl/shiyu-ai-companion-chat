@@ -179,14 +179,14 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
             .onFailure { _state.value = _state.value.copy(status = it.message) }
     }
 
-    fun select(character: CharacterEntity) {
+    fun select(character: CharacterEntity, ensureOpening: Boolean = true) {
         observeJob?.cancel()
         _state.value = _state.value.copy(
             selected = character, messages = emptyList(), memories = emptyList(),
             structuredMemories = emptyList(), turnTraces = emptyList(),
         )
         observeJob = viewModelScope.launch {
-            repository.ensureOpening(character)
+            if (ensureOpening) repository.ensureOpening(character)
             launch {
                 repository.observeMessages(character.id).collect { messages ->
                     _state.value = _state.value.copy(messages = messages)
@@ -264,6 +264,29 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 turnTraces = emptyList(),
                 status = "角色对话、记忆和状态已重置",
             )
+        }
+    }
+
+    fun resetManagedCharacter(character: CharacterEntity) {
+        if (_state.value.busy || _state.value.avatarBusy) return
+        _state.value = _state.value.copy(busy = true)
+        viewModelScope.launch {
+            runCatching {
+                repository.reset(character.id)
+            }.onSuccess {
+                _state.value = _state.value.copy(
+                    busy = false,
+                    memories = emptyList(),
+                    structuredMemories = emptyList(),
+                    turnTraces = emptyList(),
+                    status = "${character.name}的对话、记忆和状态已重置",
+                )
+            }.onFailure { error ->
+                _state.value = _state.value.copy(
+                    busy = false,
+                    status = error.message ?: "重置角色失败",
+                )
+            }
         }
     }
 
@@ -352,6 +375,38 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
         }
     }
 
+    fun deleteManagedCharacter(character: CharacterEntity) {
+        if (_state.value.busy || _state.value.avatarBusy) return
+        _state.value = _state.value.copy(busy = true)
+        viewModelScope.launch {
+            try {
+                repository.deleteCharacter(character.id)
+                if (_state.value.selected?.id == character.id) {
+                    observeJob?.cancel()
+                    _state.value = _state.value.copy(
+                        selected = null,
+                        messages = emptyList(),
+                        memories = emptyList(),
+                        structuredMemories = emptyList(),
+                        turnTraces = emptyList(),
+                        busy = false,
+                        status = "${character.name}已删除",
+                    )
+                } else {
+                    _state.value = _state.value.copy(
+                        busy = false,
+                        status = "${character.name}已删除",
+                    )
+                }
+            } catch (error: Exception) {
+                _state.value = _state.value.copy(
+                    busy = false,
+                    status = error.message ?: "删除角色失败",
+                )
+            }
+        }
+    }
+
     fun generateCharacter(idea: String, onComplete: (CharacterEntity) -> Unit) {
         if (idea.isBlank()) return
         _state.value = _state.value.copy(busy = true, status = "正在生成角色档案…")
@@ -398,7 +453,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 .onSuccess { updated ->
                     _state.value = _state.value.copy(
                         avatarBusy = false,
-                        status = "背景和头像已应用，保存角色后生效",
+                        status = "背景和头像已应用并保存",
                     )
                     onImported(updated)
                 }

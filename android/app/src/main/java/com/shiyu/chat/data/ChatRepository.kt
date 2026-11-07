@@ -545,6 +545,17 @@ class ChatRepository(
             backgroundSelection,
             avatarSelection,
         )
+        database.characters().updateArtwork(
+            character.id,
+            paths.avatarPath,
+            paths.backgroundPath,
+        )
+        character.avatarPath
+            ?.takeIf { it != paths.avatarPath }
+            ?.let(avatarGenerator::deleteAvatar)
+        character.backgroundPath
+            ?.takeIf { it != paths.backgroundPath }
+            ?.let(avatarGenerator::deleteAvatar)
         return character.copy(
             avatarPath = paths.avatarPath,
             backgroundPath = paths.backgroundPath,
