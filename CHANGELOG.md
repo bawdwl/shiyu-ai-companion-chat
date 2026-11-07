@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-11-06 — Android `0.18.7` full-screen workspaces and generation progress
+## 2026-11-07 — Android `0.18.8` four-tab app shell
 
 - Entering a chat now positions directly at the newest message without the previous animated scroll from the start of the conversation.
 - The full-screen character artwork now stays fixed at 100% opacity while the interactive layer avoids the software keyboard. The latest reply is anchored above the composer, so opening the keyboard moves the message but leaves the artwork in place.
@@ -18,6 +18,8 @@
 - Image generation reports real Local Dream step progress as a percentage; cloud generation reports request, download and save stages.
 - Reset conversation now requires a destructive confirmation dialog. Home-screen character artwork is aligned to the top of the card so faces are less likely to be cropped.
 - Full-screen workspaces reserve the Android navigation/gesture safe area and add bottom content space, so final buttons remain reachable. Character thumbnails now decode off the main thread with a bounded bitmap cache, removing card-composition jank during downward scrolling.
+- Added a persistent four-item bottom bar for Home, Messages, Create and Settings. Home uses an infinite vertical character pager with a random initial role; Messages lists only roles with real user conversation and shows avatar, name, latest message and time; Create and Settings are embedded pages rather than dialogs.
+- Chat remembers whether it was opened from Home or Messages and returns to that tab. A newly created role returns to Home after its first chat.
 - Room schema is now 13 with a lossless 12→13 migration. Added deterministic rollback, artwork-crop and action-bracket tests. Android JVM tests and the debug APK build pass.
 
 ## 2026-11-06 — `v0.18.0` republish with Windows 0.18.0 / Android 0.18.3

@@ -51,6 +51,8 @@ class ChatRepository(
     private val localSummaryMutex = Mutex()
 
     val characters: Flow<List<CharacterEntity>> = database.characters().observeAll()
+    val conversationSummaries: Flow<List<ConversationSummaryRow>> =
+        database.messages().observeConversationSummaries()
     val showDevProviders: Boolean = context.resources.getBoolean(R.bool.show_dev_providers)
 
     init {

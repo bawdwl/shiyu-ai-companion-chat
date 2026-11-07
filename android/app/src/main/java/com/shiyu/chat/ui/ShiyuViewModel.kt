@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.shiyu.chat.data.CharacterEntity
 import com.shiyu.chat.data.ChatRepository
+import com.shiyu.chat.data.ConversationSummaryRow
 import com.shiyu.chat.data.DeviceModelCompatibility
 import com.shiyu.chat.data.Limits
 import com.shiyu.chat.data.MemoryEntity
@@ -25,6 +26,7 @@ import kotlinx.coroutines.launch
 
 data class ShiyuUiState(
     val characters: List<CharacterEntity> = emptyList(),
+    val conversationSummaries: List<ConversationSummaryRow> = emptyList(),
     val selected: CharacterEntity? = null,
     val messages: List<MessageEntity> = emptyList(),
     val memories: List<MemoryEntity> = emptyList(),
@@ -95,6 +97,13 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                     characters.firstOrNull { it.id == current.id }
                 }
                 _state.value = _state.value.copy(characters = characters, selected = selected)
+            }
+            launch {
+                repository.conversationSummaries.collect { summaries ->
+                    _state.value = _state.value.copy(
+                        conversationSummaries = summaries,
+                    )
+                }
             }
         }
     }

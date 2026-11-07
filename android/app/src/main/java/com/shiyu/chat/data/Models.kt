@@ -285,6 +285,13 @@ data class TokenUsage(
     val cachedTokens: Int,
 )
 
+data class ConversationSummaryRow(
+    val characterId: String,
+    val lastContent: String,
+    val lastTimestamp: Long,
+    val userMessageCount: Int,
+)
+
 data class Limits(
     val requestTokens: Int = 12_000,
     val dailyTokens: Int = 200_000,

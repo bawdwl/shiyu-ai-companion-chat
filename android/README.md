@@ -1,6 +1,6 @@
 # 拾语 Android
 
-当前源码版本：`0.18.7 / versionCode 37`，Room schema 13，只提供一个完整安装包：
+当前源码版本：`0.18.8 / versionCode 38`，Room schema 13，只提供一个完整安装包：
 
 - `com.shiyu.chat`：内置本地语音识别、角色朗读、MNN 和图片生成入口。
 
@@ -10,6 +10,7 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 ## 已实现
 
 - Debug 与 Release 都支持 OpenCode Go `deepseek-v4.1-flash` 与 DeepSeek `deepseek-flash`。
+- 首页、消息、创建、设置四个固定底部页签；首页支持上下循环浏览角色，聊天返回时回到进入前页签。
 - 每个角色可独立选择云端 API 或手机本地 MNN 模型。
 - 创建、编辑、删除角色；角色卡、世界书、知识边界和固定事实。
 - 一个角色只有一个持续对话，支持主动剧情开场和本地历史。
@@ -73,7 +74,7 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 ## 当前验证
 
-- `0.18.7` 源码已通过 78 项 JVM 测试、Debug Lint 和 Debug APK 构建。
+- `0.18.8` 源码已通过 78 项 JVM 测试、Debug Lint 和 Debug APK 构建。
 - Debug Lint 为 0 errors、2 个既有 `android.media.ExifInterface` 警告。
 - 预编译 APK 仅作为 GitHub Release 附件分发，不提交到 Git：
   <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.0>

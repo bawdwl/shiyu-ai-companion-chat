@@ -66,6 +66,21 @@ interface MessageDao {
 
     @Query("SELECT COUNT(*) FROM messages WHERE characterId=:characterId")
     suspend fun count(characterId: String): Int
+
+    @Query(
+        """SELECT m.characterId,
+                  m.content AS lastContent,
+                  m.createdAt AS lastTimestamp,
+                  (SELECT COUNT(*) FROM messages u
+                   WHERE u.characterId=m.characterId AND u.role='user') AS userMessageCount
+           FROM messages m
+           INNER JOIN (
+               SELECT characterId,MAX(id) AS maxId
+               FROM messages GROUP BY characterId
+           ) latest ON latest.maxId=m.id
+           ORDER BY m.createdAt DESC""",
+    )
+    fun observeConversationSummaries(): Flow<List<ConversationSummaryRow>>
 }
 
 @Dao

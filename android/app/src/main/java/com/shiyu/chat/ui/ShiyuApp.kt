@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,6 +40,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -51,10 +54,12 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Mic
@@ -152,6 +157,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 import kotlin.math.roundToInt
+import kotlin.random.Random
 
 private val DeepForest = Color(0xFF4E3A86)
 private val Forest = Color(0xFF7457C8)
@@ -168,6 +174,13 @@ private val artworkBitmapCache = object : LruCache<String, android.graphics.Bitm
 ) {
     override fun sizeOf(key: String, value: android.graphics.Bitmap): Int =
         value.allocationByteCount
+}
+
+private enum class RootTab(val label: String) {
+    HOME("首页"),
+    MESSAGES("消息"),
+    CREATE("创建"),
+    SETTINGS("设置"),
 }
 
 @Composable
@@ -228,8 +241,8 @@ private fun FullScreenPage(
 fun ShiyuApp(repository: ChatRepository) {
     val vm: ShiyuViewModel = viewModel(factory = ShiyuViewModelFactory(repository))
     val state by vm.state.collectAsStateWithLifecycle()
-    var showSettings by remember { mutableStateOf(false) }
-    var showCreate by remember { mutableStateOf(false) }
+    var activeTab by remember { mutableStateOf(RootTab.HOME) }
+    var chatReturnTab by remember { mutableStateOf(RootTab.HOME) }
     var showMemory by remember { mutableStateOf(false) }
     var showTrace by remember { mutableStateOf(false) }
     var showEdit by remember { mutableStateOf(false) }
@@ -245,6 +258,14 @@ fun ShiyuApp(repository: ChatRepository) {
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
+        bottomBar = {
+            if (state.selected == null) {
+                RootBottomBar(
+                    current = activeTab,
+                    onSelect = { activeTab = it },
+                )
+            }
+        },
         contentWindowInsets = WindowInsets(0),
         containerColor = Color.Transparent,
     ) { padding ->
@@ -259,24 +280,83 @@ fun ShiyuApp(repository: ChatRepository) {
                 .padding(padding),
         ) {
             if (state.selected == null) {
-                CharacterHome(
-                    state = state,
-                    onSelect = { character ->
-                        pendingCharacter = null
-                        vm.select(character)
-                    },
-                    onSettings = { showSettings = true },
-                    onCreate = {
-                        pendingCharacter = null
-                        showCreate = true
-                    },
-                )
+                when (activeTab) {
+                    RootTab.HOME -> CharacterDiscoveryPager(
+                        state = state,
+                        onCreate = { activeTab = RootTab.CREATE },
+                        onChat = { character ->
+                            pendingCharacter = null
+                            chatReturnTab = RootTab.HOME
+                            vm.select(character)
+                        },
+                    )
+                    RootTab.MESSAGES -> ConversationMessagesPage(
+                        state = state,
+                        onChat = { character ->
+                            pendingCharacter = null
+                            chatReturnTab = RootTab.MESSAGES
+                            vm.select(character)
+                        },
+                    )
+                    RootTab.CREATE -> CreateCharacterDialog(
+                        busy = state.busy,
+                        embedded = true,
+                        onDismiss = { activeTab = RootTab.HOME },
+                        onCreate = { idea ->
+                            vm.generateCharacter(idea) { character ->
+                                pendingCharacter = character
+                                showEdit = true
+                            }
+                        },
+                        onManual = {
+                            pendingCharacter = CharacterEntity(
+                                id = "custom-" + UUID.randomUUID().toString().take(12),
+                                name = "新角色",
+                                tag = "原创角色",
+                                description = "等待补完的人物",
+                                personality = "",
+                                speechStyle = "",
+                                relationship = "初次交谈",
+                                appearance = "",
+                                appearancePrompt = "",
+                                greeting = "",
+                                era = "原创世界",
+                                knowledgeCutoff = "",
+                                forbiddenKnowledge = "",
+                                forbiddenTerms = "",
+                                custom = true,
+                            )
+                            showEdit = true
+                        },
+                    )
+                    RootTab.SETTINGS -> SettingsDialog(
+                        state = state,
+                        embedded = true,
+                        onDismiss = { activeTab = RootTab.HOME },
+                        onSaveKey = vm::saveApiKey,
+                        onRemoveKey = vm::removeApiKey,
+                        onSaveOpenCodeKey = vm::saveOpenCodeApiKey,
+                        onRemoveOpenCodeKey = vm::removeOpenCodeApiKey,
+                        onProviderChange = vm::setCloudProvider,
+                        onSaveLimits = vm::saveLimits,
+                        onSaveImageKey = vm::saveImageApiKey,
+                        onRemoveImageKey = vm::removeImageApiKey,
+                        onSaveDreamSettings = vm::saveDreamGenerationSettings,
+                        onImportAvatarModel = vm::importAvatarModel,
+                        onDeleteAvatarModel = vm::deleteAvatarModel,
+                        onImportLocalModel = vm::importLocalModel,
+                        onDeleteLocalModel = vm::deleteLocalModel,
+                        onDownloadLocalModel = vm::downloadLocalModel,
+                        onDownloadDreamModel = vm::downloadDreamModel,
+                    )
+                }
             } else {
                 ChatScreen(
                     state = state,
                     onBack = {
                         pendingCharacter = null
                         vm.closeCharacter()
+                        activeTab = chatReturnTab
                     },
                     onSend = vm::send,
                     onStop = vm::stop,
@@ -294,65 +374,6 @@ fun ShiyuApp(repository: ChatRepository) {
         }
     }
 
-    if (showSettings) {
-        SettingsDialog(
-            state = state,
-            onDismiss = { showSettings = false },
-            onSaveKey = vm::saveApiKey,
-            onRemoveKey = vm::removeApiKey,
-            onSaveOpenCodeKey = vm::saveOpenCodeApiKey,
-            onRemoveOpenCodeKey = vm::removeOpenCodeApiKey,
-            onProviderChange = vm::setCloudProvider,
-            onSaveLimits = vm::saveLimits,
-            onSaveImageKey = vm::saveImageApiKey,
-            onRemoveImageKey = vm::removeImageApiKey,
-            onSaveDreamSettings = vm::saveDreamGenerationSettings,
-            onImportAvatarModel = vm::importAvatarModel,
-            onDeleteAvatarModel = vm::deleteAvatarModel,
-            onImportLocalModel = vm::importLocalModel,
-            onDeleteLocalModel = vm::deleteLocalModel,
-            onDownloadLocalModel = vm::downloadLocalModel,
-            onDownloadDreamModel = vm::downloadDreamModel,
-        )
-    }
-    if (showCreate) {
-        CreateCharacterDialog(
-            busy = state.busy,
-            onDismiss = {
-                pendingCharacter = null
-                showCreate = false
-            },
-            onCreate = { idea ->
-                vm.generateCharacter(idea) { character ->
-                    showCreate = false
-                    pendingCharacter = character
-                    showEdit = true
-                }
-            },
-            onManual = {
-                val character = CharacterEntity(
-                    id = "custom-" + UUID.randomUUID().toString().take(12),
-                    name = "新角色",
-                    tag = "原创角色",
-                    description = "等待补完的人物",
-                    personality = "",
-                    speechStyle = "",
-                    relationship = "初次交谈",
-                    appearance = "",
-                    appearancePrompt = "",
-                    greeting = "",
-                    era = "原创世界",
-                    knowledgeCutoff = "",
-                    forbiddenKnowledge = "",
-                    forbiddenTerms = "",
-                    custom = true,
-                )
-                showCreate = false
-                pendingCharacter = character
-                showEdit = true
-            },
-        )
-    }
     if (showMemory && state.selected != null) {
         MemorySheet(
             character = state.selected!!,
@@ -422,10 +443,304 @@ fun ShiyuApp(repository: ChatRepository) {
                 vm.saveCharacter(updated) {
                     showEdit = false
                     pendingCharacter = null
+                    chatReturnTab = RootTab.HOME
                     vm.select(updated)
                 }
             },
         )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CharacterDiscoveryPager(
+    state: ShiyuUiState,
+    onCreate: () -> Unit,
+    onChat: (CharacterEntity) -> Unit,
+) {
+    if (state.characters.isEmpty()) {
+        Box(
+            Modifier.fillMaxSize().statusBarsPadding(),
+            contentAlignment = Alignment.Center,
+        ) {
+            EmptyCharacters(onCreate = onCreate)
+        }
+        return
+    }
+    val count = state.characters.size
+    val randomOffset = remember(count) { Random.nextInt(count) }
+    val initialPage = Int.MAX_VALUE / 2 -
+        (Int.MAX_VALUE / 2 % count) +
+        randomOffset
+    val pagerState = rememberPagerState(
+        initialPage = initialPage,
+        pageCount = { Int.MAX_VALUE },
+    )
+    VerticalPager(
+        state = pagerState,
+        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+        beyondViewportPageCount = 1,
+    ) { page ->
+        val character = state.characters[Math.floorMod(page, count)]
+        CharacterDiscoveryPage(
+            character = character,
+            onChat = { onChat(character) },
+        )
+    }
+}
+
+@Composable
+private fun CharacterDiscoveryPage(
+    character: CharacterEntity,
+    onChat: () -> Unit,
+) {
+    val background = character.backgroundPath?.takeIf { File(it).isFile }
+        ?: character.avatarPath
+    Box(Modifier.fillMaxSize().background(Color(0xFF17131E))) {
+        LocalAvatar(
+            path = background,
+            modifier = Modifier.fillMaxSize(),
+            cropTop = true,
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.Black.copy(alpha = 0.12f),
+                            Color.Transparent,
+                            Color(0xEC0F1013),
+                        ),
+                    ),
+                ),
+        )
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "拾语",
+                color = Color.White,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "上滑遇见下一位",
+                color = Color.White.copy(alpha = 0.72f),
+                fontSize = 10.sp,
+            )
+        }
+        Column(
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 22.dp),
+        ) {
+            Text(
+                character.name,
+                color = Color.White,
+                fontSize = 30.sp,
+                lineHeight = 36.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = Color.White.copy(alpha = 0.15f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+            ) {
+                Text(
+                    character.tag.ifBlank { "原创角色" },
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = 11.sp,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                character.description.ifBlank { "进入这段尚未写完的故事" },
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = 13.sp,
+                lineHeight = 20.sp,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(18.dp))
+            Button(
+                onClick = onChat,
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(999.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF77D5FF),
+                    contentColor = Color(0xFF14242C),
+                ),
+            ) {
+                Text("和 TA 聊天", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConversationMessagesPage(
+    state: ShiyuUiState,
+    onChat: (CharacterEntity) -> Unit,
+) {
+    val characters = remember(state.characters) {
+        state.characters.associateBy(CharacterEntity::id)
+    }
+    val rows = remember(state.conversationSummaries, characters) {
+        state.conversationSummaries
+            .asSequence()
+            .filter { it.userMessageCount > 0 }
+            .mapNotNull { summary ->
+                characters[summary.characterId]?.let { character ->
+                    character to summary
+                }
+            }
+            .sortedByDescending { it.second.lastTimestamp }
+            .toList()
+    }
+    Column(
+        Modifier.fillMaxSize().statusBarsPadding(),
+    ) {
+        Text(
+            "消息",
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
+            fontSize = 27.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        if (rows.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    "还没有聊过天的角色",
+                    color = InkMuted,
+                    fontSize = 13.sp,
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                items(rows, key = { it.second.characterId }) { (character, summary) ->
+                    Surface(
+                        onClick = { onChat(character) },
+                        color = Color.Transparent,
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            CharacterBadge(character, 56.dp)
+                            Spacer(Modifier.width(13.dp))
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        character.name,
+                                        modifier = Modifier.weight(1f),
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Text(
+                                        formatConversationTime(summary.lastTimestamp),
+                                        color = InkMuted,
+                                        fontSize = 9.sp,
+                                    )
+                                }
+                                Text(
+                                    summary.lastContent
+                                        .replace(Regex("\\s+"), " ")
+                                        .trim(),
+                                    modifier = Modifier.padding(top = 4.dp),
+                                    color = InkMuted,
+                                    fontSize = 12.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatConversationTime(timestamp: Long): String =
+    SimpleDateFormat("M/d HH:mm", Locale.CHINA).format(Date(timestamp))
+
+@Composable
+private fun RootBottomBar(
+    current: RootTab,
+    onSelect: (RootTab) -> Unit,
+) {
+    Surface(
+        color = Color(0xF2101114),
+        contentColor = Color.White,
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .height(66.dp)
+                .padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceAround,
+        ) {
+            RootTab.entries.forEach { tab ->
+                val selected = current == tab
+                Surface(
+                    onClick = { onSelect(tab) },
+                    color = if (selected) Forest.copy(alpha = 0.34f) else Color.Transparent,
+                    contentColor = if (selected) Color(0xFF9EE7FF) else Color.White.copy(alpha = 0.65f),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 7.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        if (tab == RootTab.CREATE) {
+                            Box(
+                                Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF77D5FF)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Default.Add,
+                                    contentDescription = "创建角色",
+                                    tint = Color(0xFF14242C),
+                                )
+                            }
+                        } else {
+                            Icon(
+                                when (tab) {
+                                    RootTab.HOME -> Icons.Default.Home
+                                    RootTab.MESSAGES -> Icons.Default.ChatBubbleOutline
+                                    RootTab.SETTINGS -> Icons.Default.Settings
+                                    RootTab.CREATE -> Icons.Default.Add
+                                },
+                                contentDescription = tab.label,
+                                modifier = Modifier.size(21.dp),
+                            )
+                            Text(tab.label, fontSize = 9.sp)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -2046,6 +2361,7 @@ private fun DreamSchedulerChoice(
 private fun SettingsDialog(
     state: ShiyuUiState,
     onDismiss: () -> Unit,
+    embedded: Boolean = false,
     onSaveKey: (String) -> Unit,
     onRemoveKey: () -> Unit,
     onSaveOpenCodeKey: (String) -> Unit,
@@ -2100,10 +2416,7 @@ private fun SettingsDialog(
     ) { uri ->
         uri?.let(onImportLocalModel)
     }
-    FullScreenPage(
-        title = "应用设置",
-        onBack = onDismiss,
-    ) { pageModifier ->
+    val pageContent: @Composable (Modifier) -> Unit = { pageModifier ->
         Column(pageModifier) {
             Column(
                 Modifier
@@ -2112,6 +2425,9 @@ private fun SettingsDialog(
                     .padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                if (embedded) {
+                    Text("应用设置", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                }
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -2614,6 +2930,14 @@ private fun SettingsDialog(
             }
         }
     }
+    if (embedded) {
+        pageContent(Modifier.fillMaxSize().statusBarsPadding())
+    } else {
+        FullScreenPage(
+            title = "应用设置",
+            onBack = onDismiss,
+        ) { pageContent(it) }
+    }
 }
 
 @Composable
@@ -2622,17 +2946,18 @@ private fun CreateCharacterDialog(
     onDismiss: () -> Unit,
     onCreate: (String) -> Unit,
     onManual: () -> Unit,
+    embedded: Boolean = false,
 ) {
     var idea by remember { mutableStateOf("") }
-    FullScreenPage(
-        title = "创建角色",
-        onBack = onDismiss,
-    ) { modifier ->
+    val pageContent: @Composable (Modifier) -> Unit = { modifier ->
         Column(modifier.padding(20.dp)) {
             Column(
                 Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                if (embedded) {
+                    Text("创建角色", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                }
                 Text(
                     "写下身份、时代、关系和不能知道的内容。生成结果是草稿，请后续检查。",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2675,6 +3000,14 @@ private fun CreateCharacterDialog(
                 }
             }
         }
+    }
+    if (embedded) {
+        pageContent(Modifier.fillMaxSize().statusBarsPadding())
+    } else {
+        FullScreenPage(
+            title = "创建角色",
+            onBack = onDismiss,
+        ) { pageContent(it) }
     }
 }
 
