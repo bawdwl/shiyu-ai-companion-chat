@@ -1,46 +1,45 @@
-# Shiyu releases
+# Shiyu Releases
 
-Prebuilt applications are distributed as GitHub Release assets and are not
-stored in Git.
+发布包通过 GitHub Release 分发，APK 和 ZIP 不进入 Git。本地目录只保留当前
+发布物，避免重复保存每次测试构建：
 
-## Windows
+```text
+release/
+├─ apk-0.18.22/   当前 Android APK
+├─ windows/       当前 Windows onedir ZIP
+└─ README.md
+```
 
-- Windows `0.18.0` uses the same React workspace, character profile editor,
-  role generation flow and automatic structured-memory backend as the PC web
-  build.
-- Download and extract `Shiyu-0.18.0-Windows-x64.zip`, then run
-  `Shiyu-0.18.0-Windows-x64.exe`.
-- API keys are entered inside the app and are not bundled.
-- ZIP SHA-256:
-  `197D4EA9408327C48C8909DCB3DA1C2BE46014DECAAC682A2040CD12BCB11658`
-- EXE SHA-256:
-  `A1DA433F6792789D05BD968BB27AC146CA03DE13CF5373E1A99872529B19A6A5`
+## Android 0.18.22
 
-## Android
+- GitHub：[`v0.18.22`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.22)
+- 文件：`apk-0.18.22/Shiyu-0.18.22-Android-arm64-v8a.apk`
+- 大小：`299,731,904` 字节
+- SHA-256：`9A2DDA53BE979FD9F1B40FB7C4CBE0FD097C9A298B5ABB318972222A99CD4E8E`
+- 要求：Android 8.0+、ARM64；API Key 由用户在应用内填写
 
-The current prebuilt APK is distributed as a GitHub Release asset:
+当前 APK 内置 12 个初始角色及头像、背景。聊天、记忆、API Key 和个人图片不在
+发布包中。
 
-- [Shiyu Android 0.17.0](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.17.0)
-
-Release requirements:
-
-- Android 8.0 or newer
-- ARM64 device
-- API keys are configured by each user inside the app
-
-The `v0.17.0` APK is `283,040,467` bytes with SHA-256
-`0F6F28E2876329DBA0F1B5E9701E3475F83BD46F1992D65024514C38F51B600B`.
-
-Build from source:
+重新构建：
 
 ```powershell
-$env:JAVA_HOME = "C:\path\to\jdk-17"
-$env:ANDROID_HOME = "C:\path\to\Android\Sdk"
 .\scripts\build_android.ps1
 ```
 
-Output:
+输出：
 
 ```text
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
+
+## Windows 0.18.0
+
+- 文件：`windows/Shiyu-0.18.0-Windows-x64.zip`
+- ZIP SHA-256：`9D089A71A83291C04FFCAD814235DBEEF7710106E955F077499DBBB65F4AF8BA`
+- EXE SHA-256：`A365221D65CA5FBFF0A6AED6F6C51197D6C71460DEB71AD1538E741C8DBA1D2E`
+- 需要完整解压目录后运行 EXE，不要只复制可执行文件
+- API Key 由用户在应用内填写
+
+Windows 包是基础云端版。本地 Qwen/LoRA、MeinaMix、BGE、Whisper 和
+CosyVoice 需要按 PC 网页完整环境自行安装。

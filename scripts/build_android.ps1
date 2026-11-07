@@ -1,6 +1,15 @@
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
-$toolchain = Join-Path $root "outputs/android-toolchain"
+$toolchainCandidates = @(
+    (Join-Path $root "outputs/android-toolchain"),
+    (Join-Path (Split-Path -Parent $root) "outputs/android-toolchain")
+)
+$toolchain = $toolchainCandidates |
+    Where-Object { Test-Path -LiteralPath $_ } |
+    Select-Object -First 1
+if (-not $toolchain) {
+    $toolchain = $toolchainCandidates[0]
+}
 
 if (-not $env:JAVA_HOME) {
     $localJdk = Join-Path $toolchain "jdk17/jdk-17.0.20.1+1"
