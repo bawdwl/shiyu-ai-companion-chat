@@ -403,6 +403,7 @@ fun ShiyuApp(repository: ChatRepository) {
                                     character = character,
                                     state = state,
                                     onBack = null,
+                                    showBackground = false,
                                     onComposerFocusChange = {
                                         homeComposerFocused = true
                                     },
@@ -689,12 +690,20 @@ private fun CharacterDiscoveryPage(
     active: Boolean,
     chatContent: @Composable () -> Unit,
 ) {
-    if (active) {
-        chatContent()
-        return
-    }
     val background = character.backgroundPath?.takeIf { File(it).isFile }
         ?: character.avatarPath
+    val avatarPath = character.avatarPath
+    LaunchedEffect(avatarPath) {
+        avatarPath?.let { path ->
+            withContext(Dispatchers.IO) {
+                loadCachedArtwork(
+                    path,
+                    File(path).lastModified(),
+                    640,
+                )
+            }
+        }
+    }
     Box(
         Modifier
             .fillMaxSize()
@@ -709,6 +718,9 @@ private fun CharacterDiscoveryPage(
             modifier = Modifier.fillMaxSize(),
             cropTop = true,
         )
+        if (active) {
+            chatContent()
+        }
     }
 }
 
@@ -1601,6 +1613,7 @@ private fun ChatScreen(
     onBack: (() -> Unit)?,
     onComposerFocusChange: () -> Unit = {},
     composerBottomInset: androidx.compose.ui.unit.Dp = 0.dp,
+    showBackground: Boolean = true,
     onSend: (String, Uri?) -> Unit,
     onStop: () -> Unit,
     onMemory: () -> Unit,
@@ -1735,21 +1748,24 @@ private fun ChatScreen(
         }
     }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFFF3EDFF), CanvasMist, Color(0xFFFFF5F8)),
-                ),
-            ),
-    ) {
-        LocalAvatar(
-            path = character.backgroundPath?.takeIf { File(it).isFile }
-                ?: character.avatarPath,
-            modifier = Modifier.fillMaxSize(),
-            cropTop = true,
-        )
+    Box(Modifier.fillMaxSize()) {
+        if (showBackground) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color(0xFFF3EDFF), CanvasMist, Color(0xFFFFF5F8)),
+                        ),
+                    ),
+            )
+            LocalAvatar(
+                path = character.backgroundPath?.takeIf { File(it).isFile }
+                    ?: character.avatarPath,
+                modifier = Modifier.fillMaxSize(),
+                cropTop = true,
+            )
+        }
         Column(
             Modifier
                 .fillMaxSize()
@@ -2689,11 +2705,7 @@ private fun CharacterBadge(character: CharacterEntity, size: androidx.compose.ui
             .size(size)
             .clip(CircleShape)
             .border(1.dp, Color.White.copy(alpha = 0.84f), CircleShape)
-            .background(
-                Brush.linearGradient(
-                    listOf(Forest, Color(0xFFC1639A)),
-                ),
-            ),
+            .background(Color.Black.copy(alpha = 0.28f)),
         contentAlignment = Alignment.Center,
     ) {
         LocalAvatar(
@@ -2717,7 +2729,9 @@ private fun LocalAvatar(
     val modified = path?.let { File(it).lastModified() } ?: 0L
     val maxDimension = if (cropFace) 640 else 2048
     var bitmap by remember(path, modified, maxDimension) {
-        mutableStateOf<android.graphics.Bitmap?>(null)
+        mutableStateOf(
+            cachedArtworkOrNull(path, modified, maxDimension),
+        )
     }
     LaunchedEffect(path, modified, maxDimension) {
         bitmap = withContext(Dispatchers.IO) {
@@ -2755,6 +2769,17 @@ private fun LocalAvatar(
             )
         }
     }
+}
+
+private fun cachedArtworkOrNull(
+    path: String?,
+    modified: Long,
+    maxDimension: Int,
+): android.graphics.Bitmap? {
+    val file = path?.let(::File)?.takeIf(File::isFile) ?: return null
+    return artworkBitmapCache.get(
+        "${file.absolutePath}|$modified|$maxDimension",
+    )
 }
 
 private fun loadCachedArtwork(
