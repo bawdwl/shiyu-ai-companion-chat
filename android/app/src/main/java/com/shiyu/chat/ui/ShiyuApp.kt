@@ -97,6 +97,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -148,6 +150,7 @@ import com.shiyu.chat.data.naturalMessageText
 import com.shiyu.chat.data.speechOnlyText
 import com.shiyu.chat.R
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -204,6 +207,7 @@ private fun FullScreenPage(
                 Modifier
                     .fillMaxSize()
                     .statusBarsPadding()
+                    .navigationBarsPadding()
                     .imePadding(),
             ) {
                 Row(
@@ -231,7 +235,6 @@ private fun FullScreenPage(
                 }
                 HorizontalDivider(color = Hairline)
                 content(Modifier.fillMaxWidth().weight(1f))
-                Spacer(Modifier.fillMaxWidth().navigationBarsPadding())
             }
         }
     }
@@ -243,6 +246,7 @@ fun ShiyuApp(repository: ChatRepository) {
     val state by vm.state.collectAsStateWithLifecycle()
     var activeTab by remember { mutableStateOf(RootTab.HOME) }
     var chatReturnTab by remember { mutableStateOf(RootTab.HOME) }
+    var homeCharacterId by rememberSaveable { mutableStateOf<String?>(null) }
     var showMemory by remember { mutableStateOf(false) }
     var showTrace by remember { mutableStateOf(false) }
     var showEdit by remember { mutableStateOf(false) }
@@ -283,8 +287,11 @@ fun ShiyuApp(repository: ChatRepository) {
                 when (activeTab) {
                     RootTab.HOME -> CharacterDiscoveryPager(
                         state = state,
+                        preferredCharacterId = homeCharacterId,
+                        onCharacterChanged = { homeCharacterId = it },
                         onCreate = { activeTab = RootTab.CREATE },
                         onChat = { character ->
+                            homeCharacterId = character.id
                             pendingCharacter = null
                             chatReturnTab = RootTab.HOME
                             vm.select(character)
@@ -455,6 +462,8 @@ fun ShiyuApp(repository: ChatRepository) {
 @Composable
 private fun CharacterDiscoveryPager(
     state: ShiyuUiState,
+    preferredCharacterId: String?,
+    onCharacterChanged: (String) -> Unit,
     onCreate: () -> Unit,
     onChat: (CharacterEntity) -> Unit,
 ) {
@@ -469,16 +478,26 @@ private fun CharacterDiscoveryPager(
     }
     val count = state.characters.size
     val randomOffset = remember(count) { Random.nextInt(count) }
+    val preferredIndex = state.characters.indexOfFirst { it.id == preferredCharacterId }
     val initialPage = Int.MAX_VALUE / 2 -
         (Int.MAX_VALUE / 2 % count) +
-        randomOffset
+        if (preferredIndex >= 0) preferredIndex else randomOffset
     val pagerState = rememberPagerState(
         initialPage = initialPage,
         pageCount = { Int.MAX_VALUE },
     )
+    LaunchedEffect(pagerState, state.characters) {
+        snapshotFlow { pagerState.settledPage }
+            .collect { page ->
+                val character = state.characters[
+                    Math.floorMod(page, state.characters.size)
+                ]
+                onCharacterChanged(character.id)
+            }
+    }
     VerticalPager(
         state = pagerState,
-        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+        modifier = Modifier.fillMaxSize(),
         beyondViewportPageCount = 1,
     ) { page ->
         val character = state.characters[Math.floorMod(page, count)]
@@ -518,6 +537,7 @@ private fun CharacterDiscoveryPage(
         Row(
             Modifier
                 .fillMaxWidth()
+                .statusBarsPadding()
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -693,49 +713,73 @@ private fun RootBottomBar(
                 .height(66.dp)
                 .padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceAround,
+            horizontalArrangement = Arrangement.Center,
         ) {
-            RootTab.entries.forEach { tab ->
-                val selected = current == tab
-                Surface(
-                    onClick = { onSelect(tab) },
-                    color = if (selected) Forest.copy(alpha = 0.34f) else Color.Transparent,
-                    contentColor = if (selected) Color(0xFF9EE7FF) else Color.White.copy(alpha = 0.65f),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 7.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
+            listOf<RootTab?>(
+                RootTab.HOME,
+                RootTab.MESSAGES,
+                RootTab.CREATE,
+                null,
+                RootTab.SETTINGS,
+            ).forEach { tab ->
+                if (tab == null) {
+                    Box(
+                        Modifier.weight(1f).height(48.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        if (tab == RootTab.CREATE) {
-                            Box(
-                                Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF77D5FF)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    Icons.Default.Add,
-                                    contentDescription = "创建角色",
-                                    tint = Color(0xFF14242C),
-                                )
-                            }
+                        Box(
+                            Modifier
+                                .size(5.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.16f)),
+                        )
+                    }
+                } else {
+                    val selected = current == tab
+                    Surface(
+                        onClick = { onSelect(tab) },
+                        color = if (selected) Forest.copy(alpha = 0.34f) else Color.Transparent,
+                        contentColor = if (selected) {
+                            Color(0xFF9EE7FF)
                         } else {
-                            Icon(
-                                when (tab) {
-                                    RootTab.HOME -> Icons.Default.Home
-                                    RootTab.MESSAGES -> Icons.Default.ChatBubbleOutline
-                                    RootTab.SETTINGS -> Icons.Default.Settings
-                                    RootTab.CREATE -> Icons.Default.Add
-                                },
-                                contentDescription = tab.label,
-                                modifier = Modifier.size(21.dp),
-                            )
-                            Text(tab.label, fontSize = 9.sp)
+                            Color.White.copy(alpha = 0.65f)
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 7.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            if (tab == RootTab.CREATE) {
+                                Box(
+                                    Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF77D5FF)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = "创建角色",
+                                        tint = Color(0xFF14242C),
+                                    )
+                                }
+                            } else {
+                                Icon(
+                                    when (tab) {
+                                        RootTab.HOME -> Icons.Default.Home
+                                        RootTab.MESSAGES -> Icons.Default.ChatBubbleOutline
+                                        RootTab.SETTINGS -> Icons.Default.Settings
+                                        RootTab.CREATE -> Icons.Default.Add
+                                    },
+                                    contentDescription = tab.label,
+                                    modifier = Modifier.size(21.dp),
+                                )
+                                Text(tab.label, fontSize = 9.sp)
+                            }
                         }
                     }
                 }
@@ -1944,7 +1988,7 @@ private fun RollbackPickerSheet(
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = 20.dp),
+                contentPadding = PaddingValues(bottom = 36.dp),
             ) {
                 items(messages.asReversed(), key = { it.id }) { message ->
                     Surface(
@@ -2067,7 +2111,7 @@ private fun VoicePickerSheet(
             LazyColumn(
                 modifier = Modifier.weight(1f).padding(top = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(7.dp),
-                contentPadding = PaddingValues(bottom = 18.dp),
+                contentPadding = PaddingValues(bottom = 36.dp),
             ) {
                 items(voices, key = { it }) { id ->
                     val selected = id == current
@@ -3100,7 +3144,12 @@ private fun EditCharacterDialog(
     ) { modifier ->
         LazyColumn(
             modifier,
-            contentPadding = PaddingValues(20.dp),
+            contentPadding = PaddingValues(
+                start = 20.dp,
+                top = 20.dp,
+                end = 20.dp,
+                bottom = 48.dp,
+            ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
@@ -3429,89 +3478,107 @@ private fun ArtworkCropDialog(
         },
         onBack = onDismiss,
     ) { modifier ->
-        Column(
-            modifier
-                .padding(horizontal = 18.dp),
+        LazyColumn(
+            modifier = modifier,
+            contentPadding = PaddingValues(
+                start = 18.dp,
+                top = 5.dp,
+                end = 18.dp,
+                bottom = 40.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                when {
-                    selectingBackground ->
-                        "背景会以 9:16 手机竖屏显示。调整左右、上下和缩放，让角色在聊天界面中处于合适位置。"
-                    avatarOnly ->
-                        "使用刚刚生成的手机竖屏图选择头像区域。建议让脸部和眼睛位于圆形头像中央。"
-                    else ->
-                        "头像使用 1:1 正方形裁切。可以直接把脸部移到圆形预览中央。"
-                },
-                modifier = Modifier.padding(top = 5.dp, bottom = 10.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 11.sp,
-                lineHeight = 17.sp,
-            )
-            Box(
-                Modifier.weight(1f).fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (bitmap == null) {
-                    Text(
-                        "无法读取这张图片，请重新选择。",
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                } else {
-                    val ratio = if (selectingBackground) 9f / 16f else 1f
-                    ArtworkCropPreview(
-                        bitmap = bitmap,
-                        aspectRatio = ratio,
-                        selection = previewSelection,
-                        roundAvatar = !selectingBackground,
-                        modifier = Modifier
-                            .fillMaxHeight(0.96f)
-                            .aspectRatio(ratio),
-                    )
+            item {
+                Text(
+                    when {
+                        selectingBackground ->
+                            "背景会以 9:16 手机竖屏显示。调整左右、上下和缩放，让角色在聊天界面中处于合适位置。"
+                        avatarOnly ->
+                            "使用刚刚生成的手机竖屏图选择头像区域。建议让脸部和眼睛位于圆形头像中央。"
+                        else ->
+                            "头像使用 1:1 正方形裁切。可以直接把脸部移到圆形预览中央。"
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.sp,
+                    lineHeight = 17.sp,
+                )
+            }
+            item {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(
+                            min = 260.dp,
+                            max = if (selectingBackground) 430.dp else 360.dp,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (bitmap == null) {
+                        Text(
+                            "无法读取这张图片，请重新选择。",
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    } else {
+                        val ratio = if (selectingBackground) 9f / 16f else 1f
+                        ArtworkCropPreview(
+                            bitmap = bitmap,
+                            aspectRatio = ratio,
+                            selection = previewSelection,
+                            roundAvatar = !selectingBackground,
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .aspectRatio(ratio),
+                        )
+                    }
                 }
             }
-            ArtworkCropControls(
-                selection = previewSelection,
-                onChange = updateSelection,
-            )
-            Row(
-                Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (!avatarOnly && selectingBackground) {
-                    TextButton(
-                        onClick = {
-                            updateSelection(CharacterArtworkPolicy.DEFAULT_BACKGROUND)
-                        },
-                    ) {
-                        Text("重置背景")
-                    }
-                } else {
-                    TextButton(
-                        onClick = {
-                            updateSelection(CharacterArtworkPolicy.DEFAULT_AVATAR)
-                        },
-                    ) {
-                        Text("脸部居中")
-                    }
-                }
-                Spacer(Modifier.weight(1f))
-                Button(
-                    enabled = bitmap != null,
-                    onClick = {
-                        if (selectingBackground) {
-                            step = 1
-                        } else {
-                            onApply(
-                                backgroundSelection,
-                                avatarSelection,
-                            )
-                        }
-                    },
+            item {
+                ArtworkCropControls(
+                    selection = previewSelection,
+                    onChange = updateSelection,
+                )
+            }
+            item {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        if (selectingBackground) "下一步：头像" else "应用",
-                    )
+                    if (!avatarOnly && selectingBackground) {
+                        TextButton(
+                            onClick = {
+                                updateSelection(CharacterArtworkPolicy.DEFAULT_BACKGROUND)
+                            },
+                        ) {
+                            Text("重置背景")
+                        }
+                    } else {
+                        TextButton(
+                            onClick = {
+                                updateSelection(CharacterArtworkPolicy.DEFAULT_AVATAR)
+                            },
+                        ) {
+                            Text("脸部居中")
+                        }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Button(
+                        enabled = bitmap != null,
+                        onClick = {
+                            if (selectingBackground) {
+                                step = 1
+                            } else {
+                                onApply(
+                                    backgroundSelection,
+                                    avatarSelection,
+                                )
+                            }
+                        },
+                    ) {
+                        Text(
+                            if (selectingBackground) "下一步：头像" else "应用",
+                        )
+                    }
                 }
             }
         }
@@ -3696,6 +3763,7 @@ private fun TraceSheet(
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(bottom = 36.dp),
                 ) {
                     items(traces, key = { it.runId }) { trace ->
                         Surface(
@@ -3773,7 +3841,11 @@ private fun MemorySheet(
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 8.dp, bottom = 15.dp),
             )
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            LazyColumn(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(9.dp),
+                contentPadding = PaddingValues(bottom = 40.dp),
+            ) {
                 item {
                     Row(
                         Modifier.fillMaxWidth(),

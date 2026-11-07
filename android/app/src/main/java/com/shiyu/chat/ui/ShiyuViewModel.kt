@@ -92,18 +92,18 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 localModelName = repository.localModelName(),
                 deviceCompatibility = repository.deviceCompatibility(),
             )
-            repository.characters.collect { characters ->
-                val selected = _state.value.selected?.let { current ->
-                    characters.firstOrNull { it.id == current.id }
-                }
-                _state.value = _state.value.copy(characters = characters, selected = selected)
-            }
             launch {
                 repository.conversationSummaries.collect { summaries ->
                     _state.value = _state.value.copy(
                         conversationSummaries = summaries,
                     )
                 }
+            }
+            repository.characters.collect { characters ->
+                val selected = _state.value.selected?.let { current ->
+                    characters.firstOrNull { it.id == current.id }
+                }
+                _state.value = _state.value.copy(characters = characters, selected = selected)
             }
         }
     }
