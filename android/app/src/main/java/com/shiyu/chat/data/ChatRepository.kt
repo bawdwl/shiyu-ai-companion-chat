@@ -2224,19 +2224,35 @@ class ChatRepository(
         val messages = JSONArray()
             .put(JSONObject().put("role", "system").put("content", CharacterGenerationPolicy.SYSTEM_PROMPT))
             .put(JSONObject().put("role", "user").put("content", idea.take(1800)))
-        val (raw, usage) = if (provider == PROVIDER_OPENCODE) {
-            opencodeClient.completeWithUsage(
-                key,
-                messages,
-                1800,
-                "shiyu-character-studio-${UUID.randomUUID()}",
-                json = false,
-            )
-        } else {
-            deepseekClient.completeWithUsage(key, messages, 1800, json = true)
+        suspend fun requestCard(maxTokens: Int): String {
+            val (raw, usage) = if (provider == PROVIDER_OPENCODE) {
+                opencodeClient.completeWithUsage(
+                    key,
+                    messages,
+                    maxTokens,
+                    "shiyu-character-studio-${UUID.randomUUID()}",
+                    json = false,
+                )
+            } else {
+                deepseekClient.completeWithUsage(
+                    key,
+                    messages,
+                    maxTokens,
+                    json = true,
+                )
+            }
+            addUsage(usage.promptTokens + usage.completionTokens)
+            return raw
         }
-        addUsage(usage.promptTokens + usage.completionTokens)
-        var character = parseGeneratedCharacter(raw, idea)
+        var character = runCatching {
+            parseGeneratedCharacter(requestCard(3_000), idea)
+        }.getOrElse {
+            runCatching {
+                parseGeneratedCharacter(requestCard(3_000), idea)
+            }.getOrElse {
+                error("角色卡生成未完成，请稍后重试")
+            }
+        }
         val missing = CharacterGenerationPolicy.missingMaterials(character)
         if (missing.isEmpty()) return character
 
@@ -2257,19 +2273,35 @@ class ChatRepository(
                             .toString(),
                     ),
             )
-        val (repairRaw, repairUsage) = if (provider == PROVIDER_OPENCODE) {
-            opencodeClient.completeWithUsage(
-                key,
-                repairMessages,
-                1200,
-                "shiyu-character-studio-${UUID.randomUUID()}",
-                json = false,
-            )
-        } else {
-            deepseekClient.completeWithUsage(key, repairMessages, 1200, json = true)
+        suspend fun requestRepair(maxTokens: Int): JSONObject {
+            val (raw, usage) = if (provider == PROVIDER_OPENCODE) {
+                opencodeClient.completeWithUsage(
+                    key,
+                    repairMessages,
+                    maxTokens,
+                    "shiyu-character-studio-${UUID.randomUUID()}",
+                    json = false,
+                )
+            } else {
+                deepseekClient.completeWithUsage(
+                    key,
+                    repairMessages,
+                    maxTokens,
+                    json = true,
+                )
+            }
+            addUsage(usage.promptTokens + usage.completionTokens)
+            return parseJsonObject(raw)
         }
-        addUsage(repairUsage.promptTokens + repairUsage.completionTokens)
-        character = mergeGeneratedMaterials(character, parseJsonObject(repairRaw))
+        character = runCatching {
+            mergeGeneratedMaterials(character, requestRepair(2_400))
+        }.getOrElse {
+            runCatching {
+                mergeGeneratedMaterials(character, requestRepair(2_400))
+            }.getOrElse {
+                error("角色档案补齐未完成，请稍后重试")
+            }
+        }
         return character
     }
 

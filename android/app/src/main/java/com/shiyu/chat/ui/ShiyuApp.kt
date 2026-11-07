@@ -43,6 +43,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -282,6 +284,7 @@ fun ShiyuApp(repository: ChatRepository) {
     var activeTab by remember { mutableStateOf(RootTab.HOME) }
     var chatReturnTab by remember { mutableStateOf(RootTab.HOME) }
     var homeCharacterId by rememberSaveable { mutableStateOf<String?>(null) }
+    var homeNavigationTargetId by remember { mutableStateOf<String?>(null) }
     var fullScreenChat by remember { mutableStateOf(false) }
     var homeComposerFocused by remember { mutableStateOf(false) }
     var showMemory by remember { mutableStateOf(false) }
@@ -387,8 +390,16 @@ fun ShiyuApp(repository: ChatRepository) {
                     when (rootTabs[page]) {
                         RootTab.HOME -> CharacterDiscoveryPager(
                             state = state,
-                            preferredCharacterId = homeCharacterId,
-                            onCharacterActivated = { character ->
+                            preferredCharacterId =
+                                homeNavigationTargetId ?: homeCharacterId,
+                            onCharacterActivated = activated@{ character ->
+                                val targetId = homeNavigationTargetId
+                                if (targetId != null && character.id != targetId) {
+                                    return@activated
+                                }
+                                if (character.id == targetId) {
+                                    homeNavigationTargetId = null
+                                }
                                 homeCharacterId = character.id
                                 homeComposerFocused = false
                                 focusManager.clearFocus()
@@ -642,6 +653,7 @@ fun ShiyuApp(repository: ChatRepository) {
                     showEdit = false
                     pendingCharacter = null
                     homeCharacterId = updated.id
+                    homeNavigationTargetId = updated.id
                     when (characterEditorOrigin) {
                         CharacterEditorOrigin.CREATE -> {
                             chatReturnTab = RootTab.HOME
@@ -713,6 +725,11 @@ private fun CharacterDiscoveryPager(
         state = pagerState,
         modifier = Modifier.fillMaxSize(),
         beyondViewportPageCount = 1,
+        flingBehavior = PagerDefaults.flingBehavior(
+            state = pagerState,
+            pagerSnapDistance = PagerSnapDistance.atMost(1),
+            snapPositionalThreshold = 0.1f,
+        ),
     ) { page ->
         val character = state.characters[Math.floorMod(page, count)]
         CharacterDiscoveryPage(
@@ -3600,7 +3617,7 @@ private fun CreateCharacterDialog(
     val pageContent: @Composable (Modifier) -> Unit = { modifier ->
         Column(modifier.padding(20.dp)) {
             Column(
-                Modifier.weight(1f),
+                Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 if (embedded) {
@@ -3647,6 +3664,7 @@ private fun CreateCharacterDialog(
                     Text(if (busy) " 生成中" else " 生成草稿")
                 }
             }
+            Spacer(Modifier.weight(1f))
         }
     }
     if (embedded) {

@@ -416,7 +416,20 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 _state.value = _state.value.copy(busy = false, status = "角色草稿已保存，请检查后再继续编辑")
                 onComplete(character)
             } catch (error: Exception) {
-                _state.value = _state.value.copy(busy = false, status = error.message ?: "角色生成失败")
+                val rawMessage = error.message.orEmpty()
+                val friendlyMessage = if (
+                    rawMessage.length > 240 ||
+                    rawMessage.startsWith("{") ||
+                    rawMessage.contains("\"description\"")
+                ) {
+                    "角色卡生成未完成，请稍后重试"
+                } else {
+                    rawMessage.ifBlank { "角色生成失败" }
+                }
+                _state.value = _state.value.copy(
+                    busy = false,
+                    status = friendlyMessage,
+                )
             }
         }
     }
