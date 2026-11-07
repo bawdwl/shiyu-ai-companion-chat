@@ -3578,7 +3578,11 @@ private fun SettingsDialog(
                 }
                 Text("分辨率", fontSize = 11.sp, fontWeight = FontWeight.Medium)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("512" to "512×512", "768" to "768×768", "1024" to "1024×1024")
+                    listOf(
+                        "512" to "512×512 方形",
+                        "768" to "768×1344 竖图",
+                        "1024" to "1024×1536 竖图",
+                    )
                         .forEach { (value, label) ->
                             DreamSchedulerChoice(
                                 label = label,
@@ -3590,7 +3594,7 @@ private fun SettingsDialog(
                         }
                 }
                 Text(
-                    "1024×1024 需要模型包内存在 1024.patch；缺失时自动回退到 768。",
+                    "768/1024 竖图使用模型包内对应的同宽度 patch；缺失时自动回退到更低的兼容尺寸。",
                     fontSize = 9.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -18,6 +18,12 @@ data class DreamGenerationSettings(
         resolution = resolution.takeIf { it in RESOLUTIONS } ?: 1024,
     )
 
+    fun canvasSize(): Pair<Int, Int> = when (normalized().resolution) {
+        1024 -> 1024 to 1536
+        768 -> 768 to 1344
+        else -> 512 to 512
+    }
+
     fun buildPrompt(character: CharacterEntity): String {
         val appearance = sequenceOf(character.appearancePrompt, character.appearance)
             .map(String::trim)

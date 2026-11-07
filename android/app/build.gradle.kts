@@ -16,8 +16,8 @@ android {
         applicationId = "com.shiyu.chat"
         minSdk = 26
         targetSdk = 35
-        versionCode = 49
-        versionName = "0.18.19"
+        versionCode = 50
+        versionName = "0.18.20"
         ndk {
             abiFilters += "arm64-v8a"
         }
