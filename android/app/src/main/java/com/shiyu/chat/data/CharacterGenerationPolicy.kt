@@ -25,15 +25,19 @@ public_intro 用120至220个中文字符写成首次聊天时展示给用户的�
 personality 用80至220个中文字符写明性格、行为方式和矛盾点；
 speech_style 用60至180个中文字符写明语言节奏、用词和动作表达习惯；
 relationship 用40至160个中文字符说明双方关系、边界和当前距离。
-appearance 必须填写，用140至320个中文字符描述清晰、可区分的可见外貌，
-明确写出性别与外观年龄，并详细覆盖脸型、眉眼、鼻唇、肤色、发型与发色、
-身高与身形、服装款式与颜色材质、鞋饰珠宝或其他配件、常见神态和习惯动作。
+appearance 必须填写，用80至150个中文字符描述角色整体可见外貌。
+优先保留性别与外观年龄、整体脸型与五官印象、发色发型、身形、主服装轮廓与配色、
+一个高辨识度配饰，以及必要的神态、姿势或简单场景；细节交给生图模型补全，
+不要逐项堆叠睫毛、鼻梁、唇形、服装材质等微细节。
+不得写身份、职业、成长背景、性格或人物关系。
 即使用户没有写外貌，也要创作与身份、性别和时代一致且具有辨识度的外貌。
-appearance_prompt 是仅供本地 Dream/SD1.5 生图使用的视觉提示词，
-必须把中文外貌中的独有特征转成具体英文视觉标签，重点写年龄、性别、脸型、
-眉眼、鼻唇、发型、肤色、身形、服装、配饰、神态和简单场景；
-必须以 1boy, male, solo、1girl, female, solo 或 1person, solo 开头；
-保持逗号分隔，控制在30至50个英文词；不要写画质、镜头或艺术风格。
+appearance_prompt 是仅供本地 Dream/SD1.5 生图使用的视觉提示词。
+必须根据角色整体设定独立生成，不得逐句翻译或机械复制 appearance。
+按以下顺序保留核心视觉锚点：主体与年龄、整体脸型、眼睛整体印象、发色发型、
+身形、主服装与主色、鞋包、一个高辨识度配饰、常见神态、简单场景。
+省略非关键的五官微细节；必须以 1boy, male, solo、1girl, female, solo
+或 1person, solo 开头；保持逗号分隔，控制在28至42个英文词；
+不要写画质、镜头或艺术风格。
 worldbook 生成3条，每条包含 title、keywords、content、priority、enabled；
 内容围绕重要地点、职业、人际关系或关键经历，关键词必须具体且能在聊天中自然触发。
 fixed_facts 最多6条；example_dialogue 最多2组，每条必须有完整用户输入和角色回复；
@@ -44,7 +48,7 @@ greeting 是保存后立即发送给用户的第一条角色聊天消息，约10
 不要列字段，不要加 Markdown 标题，不要默认输出内心独白、好感度或数值。
 不要每条都以反问结束。优先保证字段完整、内容具体和可直接编辑。"""
 
-    const val MATERIAL_REPAIR_PROMPT = """你是角色卡完整性修复器。根据角色草稿和作者灵感，只补齐缺失的 description、public_intro、personality、speech_style、relationship、appearance、appearance_prompt 和 worldbook。description 用100至200字说明身份与当前处境；public_intro 用120至220字写成首次聊天时展示给用户的角色初识卡，必须使用第三人称客观视角，明确写出角色姓名、背景、身份、性格、与用户的关系和当前情境；叙述中不要用“你”指代用户，必要时可以提前写明用户在故事中的身份，但不得与角色卡冲突，不要包含系统提示、内部字段、动作描写、剧情剧透或隐藏设定；personality 用80至220字，speech_style 用60至180字，relationship 用40至160字。appearance 必须是140至320个中文字符的具体外貌，包括年龄感、脸型、眉眼鼻唇、肤色、发型发色、身形、服装颜色材质、配饰、神态和习惯动作，并突出与角色身份相关的独特视觉特征。appearance_prompt 必须是30至50个逗号分隔的英文视觉标签，以 1girl, female, solo、1boy, male, solo 或 1person, solo 开头，逐项翻译中文外貌中最有区分度的细节，包含年龄、脸型、眉眼、发型、服装、配饰和场景；不要包含 Markdown、中文、画质、镜头或艺术风格。worldbook 给 3 条具体的触发条目，每条包含 title、keywords、content、priority、enabled；关键词必须能从日常聊天中自然命中。只返回一个合法 JSON 对象，不要输出其他字段或说明。"""
+    const val MATERIAL_REPAIR_PROMPT = """你是角色卡完整性修复器。根据角色草稿和作者灵感，只补齐缺失的 description、public_intro、personality、speech_style、relationship、appearance、appearance_prompt 和 worldbook。description 用100至200字说明身份与当前处境；public_intro 用120至220字写成首次聊天时展示给用户的角色初识卡，必须使用第三人称客观视角，明确写出角色姓名、背景、身份、性格、与用户的关系和当前情境；叙述中不要用“你”指代用户，必要时可以提前写明用户在故事中的身份，但不得与角色卡冲突，不要包含系统提示、内部字段、动作描写、剧情剧透或隐藏设定；personality 用80至220字，speech_style 用60至180字，relationship 用40至160字。appearance 用80至150个中文字符描述角色整体可见外貌，优先保留性别与年龄、整体脸型与五官印象、发色发型、身形、主服装轮廓与配色、一个高辨识度配饰，以及必要的神态、姿势或简单场景；不得写身份、职业、成长背景、性格或人物关系，不要堆叠睫毛、鼻梁、唇形、服装材质等微细节。appearance_prompt 必须根据角色整体设定独立生成，不得逐句翻译或机械复制 appearance；按主体与年龄、整体脸型、眼睛整体印象、发色发型、身形、主服装与主色、鞋包、一个高辨识度配饰、常见神态、简单场景的顺序生成28至42个逗号分隔的英文词，以 1girl, female, solo、1boy, male, solo 或 1person, solo 开头；不要包含 Markdown、中文、画质、镜头或艺术风格。worldbook 给 3 条具体的触发条目，每条包含 title、keywords、content、priority、enabled；关键词必须能从日常聊天中自然命中。只返回一个合法 JSON 对象，不要输出其他字段或说明。"""
 
     fun missingMaterials(character: CharacterEntity): List<String> {
         val missing = mutableListOf<String>()
@@ -53,10 +57,12 @@ greeting 是保存后立即发送给用户的第一条角色聊天消息，约10
         if (character.personality.trim().length < 60) missing += "personality"
         if (character.speechStyle.trim().length < 40) missing += "speech_style"
         if (character.relationship.trim().length < 30) missing += "relationship"
-        if (character.appearance.trim().length < 120) missing += "appearance"
+        if (character.appearance.trim().length !in 80..150) missing += "appearance"
         val prompt = character.appearancePrompt.trim()
+        val promptWordCount = prompt.split(Regex("\\s+"))
+            .count(String::isNotBlank)
         if (
-            prompt.split(Regex("\\s+")).count(String::isNotBlank) < 26 ||
+            promptWordCount !in 20..45 ||
             Regex("[\\u3400-\\u9fff]").containsMatchIn(prompt)
         ) {
             missing += "appearance_prompt"

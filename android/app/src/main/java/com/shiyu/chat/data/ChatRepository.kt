@@ -689,18 +689,22 @@ class ChatRepository(
             .put(
                 JSONObject().put("role", "system").put(
                     "content",
-                    "Create a detailed visual appearance profile from the supplied character. " +
+                    "Create a concise overall visual appearance profile from the supplied character. " +
                         "Return one JSON object only with string fields appearance_zh and " +
-                        "appearance_prompt. appearance_zh must be 140 to 320 Chinese characters " +
-                        "and explicitly include apparent gender, apparent age, face shape, " +
-                        "eyebrows, eyes, nose, lips, skin tone, hair style and color, build, " +
-                        "height when known, clothing cut/color/material, accessories, expression, " +
-                        "habitual pose and one common setting. Highlight distinctive visual traits. " +
-                        "appearance_prompt must be one comma-separated English SD1.5 tag line " +
-                        "with 30 to 50 concise tags translated faithfully from appearance_zh. " +
-                        "$subjectRule Do not include " +
-                        "quality, camera or art-style tags. Never include contradictory gender " +
-                        "words. Preserve distinctive details from the profile.",
+                        "appearance_prompt. appearance_zh must be 80 to 150 Chinese characters " +
+                        "and describe only the overall visible appearance: apparent gender and " +
+                        "age, overall face impression, eyes, hair, build, primary outfit and " +
+                        "colors, shoes or bag, one distinctive accessory, plus optional expression, " +
+                        "pose and simple setting. Do not include identity, occupation, backstory, " +
+                        "personality or relationship. Do not enumerate eyelashes, nose bridge, lips " +
+                        "or fabric details unless essential. appearance_prompt must be generated " +
+                        "independently from the full character profile, not translated sentence by " +
+                        "sentence from appearance_zh. Use one comma-separated English SD1.5 tag line " +
+                        "with 28 to 42 words in this order: subject and age, overall face, eye " +
+                        "impression, hair, build, primary outfit and colors, shoes/bag, one " +
+                        "distinctive accessory, expression, simple setting. Omit minor facial " +
+                        "micro-details. $subjectRule Do not include quality, camera or art-style " +
+                        "tags. Never include contradictory gender words.",
                 ),
             )
             .put(JSONObject().put("role", "user").put("content", source.toString()))
@@ -717,8 +721,8 @@ class ChatRepository(
         }
         addUsage(usage.promptTokens + usage.completionTokens)
         val json = parseJsonObject(raw)
-        val chinese = json.optString("appearance_zh").trim().take(700)
-        require(chinese.length >= 80) { "模型没有生成完整的中文外貌描述" }
+        val chinese = json.optString("appearance_zh").trim().take(260)
+        require(chinese.length in 60..220) { "模型没有生成完整的中文外貌描述" }
         return DreamAppearanceProfile(
             chinese = chinese,
             english = normalizeEnglishAppearancePrompt(json.optString("appearance_prompt")),
@@ -2349,8 +2353,8 @@ class ChatRepository(
             personality = text("personality").take(500),
             speechStyle = text("speech_style", "speechStyle").take(500),
             relationship = text("relationship").take(400),
-            appearance = text("appearance").take(1200),
-            appearancePrompt = text("appearance_prompt", "appearancePrompt").take(800),
+            appearance = text("appearance").take(260),
+            appearancePrompt = text("appearance_prompt", "appearancePrompt").take(700),
             greeting = text("greeting").ifBlank { "你好，我是$name。" }.take(600),
             characterKind = normalizeCharacterKind(
                 boundary.optString("character_kind").ifBlank {

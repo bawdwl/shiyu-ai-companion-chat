@@ -14,19 +14,15 @@ class CharacterGenerationPolicyTest {
         assertFalse(CharacterGenerationPolicy.SYSTEM_PROMPT.contains("beautiful detailed face"))
         assertTrue(
             CharacterGenerationPolicy.SYSTEM_PROMPT.contains(
-                "必须把中文外貌中的独有特征转成具体英文视觉标签",
+                "appearance 必须填写，用80至150个中文字符",
             ),
         )
         assertTrue(
             CharacterGenerationPolicy.SYSTEM_PROMPT.contains(
-                "appearance 必须填写，用140至320个中文字符",
+                "必须根据角色整体设定独立生成，不得逐句翻译",
             ),
         )
-        assertTrue(
-            CharacterGenerationPolicy.MATERIAL_REPAIR_PROMPT.contains(
-                "30至50个逗号分隔的英文视觉标签",
-            ),
-        )
+        assertTrue(CharacterGenerationPolicy.SYSTEM_PROMPT.contains("控制在28至42个英文词"))
         assertTrue(CharacterGenerationPolicy.MATERIAL_REPAIR_PROMPT.contains("worldbook 给 3 条"))
     }
 
