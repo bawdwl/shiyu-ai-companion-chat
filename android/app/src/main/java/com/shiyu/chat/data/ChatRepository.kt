@@ -2294,6 +2294,11 @@ class ChatRepository(
             name = name,
             tag = text("tagline", "tag").ifBlank { "一位等待与你相遇的原创角色" }.take(100),
             description = text("description").take(500),
+            publicIntro = text(
+                "public_intro",
+                "publicIntro",
+                "description",
+            ).take(700),
             personality = text("personality").take(500),
             speechStyle = text("speech_style", "speechStyle").take(500),
             relationship = text("relationship").take(400),
@@ -2333,6 +2338,7 @@ class ChatRepository(
             .put("name", character.name)
             .put("tagline", character.tag)
             .put("description", character.description)
+            .put("public_intro", character.publicIntro)
             .put("personality", character.personality)
             .put("speech_style", character.speechStyle)
             .put("relationship", character.relationship)
@@ -2356,6 +2362,7 @@ class ChatRepository(
         val merged = characterToGenerationJson(character)
         for (name in listOf(
             "description",
+            "public_intro",
             "personality",
             "speech_style",
             "relationship",

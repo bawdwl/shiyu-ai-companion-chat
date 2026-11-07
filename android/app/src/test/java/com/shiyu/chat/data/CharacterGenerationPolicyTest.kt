@@ -9,6 +9,7 @@ class CharacterGenerationPolicyTest {
     fun promptRequestsDetailedDistinctiveAppearance() {
         assertTrue(CharacterGenerationPolicy.SYSTEM_PROMPT.contains("worldbook 生成3条"))
         assertTrue(CharacterGenerationPolicy.SYSTEM_PROMPT.contains("description 用100至200个中文字符"))
+        assertTrue(CharacterGenerationPolicy.SYSTEM_PROMPT.contains("public_intro 用120至220个中文字符"))
         assertTrue(
             CharacterGenerationPolicy.SYSTEM_PROMPT.contains(
                 "appearance 必须填写，用140至320个中文字符",
@@ -36,6 +37,7 @@ class CharacterGenerationPolicyTest {
         assertEquals(
             listOf(
                 "description",
+                "public_intro",
                 "personality",
                 "speech_style",
                 "relationship",
@@ -48,6 +50,7 @@ class CharacterGenerationPolicyTest {
 
         val complete = character(
             description = "角".repeat(100),
+            publicIntro = "初".repeat(120),
             personality = "性".repeat(80),
             speechStyle = "语".repeat(60),
             relationship = "关".repeat(40),
@@ -64,6 +67,7 @@ class CharacterGenerationPolicyTest {
 
     private fun character(
         description: String,
+        publicIntro: String = "",
         personality: String,
         speechStyle: String,
         relationship: String,
@@ -75,6 +79,7 @@ class CharacterGenerationPolicyTest {
         name = "测试角色",
         tag = "测试",
         description = description,
+        publicIntro = publicIntro,
         personality = personality,
         speechStyle = speechStyle,
         relationship = relationship,

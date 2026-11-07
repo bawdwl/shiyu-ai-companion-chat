@@ -398,12 +398,50 @@ fun ShiyuApp(repository: ChatRepository) {
                                 }
                             },
                             onCreate = { navigateToTab(RootTab.CREATE) },
-                            chatContent = { character ->
+                            chatContent = { character, active ->
+                                val summary = state.conversationSummaries
+                                    .firstOrNull { it.characterId == character.id }
+                                val previewText = summary?.lastContent
+                                    ?.takeIf(String::isNotBlank)
+                                    ?: character.greeting.ifBlank {
+                                        character.description
+                                    }
+                                val previewMessages = if (previewText.isBlank()) {
+                                    emptyList()
+                                } else {
+                                    listOf(
+                                        MessageEntity(
+                                            characterId = character.id,
+                                            role = "assistant",
+                                            content = previewText,
+                                            createdAt = summary?.lastTimestamp
+                                                ?: character.createdAt,
+                                        ),
+                                    )
+                                }
+                                val chatState = if (active) {
+                                    state
+                                } else {
+                                    state.copy(
+                                        selected = character,
+                                        messages = previewMessages,
+                                        memories = emptyList(),
+                                        structuredMemories = emptyList(),
+                                        turnTraces = emptyList(),
+                                        streamingText = "",
+                                        busy = false,
+                                        historyBusy = false,
+                                    )
+                                }
                                 ChatScreen(
                                     character = character,
-                                    state = state,
+                                    state = chatState,
                                     onBack = null,
                                     showBackground = false,
+                                    interactive = active,
+                                    allowFirstChatIntro = active || (
+                                        summary?.userMessageCount ?: 0
+                                        ) == 0,
                                     onComposerFocusChange = {
                                         homeComposerFocused = true
                                     },
@@ -629,7 +667,7 @@ private fun CharacterDiscoveryPager(
     preferredCharacterId: String?,
     onCharacterActivated: (CharacterEntity) -> Unit,
     onCreate: () -> Unit,
-    chatContent: @Composable (CharacterEntity) -> Unit,
+    chatContent: @Composable (CharacterEntity, Boolean) -> Unit,
 ) {
     if (state.characters.isEmpty()) {
         Box(
@@ -679,7 +717,9 @@ private fun CharacterDiscoveryPager(
         CharacterDiscoveryPage(
             character = character,
             active = state.selected?.id == character.id,
-            chatContent = { chatContent(character) },
+            chatContent = { active ->
+                chatContent(character, active)
+            },
         )
     }
 }
@@ -688,7 +728,7 @@ private fun CharacterDiscoveryPager(
 private fun CharacterDiscoveryPage(
     character: CharacterEntity,
     active: Boolean,
-    chatContent: @Composable () -> Unit,
+    chatContent: @Composable (Boolean) -> Unit,
 ) {
     val background = character.backgroundPath?.takeIf { File(it).isFile }
         ?: character.avatarPath
@@ -718,9 +758,7 @@ private fun CharacterDiscoveryPage(
             modifier = Modifier.fillMaxSize(),
             cropTop = true,
         )
-        if (active) {
-            chatContent()
-        }
+        chatContent(active)
     }
 }
 
@@ -1614,6 +1652,8 @@ private fun ChatScreen(
     onComposerFocusChange: () -> Unit = {},
     composerBottomInset: androidx.compose.ui.unit.Dp = 0.dp,
     showBackground: Boolean = true,
+    interactive: Boolean = true,
+    allowFirstChatIntro: Boolean = true,
     onSend: (String, Uri?) -> Unit,
     onStop: () -> Unit,
     onMemory: () -> Unit,
@@ -1643,6 +1683,7 @@ private fun ChatScreen(
     var draft by remember(character.id) { mutableStateOf(TextFieldValue("")) }
     val composerFocusRequester = remember { FocusRequester() }
     var historyVisible by remember(character.id) { mutableStateOf(false) }
+    var introMode by remember(character.id) { mutableIntStateOf(0) }
     val userMessages = remember(state.messages) {
         state.messages.filter { it.role == "user" }
     }
@@ -1823,7 +1864,10 @@ private fun ChatScreen(
                         )
                     }
                 }
-                IconButton(onClick = onMemory) {
+                IconButton(
+                    onClick = onMemory,
+                    enabled = interactive,
+                ) {
                     Icon(
                         Icons.Default.Memory,
                         contentDescription = "长期记忆",
@@ -1832,7 +1876,10 @@ private fun ChatScreen(
                 }
                 var menu by remember { mutableStateOf(false) }
                 Box {
-                    IconButton(onClick = { menu = true }) {
+                    IconButton(
+                        onClick = { menu = true },
+                        enabled = interactive,
+                    ) {
                         Icon(
                             Icons.Default.MoreVert,
                             contentDescription = "设置与更多",
@@ -1904,19 +1951,43 @@ private fun ChatScreen(
             if (state.messages.isEmpty() && state.streamingText.isEmpty()) {
                 Box(Modifier.fillMaxSize())
             } else if (!historyVisible) {
-                latestRoleMessage?.let { message ->
-                    LatestRoleMessage(
-                        message = message,
-                        playing = { playingId == message.id },
-                        onPlay = { playMessage(message) },
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(horizontal = 16.dp, vertical = 18.dp),
-                    )
+                Column(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (
+                        allowFirstChatIntro &&
+                        userMessages.isEmpty() &&
+                        introMode < 2 &&
+                        (
+                            character.publicIntro.isNotBlank() ||
+                                character.description.isNotBlank()
+                            )
+                    ) {
+                        CharacterIntroCard(
+                            character = character,
+                            expanded = introMode == 1,
+                            enabled = interactive,
+                            onToggle = {
+                                introMode = if (introMode == 0) 1 else 2
+                            },
+                        )
+                    }
+                    latestRoleMessage?.let { message ->
+                        LatestRoleMessage(
+                            message = message,
+                            playing = { playingId == message.id },
+                            onPlay = { playMessage(message) },
+                        )
+                    }
                 }
                 HistoryToggle(
                     historyVisible = false,
                     onClick = { historyVisible = true },
+                    enabled = interactive,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(12.dp),
@@ -1952,6 +2023,7 @@ private fun ChatScreen(
                 HistoryToggle(
                     historyVisible = true,
                     onClick = { historyVisible = false },
+                    enabled = interactive,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(12.dp),
@@ -2046,7 +2118,7 @@ private fun ChatScreen(
                                 if (it.isFocused) onComposerFocusChange()
                             }
                             .padding(horizontal = 12.dp, vertical = 11.dp),
-                        enabled = !state.busy && !state.historyBusy,
+                        enabled = interactive && !state.busy && !state.historyBusy,
                         textStyle = MaterialTheme.typography.bodyMedium.copy(
                             color = Color.White,
                             lineHeight = 20.sp,
@@ -2077,7 +2149,7 @@ private fun ChatScreen(
                     IconButton(
                         onClick = ::insertActionBrackets,
                         modifier = Modifier.size(44.dp),
-                        enabled = !state.busy && !state.historyBusy,
+                        enabled = interactive && !state.busy && !state.historyBusy,
                     ) {
                         Text(
                             "（）",
@@ -2104,11 +2176,11 @@ private fun ChatScreen(
                                 }
                             },
                             modifier = Modifier.size(44.dp),
-                            enabled = recording || (
+                            enabled = interactive && (recording || (
                                 !voiceBusy &&
                                 !state.busy &&
                                 !state.historyBusy
-                            ),
+                                )),
                         ) {
                             Icon(
                                 if (recording) Icons.Default.Stop else Icons.Default.Mic,
@@ -2128,7 +2200,8 @@ private fun ChatScreen(
                         IconButton(
                             onClick = { picker.launch("image/*") },
                             modifier = Modifier.size(44.dp),
-                            enabled = character.modelSource != MODEL_SOURCE_LOCAL_MNN &&
+                            enabled = interactive &&
+                                character.modelSource != MODEL_SOURCE_LOCAL_MNN &&
                                 !state.busy &&
                                 !state.historyBusy,
                         ) {
@@ -2170,7 +2243,7 @@ private fun ChatScreen(
                                         Color.White.copy(alpha = 0.92f)
                                     },
                                 ),
-                            enabled = state.busy || canSend,
+                            enabled = interactive && (state.busy || canSend),
                         ) {
                             Icon(
                                 if (state.busy) {
@@ -2334,6 +2407,52 @@ private fun ChatScreen(
 }
 
 @Composable
+private fun CharacterIntroCard(
+    character: CharacterEntity,
+    expanded: Boolean,
+    enabled: Boolean,
+    onToggle: () -> Unit,
+) {
+    val intro = character.publicIntro.trim().ifBlank {
+        character.description.trim()
+    }
+    Surface(
+        onClick = onToggle,
+        enabled = enabled && intro.isNotBlank(),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = Color.Black.copy(alpha = 0.66f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+        contentColor = Color.White,
+    ) {
+        Column(Modifier.padding(horizontal = 15.dp, vertical = 13.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "角色简介",
+                    modifier = Modifier.weight(1f),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    if (expanded) "关闭" else "查看",
+                    color = Color.White.copy(alpha = 0.68f),
+                    fontSize = 10.sp,
+                )
+            }
+            Text(
+                intro,
+                modifier = Modifier.padding(top = 6.dp),
+                color = Color.White.copy(alpha = 0.92f),
+                fontSize = 13.sp,
+                lineHeight = 20.sp,
+                maxLines = if (expanded) 10 else 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
 private fun LatestRoleMessage(
     message: MessageEntity,
     playing: () -> Boolean,
@@ -2381,10 +2500,12 @@ private fun LatestRoleMessage(
 private fun HistoryToggle(
     historyVisible: Boolean,
     onClick: () -> Unit,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     Surface(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier.heightIn(min = 48.dp),
         shape = CircleShape,
         color = Color.Black.copy(alpha = 0.48f),
@@ -3538,6 +3659,9 @@ private fun EditCharacterDialog(
     var name by remember(character.id) { mutableStateOf(character.name) }
     var tag by remember(character.id) { mutableStateOf(character.tag) }
     var description by remember(character.id) { mutableStateOf(character.description) }
+    var publicIntro by remember(character.id) {
+        mutableStateOf(character.publicIntro)
+    }
     var personality by remember(character.id) { mutableStateOf(character.personality) }
     var speechStyle by remember(character.id) { mutableStateOf(character.speechStyle) }
     var relationship by remember(character.id) { mutableStateOf(character.relationship) }
@@ -3608,6 +3732,7 @@ private fun EditCharacterDialog(
         name = name.trim().ifBlank { character.name },
         tag = tag.trim(),
         description = description.trim(),
+        publicIntro = publicIntro.trim(),
         personality = personality.trim(),
         speechStyle = speechStyle.trim(),
         relationship = relationship.trim(),
@@ -3868,6 +3993,18 @@ private fun EditCharacterDialog(
             item { OutlinedTextField(name, { name = it }, label = { Text("名字") }, modifier = Modifier.fillMaxWidth()) }
             item { OutlinedTextField(tag, { tag = it }, label = { Text("标签") }, modifier = Modifier.fillMaxWidth()) }
             item { OutlinedTextField(description, { description = it }, label = { Text("简介") }, minLines = 2, modifier = Modifier.fillMaxWidth()) }
+            item {
+                OutlinedTextField(
+                    value = publicIntro,
+                    onValueChange = { publicIntro = it.take(700) },
+                    label = { Text("初次见面简介（首次聊天时展示给用户）") },
+                    placeholder = {
+                        Text("概括角色背景、身份、性格、与用户的关系和当前情境。")
+                    },
+                    minLines = 4,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             item { OutlinedTextField(personality, { personality = it }, label = { Text("性格") }, minLines = 2, modifier = Modifier.fillMaxWidth()) }
             item { OutlinedTextField(speechStyle, { speechStyle = it }, label = { Text("说话方式") }, minLines = 2, modifier = Modifier.fillMaxWidth()) }
             item { OutlinedTextField(relationship, { relationship = it }, label = { Text("与用户的关系") }, minLines = 2, modifier = Modifier.fillMaxWidth()) }

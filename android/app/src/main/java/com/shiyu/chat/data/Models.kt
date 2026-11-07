@@ -14,6 +14,7 @@ data class CharacterEntity(
     val name: String,
     val tag: String,
     val description: String,
+    @ColumnInfo(defaultValue = "''") val publicIntro: String = "",
     val personality: String,
     val speechStyle: String,
     val relationship: String,

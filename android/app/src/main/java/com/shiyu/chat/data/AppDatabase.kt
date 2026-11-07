@@ -504,7 +504,7 @@ interface InternalStateDao {
         TurnTraceEntity::class,
         AppMetaEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -854,6 +854,14 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
                     "ALTER TABLE characters ADD COLUMN backgroundPath TEXT",
+                )
+            }
+        }
+
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE characters ADD COLUMN publicIntro TEXT NOT NULL DEFAULT ''",
                 )
             }
         }
