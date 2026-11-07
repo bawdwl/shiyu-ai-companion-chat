@@ -33,6 +33,12 @@ private data class DreamAppearanceProfile(
     val english: String,
 )
 
+private data class BuiltInSeedCharacter(
+    val character: CharacterEntity,
+    val avatarAsset: String,
+    val backgroundAsset: String,
+)
+
 class ChatRepository(
     private val context: Context,
     private val database: AppDatabase,
@@ -105,11 +111,45 @@ class ChatRepository(
         }
     }
 
-    /**
-     * Seed the four product roles without overwriting a user's edited copy.
-     * Model weights stay outside the APK and are installed from Settings.
-     */
     suspend fun ensureBuiltInCharacters() {
+        val seeds = loadBuiltInSeedCharacters()
+        if (seeds.isEmpty()) {
+            ensureLegacyBuiltInCharacters()
+            return
+        }
+        prefs.edit()
+            .remove("local-rolling-summary:${SONG_ZHIYI_CHARACTER_ID.length}:$SONG_ZHIYI_CHARACTER_ID")
+            .remove(
+                "local-rolling-summary-watermark:${SONG_ZHIYI_CHARACTER_ID.length}:$SONG_ZHIYI_CHARACTER_ID",
+            )
+            .apply()
+        val deletedBuiltIns = prefs
+            .getStringSet(KEY_DELETED_BUILTIN_CHARACTERS, emptySet())
+            .orEmpty()
+        seeds.forEach { seed ->
+            val character = seed.character
+            if (character.id in deletedBuiltIns) return@forEach
+            val existing = database.characters().get(character.id)
+            if (existing == null) {
+                val installed = installSeedArtwork(character, seed)
+                database.characters().upsert(installed)
+                ensureOpening(installed)
+            } else if (
+                existing.publicIntro.isBlank() &&
+                character.publicIntro.isNotBlank()
+            ) {
+                database.characters().fillMissingPublicIntro(
+                    character.id,
+                    character.publicIntro,
+                )
+            }
+        }
+    }
+
+    /**
+     * Fallback for incomplete development builds that predate package seeds.
+     */
+    private suspend fun ensureLegacyBuiltInCharacters() {
         prefs.edit()
             .remove("local-rolling-summary:${SONG_ZHIYI_CHARACTER_ID.length}:$SONG_ZHIYI_CHARACTER_ID")
             .remove(
@@ -147,6 +187,111 @@ class ChatRepository(
         }
         if (avatarSeedVersion < BUILTIN_AVATAR_SEED_VERSION) {
             prefs.edit().putInt(KEY_BUILTIN_AVATAR_SEED_VERSION, BUILTIN_AVATAR_SEED_VERSION).apply()
+        }
+    }
+
+    private fun loadBuiltInSeedCharacters(): List<BuiltInSeedCharacter> =
+        runCatching {
+            val raw = context.assets.open("seed-characters/characters.json")
+                .bufferedReader()
+                .use { it.readText() }
+            val array = JSONArray(raw)
+            buildList {
+                for (index in 0 until array.length()) {
+                    val json = array.getJSONObject(index)
+                    val id = json.getString("id")
+                    val modelSource = json.optString("modelSource")
+                        .takeIf { it in setOf(MODEL_SOURCE_API, MODEL_SOURCE_LOCAL_MNN) }
+                        ?: MODEL_SOURCE_API
+                    add(
+                        BuiltInSeedCharacter(
+                            character = CharacterEntity(
+                                id = id,
+                                name = json.getString("name"),
+                                tag = json.optString("tag"),
+                                description = json.optString("description"),
+                                publicIntro = json.optString("publicIntro"),
+                                personality = json.optString("personality"),
+                                speechStyle = json.optString("speechStyle"),
+                                relationship = json.optString("relationship"),
+                                appearance = json.optString("appearance"),
+                                appearancePrompt = json.optString("appearancePrompt"),
+                                greeting = json.optString("greeting"),
+                                characterKind = json.optString("characterKind", "original"),
+                                era = json.optString("era"),
+                                knowledgeCutoff = json.optString("knowledgeCutoff"),
+                                forbiddenKnowledge = json.optString("forbiddenKnowledge"),
+                                forbiddenTerms = json.optString("forbiddenTerms"),
+                                worldbookJson = json.optString("worldbookJson", "[]"),
+                                canLearnFromUser = json.optBoolean(
+                                    "canLearnFromUser",
+                                    true,
+                                ),
+                                allowEverydayInvention = json.optBoolean(
+                                    "allowEverydayInvention",
+                                    true,
+                                ),
+                                custom = false,
+                                modelSource = modelSource,
+                                createdAt = json.optLong(
+                                    "createdAt",
+                                    System.currentTimeMillis(),
+                                ),
+                            ),
+                            avatarAsset = json.getString("avatarAsset"),
+                            backgroundAsset = json.getString("backgroundAsset"),
+                        ),
+                    )
+                }
+            }
+        }.onFailure {
+            Log.e("ChatRepository", "Unable to load packaged character seeds", it)
+        }.getOrDefault(emptyList())
+
+    private suspend fun installSeedArtwork(
+        character: CharacterEntity,
+        seed: BuiltInSeedCharacter,
+    ): CharacterEntity = withContext(Dispatchers.IO) {
+        val directory = File(context.filesDir, "character-avatars").apply { mkdirs() }
+        val safeId = character.id.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        val avatarPath = installSeedAsset(
+            directory,
+            seed.avatarAsset,
+            character.avatarPath,
+            "$safeId-avatar",
+        )
+        val backgroundPath = installSeedAsset(
+            directory,
+            seed.backgroundAsset,
+            character.backgroundPath,
+            "$safeId-background",
+        )
+        character.copy(
+            avatarPath = avatarPath,
+            backgroundPath = backgroundPath,
+        )
+    }
+
+    private fun installSeedAsset(
+        directory: File,
+        assetName: String,
+        currentPath: String?,
+        outputStem: String,
+    ): String {
+        val current = currentPath?.let(::File)
+        if (current?.isFile == true) return current.absolutePath
+        val extension = assetName.substringAfterLast('.', "webp")
+        val output = File(directory, "$outputStem.$extension")
+        val temporary = File.createTempFile("seed-artwork-", ".tmp", directory)
+        try {
+            context.assets.open("seed-characters/$assetName").use { input ->
+                temporary.outputStream().buffered().use(input::copyTo)
+            }
+            if (output.exists()) output.delete()
+            check(temporary.renameTo(output)) { "初始角色图片保存失败" }
+            return output.absolutePath
+        } finally {
+            temporary.delete()
         }
     }
 
@@ -953,21 +1098,10 @@ class ChatRepository(
 
     suspend fun reset(characterId: String) {
         val character = database.characters().get(characterId) ?: error("角色不存在")
-        avatarGenerator.deleteAvatar(character.avatarPath)
-        avatarGenerator.deleteCharacterAvatars(characterId)
         database.withTransaction {
             clearCharacterScope(characterId)
-            database.characters().updateArtwork(characterId, null, null)
         }
-        val restored = installDefaultAvatar(character.copy(avatarPath = null), force = true)
-        if (restored.avatarPath != null) {
-            database.characters().updateArtwork(
-                characterId,
-                restored.avatarPath,
-                restored.backgroundPath,
-            )
-        }
-        ensureOpening(restored)
+        ensureOpening(character)
         prefs.edit().remove("summarized:$characterId").apply()
     }
 
@@ -2698,6 +2832,14 @@ class ChatRepository(
             PEI_JIMING_CHARACTER_ID,
             LI_BAI_CHARACTER_ID,
             XIAO_CHENGYUAN_CHARACTER_ID,
+            "custom-c9b73e57-ba4",
+            "custom-5941ca69-ca2",
+            "custom-a8c37ce5-13d",
+            "custom-1abbfae9-595",
+            "custom-e807e8f2-59b",
+            "custom-55ddf99f-5b6",
+            "custom-42654713-fec",
+            "custom-631529e4-490",
         )
         private val FORCED_AVATAR_REFRESH_IDS = setOf(
             XIAO_CHENGYUAN_CHARACTER_ID,

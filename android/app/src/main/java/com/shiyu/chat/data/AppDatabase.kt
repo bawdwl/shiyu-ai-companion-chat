@@ -31,6 +31,9 @@ interface CharacterDao {
     @Query("UPDATE characters SET avatarPath=:avatarPath,backgroundPath=:backgroundPath WHERE id=:id")
     suspend fun updateArtwork(id: String, avatarPath: String?, backgroundPath: String?)
 
+    @Query("UPDATE characters SET publicIntro=:publicIntro WHERE id=:id AND TRIM(publicIntro)=''")
+    suspend fun fillMissingPublicIntro(id: String, publicIntro: String): Int
+
     @Query("DELETE FROM characters WHERE id=:id AND custom=1")
     suspend fun deleteCustom(id: String)
 

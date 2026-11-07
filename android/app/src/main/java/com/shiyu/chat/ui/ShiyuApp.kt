@@ -1298,7 +1298,7 @@ private fun CharacterManagementPage(
             onDismissRequest = { resetTarget = null },
             title = { Text("重置 ${character.name} 的对话？") },
             text = {
-                Text("聊天记录、长期记忆、内部状态和已生成的对话图片会被清除；角色档案保留，头像与背景恢复默认。")
+                Text("聊天记录、长期记忆和内部状态会被清除；角色档案、头像和背景都会保留。")
             },
             confirmButton = {
                 TextButton(
@@ -2622,7 +2622,7 @@ private fun ChatScreen(
             title = { Text("重置和${character.name}的对话？") },
             text = {
                 Text(
-                    "这会删除当前角色的全部聊天、长期记忆、内部状态、语音记录和生成图片，无法恢复。角色档案本身会保留。",
+                    "这会删除当前角色的全部聊天、长期记忆和内部状态，无法恢复。角色档案、头像和背景会保留。",
                 )
             },
             confirmButton = {

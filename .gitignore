@@ -48,6 +48,8 @@ voice-profiles/
 *.sqlite
 release/apk-*/*.apk
 release/apk-*/*.idsig
+release/seed-export/
+release/inspected-device/
 release/windows/
 build/
 
