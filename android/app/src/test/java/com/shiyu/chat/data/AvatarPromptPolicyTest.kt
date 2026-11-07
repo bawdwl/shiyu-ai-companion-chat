@@ -84,7 +84,6 @@ class AvatarPromptPolicyTest {
         org.junit.Assert.assertEquals(1.0f, normalized.cfg, 0.001f)
         org.junit.Assert.assertEquals("dpm_sde_karras", normalized.scheduler)
         org.junit.Assert.assertEquals(1024, normalized.resolution)
-        org.junit.Assert.assertEquals(1024 to 1536, normalized.canvasSize())
     }
 
     @Test
@@ -95,21 +94,5 @@ class AvatarPromptPolicyTest {
         ).normalized()
 
         org.junit.Assert.assertEquals("lcm", normalized.scheduler)
-    }
-
-    @Test
-    fun portraitResolutionsUseTestedNativeCanvasSizes() {
-        org.junit.Assert.assertEquals(
-            768 to 1344,
-            DreamGenerationSettings(resolution = 768).canvasSize(),
-        )
-        org.junit.Assert.assertEquals(
-            1024 to 1536,
-            DreamGenerationSettings(resolution = 1024).canvasSize(),
-        )
-        org.junit.Assert.assertEquals(
-            512 to 512,
-            DreamGenerationSettings(resolution = 512).canvasSize(),
-        )
     }
 }

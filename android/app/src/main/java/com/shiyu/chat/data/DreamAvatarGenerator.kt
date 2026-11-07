@@ -308,8 +308,8 @@ class DreamAvatarGenerator(private val context: Context) {
         require(character.name.isNotBlank()) { "角色名称不能为空" }
         File(context.filesDir, DreamBackendService.BACKEND_ERROR_FILE).delete()
         val normalizedSettings = settings.normalized()
-        val requestedWidth = listOf(
-            normalizedSettings.canvasSize().first,
+        val generationSize = listOf(
+            normalizedSettings.resolution,
             1024,
             768,
             512,
@@ -319,12 +319,8 @@ class DreamAvatarGenerator(private val context: Context) {
         DreamBackendService.start(
             context,
             modelDirectory,
-            requestedWidth,
-            when (requestedWidth) {
-                1024 -> 1536
-                768 -> 1344
-                else -> 512
-            },
+            generationSize,
+            generationSize,
         )
         return withContext(Dispatchers.IO) {
             awaitBackend()
@@ -347,15 +343,8 @@ class DreamAvatarGenerator(private val context: Context) {
                 .put("cfg", normalized.cfg.toDouble())
                 .put("seed", normalized.seed)
                 .put("scheduler", normalized.scheduler)
-                .put("width", requestedWidth)
-                .put(
-                    "height",
-                    when (requestedWidth) {
-                        1024 -> 1536
-                        768 -> 1344
-                        else -> 512
-                    },
-                )
+                .put("width", generationSize)
+                .put("height", generationSize)
                 .put("show_diffusion_process", false)
                 .toString()
             val request = Request.Builder()
