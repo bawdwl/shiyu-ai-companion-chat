@@ -419,7 +419,9 @@ fun ShiyuApp(repository: ChatRepository) {
                                         ),
                                     )
                                 }
-                                val chatState = if (active) {
+                                val hasLiveMessages = state.messages.isNotEmpty() ||
+                                    state.streamingText.isNotBlank()
+                                val chatState = if (active && hasLiveMessages) {
                                     state
                                 } else {
                                     state.copy(
@@ -439,9 +441,8 @@ fun ShiyuApp(repository: ChatRepository) {
                                     onBack = null,
                                     showBackground = false,
                                     interactive = active,
-                                    allowFirstChatIntro = active || (
-                                        summary?.userMessageCount ?: 0
-                                        ) == 0,
+                                    allowFirstChatIntro = summary == null ||
+                                        summary.userMessageCount == 0,
                                     onComposerFocusChange = {
                                         homeComposerFocused = true
                                     },
@@ -1702,6 +1703,12 @@ private fun ChatScreen(
             state.messages.lastOrNull { it.role == "assistant" }
         }
     }
+    val showIntroCard = allowFirstChatIntro &&
+        userMessages.isEmpty() &&
+        (
+            character.publicIntro.isNotBlank() ||
+                character.description.isNotBlank()
+            )
     fun startRecording() {
         if (voiceBusy) return
         voiceBusy = true; recording = true; voice.recording = true
@@ -1755,6 +1762,7 @@ private fun ChatScreen(
     DisposableEffect(voice) { onDispose { voice.recording = false; voice.stopPlayback() } }
     var imageUri by remember(character.id) { mutableStateOf<Uri?>(null) }
     val listState = rememberLazyListState()
+    val latestListState = rememberLazyListState()
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
     ) { imageUri = it }
@@ -1786,6 +1794,24 @@ private fun ChatScreen(
             val lastItem = state.messages.lastIndex + if (state.busy) 1 else 0
             listState.scrollToItem(lastItem)
             initialPositionApplied = true
+        }
+    }
+    LaunchedEffect(
+        character.id,
+        imeBottom,
+        introMode,
+        showIntroCard,
+        latestRoleMessage?.content,
+        historyVisible,
+    ) {
+        if (!historyVisible) {
+            val itemCount =
+                (if (showIntroCard) 1 else 0) +
+                    (if (latestRoleMessage != null) 1 else 0)
+            if (itemCount > 0) {
+                withFrameNanos { }
+                latestListState.scrollToItem(itemCount - 1)
+            }
         }
     }
 
@@ -1951,37 +1977,40 @@ private fun ChatScreen(
             if (state.messages.isEmpty() && state.streamingText.isEmpty()) {
                 Box(Modifier.fillMaxSize())
             } else if (!historyVisible) {
-                Column(
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 18.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                LazyColumn(
+                    state = latestListState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        top = 64.dp,
+                        end = 16.dp,
+                        bottom = 18.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(
+                        10.dp,
+                        Alignment.Bottom,
+                    ),
                 ) {
-                    if (
-                        allowFirstChatIntro &&
-                        userMessages.isEmpty() &&
-                        introMode < 2 &&
-                        (
-                            character.publicIntro.isNotBlank() ||
-                                character.description.isNotBlank()
+                    if (showIntroCard) {
+                        item {
+                            CharacterIntroCard(
+                                character = character,
+                                expanded = introMode == 1,
+                                enabled = interactive,
+                                onToggle = {
+                                    introMode = if (introMode == 0) 1 else 0
+                                },
                             )
-                    ) {
-                        CharacterIntroCard(
-                            character = character,
-                            expanded = introMode == 1,
-                            enabled = interactive,
-                            onToggle = {
-                                introMode = if (introMode == 0) 1 else 2
-                            },
-                        )
+                        }
                     }
                     latestRoleMessage?.let { message ->
-                        LatestRoleMessage(
-                            message = message,
-                            playing = { playingId == message.id },
-                            onPlay = { playMessage(message) },
-                        )
+                        item {
+                            LatestRoleMessage(
+                                message = message,
+                                playing = { playingId == message.id },
+                                onPlay = { playMessage(message) },
+                            )
+                        }
                     }
                 }
                 HistoryToggle(
@@ -2434,7 +2463,7 @@ private fun CharacterIntroCard(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    if (expanded) "关闭" else "查看",
+                    if (expanded) "收起" else "查看",
                     color = Color.White.copy(alpha = 0.68f),
                     fontSize = 10.sp,
                 )
@@ -2489,8 +2518,6 @@ private fun LatestRoleMessage(
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 14.sp,
                 lineHeight = 21.sp,
-                maxLines = 8,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -3689,7 +3716,7 @@ private fun EditCharacterDialog(
     var generatedArtwork by remember(character.id) {
         mutableStateOf<String?>(null)
     }
-    var editSection by remember(character.id) { mutableIntStateOf(0) }
+    var editSection by remember(character.id) { mutableIntStateOf(1) }
     val artworkContext = LocalContext.current
     val avatarFramePrefs = remember {
         artworkContext.getSharedPreferences(
@@ -3782,16 +3809,6 @@ private fun EditCharacterDialog(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Button(
-                        onClick = { editSection = 0 },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (editSection == 0) DeepForest else Color.Transparent,
-                            contentColor = if (editSection == 0) Color.White else DeepForest,
-                        ),
-                    ) {
-                        Text("背景与头像")
-                    }
-                    Button(
                         onClick = { editSection = 1 },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(
@@ -3800,6 +3817,16 @@ private fun EditCharacterDialog(
                         ),
                     ) {
                         Text("角色档案")
+                    }
+                    Button(
+                        onClick = { editSection = 0 },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (editSection == 0) DeepForest else Color.Transparent,
+                            contentColor = if (editSection == 0) Color.White else DeepForest,
+                        ),
+                    ) {
+                        Text("背景与头像")
                     }
                 }
             }
@@ -3990,21 +4017,23 @@ private fun EditCharacterDialog(
             }
             }
             if (editSection == 1) {
-            item { OutlinedTextField(name, { name = it }, label = { Text("名字") }, modifier = Modifier.fillMaxWidth()) }
-            item { OutlinedTextField(tag, { tag = it }, label = { Text("标签") }, modifier = Modifier.fillMaxWidth()) }
-            item { OutlinedTextField(description, { description = it }, label = { Text("简介") }, minLines = 2, modifier = Modifier.fillMaxWidth()) }
             item {
                 OutlinedTextField(
                     value = publicIntro,
                     onValueChange = { publicIntro = it.take(700) },
                     label = { Text("初次见面简介（首次聊天时展示给用户）") },
                     placeholder = {
-                        Text("概括角色背景、身份、性格、与用户的关系和当前情境。")
+                        Text(
+                            "以第三人称客观介绍角色姓名、背景、身份、性格、与用户关系和当前情境；可按剧情需要写明用户身份。",
+                        )
                     },
                     minLines = 4,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+            item { OutlinedTextField(name, { name = it }, label = { Text("名字") }, modifier = Modifier.fillMaxWidth()) }
+            item { OutlinedTextField(tag, { tag = it }, label = { Text("标签") }, modifier = Modifier.fillMaxWidth()) }
+            item { OutlinedTextField(description, { description = it }, label = { Text("简介") }, minLines = 2, modifier = Modifier.fillMaxWidth()) }
             item { OutlinedTextField(personality, { personality = it }, label = { Text("性格") }, minLines = 2, modifier = Modifier.fillMaxWidth()) }
             item { OutlinedTextField(speechStyle, { speechStyle = it }, label = { Text("说话方式") }, minLines = 2, modifier = Modifier.fillMaxWidth()) }
             item { OutlinedTextField(relationship, { relationship = it }, label = { Text("与用户的关系") }, minLines = 2, modifier = Modifier.fillMaxWidth()) }
