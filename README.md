@@ -4,7 +4,7 @@
 
 当前主线使用 **OpenCode Go `deepseek-v4.1-flash`**，同时支持独立 DeepSeek Provider。API Key 由使用者在本机填写，不会写入源码、数据库快照或 Git 仓库。
 
-发布地址：[GitHub Release `v0.18.0`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.0)
+当前 Android 发布版：[GitHub Release `v0.18.22`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.22)
 
 ![拾语 PC 当前界面](docs/images/PC-0.18-home.png)
 
@@ -14,50 +14,16 @@
 
 - **Windows EXE 基础版**：解压即可运行，提供 DeepSeek / OpenCode Go 云端角色生成和聊天、四个内置角色、角色编辑与删除、世界书、长期记忆管理及云端图片输入。发布包不附带本地大语言模型、生图模型或完整本地语音模型。
 - **PC 网页完整环境**：与 EXE 共用 React 和 FastAPI 核心，额外支持自行安装 MeinaMix V12、本地 Qwen/LoRA、BGE、CosyVoice 2、GPT-SoVITS、MeloTTS 和 Whisper 等完整实验链路。
-- **Android**：除云端 API 外，可导入 MNN 大语言模型和 Local Dream SD1.5/QNN 生图模型；APK 内置本地语音识别与 VITS 角色语音运行库。模型权重按设置页要求由用户导入。
+- **Android**：除云端 API 外，可导入 MNN 大语言模型和 Local Dream SD1.5/QNN 生图模型；APK 内置 12 个可编辑、可删除的初始角色及对应头像和背景，并包含本地语音识别与 VITS 角色语音运行库。模型权重按设置页要求由用户导入。
 
 Windows EXE 的“基础版”不是完整研究环境。需要本地大模型、本地生图、高质量角色音色或完整语音识别时，请按下方 PC 源码流程安装对应运行库和模型权重。
 
-## 2026-11-06 `0.18.0` 正式再发布
+## 当前版本
 
-- Windows 修复 WebView2 窗口使用 PNG 图标导致程序静默退出的问题，改用 ICO，并增加日志文件占用时的启动回退。
-- Windows EXE 保持基础云端版定位，完整本地能力需要复现 PC 网页环境并自行下载模型。
-- Android 以稳定的 `0.17.0` 行为为基线，删除顾清禾及其聊天、记忆、状态、头像和音色数据；升级时自动清理旧角色。
-- Android 新建角色档案直接移植了已验收 Windows `0.18.0` 备份中的生成提示、`1800/1200` Token 两阶段请求、12 个字段的 JSON 解析、缺失材料阈值和第二次补全流程；同时有 DeepSeek 与 OpenCode Key 时，档案生成优先使用该 PC 版本对应的 DeepSeek。
-- 宋知意和裴既明恢复为 LoRA 项目训练与推理时使用的逐字精简提示词；API 与本地 MNN 模式都使用同一份固定文本，不再拼接完整角色卡。逐字文本与来源哈希见 [固定角色提示词](docs/固定角色提示词_2026-11-06.md)。
-- Windows 使用已验收的 `0.18.0` 备份；公开 Android Release 为 `0.18.3`，当前源码候选为 `0.18.8`。
-
-## 2026-11-05 `0.18.0` PC 网页端同步
-
-- PC 网页端同步 Windows 桌面的角色库、三栏聊天工作台、角色详情和删除入口。
-- 首次启动通过一次性种子写入四个可编辑、可删除的演示角色：李白、宋知意、
-  裴既明、萧承渊。删除后不会在下次启动时重新出现，已有用户角色和
-  对话不会被清理。
-- 网页设置页明确显示 MeinaMix V12 本地生图模型状态，以及 CosyVoice 2 角色
-  语音链路状态；本地图片和提示词不会发送给云端图片 API。
-- 角色卡补回外貌与英文生图提示词字段，网页支持上传自定义角色头像。
-- 角色生成必须同时产出外貌、英文生图提示词和世界书；缺失时会自动再补一轮。
-- PC 角色生成按 Android 流程收敛为一次完整生成加一次按需补全，生成后先进入档案审核页，确认后才保存。
-- OpenCode 不启用其上游尚不稳定的 JSON mode；解析器兼容手机端字段名、中文角色类型和字符串形式的禁止词列表。
-- 创建或编辑角色时可选择本地生成立绘、上传自己的图片或暂时留空，并可直接编辑世界书条目。
-- 设置页可分别测试 OpenCode Go 与 DeepSeek 的实际连通状态，不再只检查 Key 是否已填写。
-- MeinaMix / SD1.5 使用 77 Token 文本窗口；网页会保留主体和关键视觉词并自动压缩过长提示词。
-- 云端默认 Provider 改为 OpenCode Go，云模式启动时不再无意义加载本地 LoRA。
-
-## 2026-10-31 `0.12.0` 更新
-
-当时的 Android 产品版本为 `0.14.3 / versionCode 27`。本轮重点是把演示项目收紧为可复现、可解释、可纠错的工程：
-
-- 产品角色目录不再包含内置默认角色；新安装不会自动创建角色，升级会清理旧默认角色及其完整本地数据。
-- PC 记忆管理支持修正事实、标记错误、恢复历史版本、忘记主题、撤销主题禁止、删除和历史审计。
-- 自动记忆新增、合并、更正、疑义、墓碑、逐字证据校验和批量语义审核继续在后台运行；普通聊天不需要逐条确认。
-- 私有脱敏自然对话回放包含 18 个案例、448 轮消息和 90 个探针；结构化事实、摘要、混合检索和混合状态四种条件均为 90/90，仅最近消息为 23/90。
-- 该 90/90 只证明固定夹具上的存储与检索；另有合成案例的真实 API 链路验证了提取、审核、入库、检索和最终回答。
-- 内部状态使用相同角色、历史、记忆、模型和生成参数完成 12 对匿名 A/B；作者偏好有状态 6 对、无状态 2 对、平局 4 对，自然度 5 比 2，因此继续默认启用内部状态提示。
-- 独立 Conda Python 3.11 环境和真实 OpenCode Key 已完成服务启动、前端加载、角色创建和首轮聊天。
-- PC 已接入 MeinaMix V12 本地 Diffusers 生图；角色立绘不会发送给云端图片 API。Android 现有实现本轮不调整。
-
-完整验收、失败项和剩余边界见 [0.12.0 完成报告](docs/0.12.0完整验收与待决策_2026-10-31.md)，记忆与状态实验见 [记忆纠错、自然回放与状态消融](docs/记忆纠错自然回放与状态消融_2026-10-31.md)，干净安装见 [Windows 干净环境验收](docs/Windows干净环境验收_2026-10-31.md)。
+Android `0.18.22` 内置 12 个可编辑、可删除的初始角色与完整头像、背景资源。
+升级只补充缺失的初次见面简介，不覆盖已有角色档案。重置对话会清除聊天记录、
+长期记忆、内部状态和 Trace，但保留角色档案、头像与背景。详细版本记录见
+[CHANGELOG](CHANGELOG.md)。
 
 ## 已实现功能
 
@@ -177,15 +143,20 @@ PC 语音优先调用本机 CosyVoice 2 FastAPI；服务或角色参考音频不
 
 ## 安装 Android 端
 
+从 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/latest)
+下载 `Shiyu-0.18.22-Android-arm64-v8a.apk`。
+
+![拾语 Android 0.18.22 角色聊天界面](docs/images/Android-0.18.22-chat.jpg)
+
 本机构建调试包：
 
 ```text
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-- 当前源码：`0.18.8 / versionCode 38`
+- 当前源码：`0.18.22 / versionCode 52`
 - Room schema：13
-- 当前 Debug APK SHA-256：`0A2B2E3519E081122A6EBEA94AC08D2EBC6BE6727DDFB6E38A375671CAF89E0C`
+- 当前 APK SHA-256：`9A2DDA53BE979FD9F1B40FB7C4CBE0FD097C9A298B5ABB318972222A99CD4E8E`
 - 安装后请在设置中填写自己的 OpenCode Go 或 DeepSeek Key。
 
 APK 包含本地语音运行库、VITS 中文语音模型、Qwen MNN 运行库和 Dream SD1.5/QNN 后端。本地 Qwen 与 MeinaMix V12 等模型权重不随 APK 分发，需要用户按应用设置中的说明导入。
@@ -219,7 +190,8 @@ android/app/build/outputs/apk/debug/app-debug.apk
 - Android 的 Key 使用 Android Keystore/EncryptedSharedPreferences。
 - 角色、消息、记忆和状态保存在各自设备的 Room 或 SQLite 中。
 - Windows EXE、PC 网页端和 Android 目前不会自动同步数据。
-- 重置角色会删除该角色的消息、长期记忆、图片和状态。
+- 重置对话会删除该角色的消息、长期记忆、内部状态和 Trace，保留角色档案、头像与背景。
+- 删除角色会同时删除该角色的档案、聊天、记忆、状态和角色图片。
 
 如果发现任何泄露的凭证，请立即在 Provider 控制台撤销并更换。不要通过 Issue 或 Pull Request 上传 API Key。
 
@@ -243,8 +215,8 @@ cd android
 - PC 全量 Python 回归：296 项通过。
 - PC 前端状态测试：40 项通过。
 - React 生产构建通过。
-- Android JVM：68 项通过。
-- Android debug APK 构建、真机覆盖安装和权限启动检查通过；本地 Dream 生图仍取决于设备 NPU 与导入模型。
+- Android JVM：80 项通过。
+- Android APK 构建、Lint、真机覆盖安装和启动检查通过；本地 Dream 生图仍取决于设备 NPU 与导入模型。
 - 自然记忆冻结回放：结构化事实、摘要、混合检索和混合状态均为 90/90；仅最近消息为 23/90。
 - 一条合成案例的真实 API 端到端记忆链路通过；该结果不是准确率基准。
 - 固定角色质量评测仍为：基础条件 18/24，长期记忆条件 22/24。

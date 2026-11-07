@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-07 — Android `0.18.22`
+
+- Added 12 editable, deletable initial characters with separate avatar and chat-background artwork.
+- Existing character profiles are preserved on upgrade. Only blank public introductions are filled, and Song Zhiyi and Pei Jiming keep every other profile field unchanged.
+- Resetting a conversation now clears messages, long-term memory, internal state, traces and rolling summaries while preserving the character profile, avatar and background.
+- Updated the Android install guide, current APK version and SHA-256, and added a real character-chat screenshot.
+- Verification: 80 Android JVM tests passed; `assembleDebug` and `lintDebug` passed; the `0.18.22 / versionCode 52` APK was installed over the existing app on the author's phone and launched successfully.
+
 ## 2026-11-07 — Android `0.18.8` four-tab app shell
 
 - Entering a chat now positions directly at the newest message without the previous animated scroll from the start of the conversation.
