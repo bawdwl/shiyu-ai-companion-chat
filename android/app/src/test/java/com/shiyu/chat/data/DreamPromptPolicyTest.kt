@@ -32,6 +32,23 @@ class DreamPromptPolicyTest {
     )
 
     @Test
+    fun acceptedObjectivePromptUsesSpecifiedTemplates() {
+        assertEquals(
+            "masterpiece, best quality, anime illustration, " +
+                "three-quarter upper body, {appearance}",
+            DreamGenerationSettings.DEFAULT_POSITIVE_TEMPLATE,
+        )
+        assertEquals(
+            "lowres, bad anatomy, bad hands, missing fingers, extra fingers, " +
+                "bad arms, missing legs, missing arms, poorly drawn face, bad face, " +
+                "fused face, cloned face, three crus, fused feet, fused thigh, " +
+                "extra crus, ugly fingers, horn, realistic photo, huge eyes, " +
+                "worst face, 2girl, long fingers, disconnected limbs",
+            DreamGenerationSettings.DEFAULT_NEGATIVE_PROMPT,
+        )
+    }
+
+    @Test
     fun keeps_leading_character_details_when_prompt_is_too_long() {
         val compacted = compactCommaPromptToLimit(
             "masterpiece, best quality, brown hair, brown eyes, " +
@@ -98,9 +115,8 @@ class DreamPromptPolicyTest {
 
         assertTrue(
             prompt.startsWith(
-                "masterpiece, best quality, anime illustration, beautiful detailed face, " +
-                    "clear expressive eyes, soft lighting, three-quarter upper body, " +
-                    "facing viewer, centered composition",
+                "masterpiece, best quality, anime illustration, " +
+                    "three-quarter upper body",
             ),
         )
         assertTrue(prompt.contains("1boy, male, solo"))

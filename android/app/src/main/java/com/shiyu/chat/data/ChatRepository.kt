@@ -2791,6 +2791,9 @@ class ChatRepository(
             "masterpiece, best quality, {appearance}, anime portrait, upper body",
             "masterpiece, best quality, anime illustration, " +
                 "three-quarter upper body, {appearance}",
+            "masterpiece, best quality, anime illustration, beautiful detailed face, " +
+                "clear expressive eyes, soft lighting, three-quarter upper body, " +
+                "facing viewer, centered composition, {appearance}",
             "masterpiece, best quality, anime portrait, detailed expressive eyes, " +
                 "soft lighting, clean lineart, upper body, facing viewer, " +
                 "centered composition, {appearance}",
@@ -2805,6 +2808,12 @@ class ChatRepository(
                 "fused face, cloned face, three crus, fused feet, fused thigh, " +
                 "extra crus, ugly fingers, horn, realistic photo, huge eyes, " +
                 "worst face, 2girl, long fingers, disconnected limbs",
+            "lowres, worst quality, deformed face, asymmetrical eyes, unnatural face, " +
+                "malformed eyes, poorly drawn face, bad anatomy, bad hands, " +
+                "missing fingers, extra fingers, bad arms, missing legs, missing arms, " +
+                "fused face, cloned face, three crus, fused feet, fused thigh, " +
+                "extra crus, ugly fingers, horn, realistic photo, huge eyes, " +
+                "worst face, 2girl, long fingers, disconnected limbs, blurry face",
         )
         private const val MEMORY_DAILY_TOKEN_LIMIT = 30_000
         private const val MEMORY_OUTPUT_TOKENS = 1_600
