@@ -446,35 +446,45 @@ fun ShiyuApp(repository: ChatRepository) {
                                         historyBusy = false,
                                     )
                                 }
-                                ChatScreen(
-                                    character = character,
-                                    state = chatState,
-                                    onBack = null,
-                                    showBackground = false,
-                                    interactive = active,
-                                    allowFirstChatIntro = summary == null ||
-                                        summary.userMessageCount == 0,
-                                    onComposerFocusChange = {
-                                        homeComposerFocused = true
-                                    },
-                                    composerBottomInset = if (homeComposerFocused) {
-                                        0.dp
-                                    } else {
-                                        bottomBarPadding
-                                    },
-                                    onSend = vm::send,
-                                    onStop = vm::stop,
-                                    onMemory = { showMemory = true },
-                                    onTrace = { showTrace = true },
-                                    onEdit = {
-                                        pendingCharacter = null
-                                        characterEditorOrigin = CharacterEditorOrigin.CHAT
-                                        showEdit = true
-                                    },
-                                    onRollback = vm::rollbackToUserMessage,
-                                    onReset = vm::reset,
-                                    onDelete = vm::deleteCharacter,
-                                )
+                                val composerInset = if (homeComposerFocused) {
+                                    0.dp
+                                } else {
+                                    bottomBarPadding
+                                }
+                                if (active) {
+                                    ChatScreen(
+                                        character = character,
+                                        state = chatState,
+                                        onBack = null,
+                                        showBackground = false,
+                                        allowFirstChatIntro = summary == null ||
+                                            summary.userMessageCount == 0,
+                                        onComposerFocusChange = {
+                                            homeComposerFocused = true
+                                        },
+                                        composerBottomInset = composerInset,
+                                        onSend = vm::send,
+                                        onStop = vm::stop,
+                                        onMemory = { showMemory = true },
+                                        onTrace = { showTrace = true },
+                                        onEdit = {
+                                            pendingCharacter = null
+                                            characterEditorOrigin = CharacterEditorOrigin.CHAT
+                                            showEdit = true
+                                        },
+                                        onRollback = vm::rollbackToUserMessage,
+                                        onReset = vm::reset,
+                                        onDelete = vm::deleteCharacter,
+                                    )
+                                } else {
+                                    ChatPreviewScreen(
+                                        character = character,
+                                        latestMessage = previewMessages.firstOrNull(),
+                                        showFirstChatIntro =
+                                            (summary?.userMessageCount ?: 0) == 0,
+                                        composerBottomInset = composerInset,
+                                    )
+                                }
                             },
                         )
                         RootTab.MESSAGES -> BottomBarSafePage(bottomBarPadding) {
@@ -777,6 +787,201 @@ private fun CharacterDiscoveryPage(
             cropTop = true,
         )
         chatContent(active)
+    }
+}
+
+@Composable
+private fun ChatPreviewScreen(
+    character: CharacterEntity,
+    latestMessage: MessageEntity?,
+    showFirstChatIntro: Boolean,
+    composerBottomInset: androidx.compose.ui.unit.Dp,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .statusBarsPadding(),
+    ) {
+        Surface(color = Color.Black.copy(alpha = 0.30f)) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Spacer(Modifier.width(8.dp))
+                CharacterBadge(character, 38.dp)
+                Spacer(Modifier.width(9.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        character.name,
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "${character.tag.ifBlank { "AI 角色" }} · " +
+                            if (character.modelSource == MODEL_SOURCE_LOCAL_MNN) {
+                                "本地 MNN"
+                            } else {
+                                "云端 API"
+                            },
+                        color = Color.White.copy(alpha = 0.72f),
+                        fontSize = 9.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Memory,
+                        contentDescription = null,
+                        tint = Color.White,
+                    )
+                }
+                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = null,
+                        tint = Color.White,
+                    )
+                }
+            }
+        }
+        HorizontalDivider(color = Color.White.copy(alpha = 0.14f))
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            val intro = character.publicIntro.trim().ifBlank {
+                character.description.trim()
+            }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    top = 64.dp,
+                    end = 16.dp,
+                    bottom = 18.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(
+                    10.dp,
+                    Alignment.Bottom,
+                ),
+            ) {
+                if (showFirstChatIntro && intro.isNotBlank()) {
+                    item {
+                        CharacterIntroCard(
+                            character = character,
+                            expanded = false,
+                            enabled = false,
+                            onToggle = {},
+                        )
+                    }
+                }
+                latestMessage?.let { message ->
+                    item {
+                        LatestRoleMessage(
+                            message = message,
+                            playing = { false },
+                            onPlay = {},
+                        )
+                    }
+                }
+            }
+            HistoryToggle(
+                historyVisible = false,
+                onClick = {},
+                enabled = false,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp),
+            )
+        }
+        ChatComposerPreview(
+            character = character,
+            bottomInset = composerBottomInset,
+        )
+    }
+}
+
+@Composable
+private fun ChatComposerPreview(
+    character: CharacterEntity,
+    bottomInset: androidx.compose.ui.unit.Dp,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .then(
+                if (bottomInset > 0.dp) {
+                    Modifier
+                } else {
+                    Modifier.navigationBarsPadding()
+                },
+            )
+            .padding(
+                start = 12.dp,
+                end = 12.dp,
+                bottom = 8.dp + bottomInset,
+            ),
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(28.dp),
+            color = Color(0xC43E3749),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+            shadowElevation = 5.dp,
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "自由输入…",
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 44.dp)
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                    color = Color.White.copy(alpha = 0.58f),
+                    fontSize = 14.sp,
+                )
+                Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        "（）",
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Mic,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.88f),
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Image,
+                        contentDescription = null,
+                        tint = Color.White.copy(
+                            alpha = if (
+                                character.modelSource == MODEL_SOURCE_LOCAL_MNN
+                            ) {
+                                0.34f
+                            } else {
+                                0.88f
+                            },
+                        ),
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+        }
     }
 }
 

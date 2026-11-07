@@ -22,10 +22,6 @@ class LocalVoice(private val context: Context) {
     @Volatile private var activeTrack: AudioTrack? = null
     @Volatile private var playbackStopped = false
 
-    init {
-        File(context.filesDir, "speech/kokoro").deleteRecursively()
-    }
-
     private fun copyAssets(path: String, target: File) {
         val children = context.assets.list(path).orEmpty()
         if (children.isEmpty()) {

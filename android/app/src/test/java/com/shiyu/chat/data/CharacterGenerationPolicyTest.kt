@@ -12,12 +12,17 @@ class CharacterGenerationPolicyTest {
         assertTrue(CharacterGenerationPolicy.SYSTEM_PROMPT.contains("public_intro 用120至220个中文字符"))
         assertTrue(
             CharacterGenerationPolicy.SYSTEM_PROMPT.contains(
+                "beautiful detailed face, delicate facial features",
+            ),
+        )
+        assertTrue(
+            CharacterGenerationPolicy.SYSTEM_PROMPT.contains(
                 "appearance 必须填写，用140至320个中文字符",
             ),
         )
         assertTrue(
             CharacterGenerationPolicy.MATERIAL_REPAIR_PROMPT.contains(
-                "30至50个逗号分隔的英文视觉标签",
+                "30至50个逗号分隔的 Danbooru 风格英文视觉标签",
             ),
         )
         assertTrue(CharacterGenerationPolicy.MATERIAL_REPAIR_PROMPT.contains("worldbook 给 3 条"))

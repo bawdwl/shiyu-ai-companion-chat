@@ -58,6 +58,9 @@ class ChatRepository(
     init {
         memoryScope.launch {
             cleanupLegacyMediaPipeModel()
+            runCatching {
+                File(context.filesDir, "speech/kokoro").deleteRecursively()
+            }
             managedModelDownloader.cleanupStaleDownloads()
             backfillStructuredMemorySearch()
             database.structuredMemoryJobs().recoverRunningJobs(
@@ -472,12 +475,24 @@ class ChatRepository(
         if (positiveTemplate != savedTemplate) {
             prefs.edit().putString(KEY_DREAM_POSITIVE_TEMPLATE, positiveTemplate).apply()
         }
-        return DreamGenerationSettings(
-        positiveTemplate = positiveTemplate,
-        negativePrompt = prefs.getString(
+        val savedNegative = prefs.getString(
             KEY_DREAM_NEGATIVE_PROMPT,
             DreamGenerationSettings.DEFAULT_NEGATIVE_PROMPT,
-        ).orEmpty(),
+        ).orEmpty()
+        val negativePrompt = if (
+            savedNegative.isBlank() ||
+            savedNegative in LEGACY_DREAM_NEGATIVE_PROMPTS
+        ) {
+            DreamGenerationSettings.DEFAULT_NEGATIVE_PROMPT
+        } else {
+            savedNegative
+        }
+        if (negativePrompt != savedNegative) {
+            prefs.edit().putString(KEY_DREAM_NEGATIVE_PROMPT, negativePrompt).apply()
+        }
+        return DreamGenerationSettings(
+        positiveTemplate = positiveTemplate,
+        negativePrompt = negativePrompt,
         steps = prefs.getInt(KEY_DREAM_STEPS, 50),
         cfg = prefs.getFloat(KEY_DREAM_CFG, 7.0f),
         scheduler = prefs.getString(KEY_DREAM_SCHEDULER, "dpm_sde_karras").orEmpty(),
@@ -2774,6 +2789,8 @@ class ChatRepository(
             "anime illustration, {appearance}",
             "anime illustration, full body, vertical composition, {appearance}",
             "masterpiece, best quality, {appearance}, anime portrait, upper body",
+            "masterpiece, best quality, anime illustration, " +
+                "three-quarter upper body, {appearance}",
             "masterpiece, best quality, anime portrait, detailed expressive eyes, " +
                 "soft lighting, clean lineart, upper body, facing viewer, " +
                 "centered composition, {appearance}",
@@ -2781,6 +2798,13 @@ class ChatRepository(
                 "soft lighting, clean lineart, full body or three-quarter body, " +
                 "standing, vertical smartphone wallpaper, centered figure, " +
                 "face in the upper half, detailed outfit, {appearance}",
+        )
+        private val LEGACY_DREAM_NEGATIVE_PROMPTS = setOf(
+            "lowres, bad anatomy, bad hands, missing fingers, extra fingers, " +
+                "bad arms, missing legs, missing arms, poorly drawn face, bad face, " +
+                "fused face, cloned face, three crus, fused feet, fused thigh, " +
+                "extra crus, ugly fingers, horn, realistic photo, huge eyes, " +
+                "worst face, 2girl, long fingers, disconnected limbs",
         )
         private const val MEMORY_DAILY_TOKEN_LIMIT = 30_000
         private const val MEMORY_OUTPUT_TOKENS = 1_600

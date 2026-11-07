@@ -67,14 +67,16 @@ data class DreamGenerationSettings(
         val RESOLUTIONS = setOf(512, 768, 1024)
 
         const val DEFAULT_POSITIVE_TEMPLATE =
-            "masterpiece, best quality, anime illustration, " +
-                "three-quarter upper body, {appearance}"
+            "masterpiece, best quality, anime illustration, beautiful detailed face, " +
+                "clear expressive eyes, soft lighting, three-quarter upper body, " +
+                "facing viewer, centered composition, {appearance}"
 
         const val DEFAULT_NEGATIVE_PROMPT =
-            "lowres, bad anatomy, bad hands, missing fingers, extra fingers, " +
-                "bad arms, missing legs, missing arms, poorly drawn face, bad face, " +
+            "lowres, worst quality, deformed face, asymmetrical eyes, unnatural face, " +
+            "malformed eyes, poorly drawn face, bad anatomy, bad hands, " +
+            "missing fingers, extra fingers, bad arms, missing legs, missing arms, " +
                 "fused face, cloned face, three crus, fused feet, fused thigh, " +
                 "extra crus, ugly fingers, horn, realistic photo, huge eyes, " +
-                "worst face, 2girl, long fingers, disconnected limbs"
+            "worst face, 2girl, long fingers, disconnected limbs, blurry face"
     }
 }

@@ -34,8 +34,9 @@ class AvatarPromptPolicyTest {
 
         assertTrue(
             prompt.startsWith(
-                "masterpiece, best quality, anime illustration, " +
-                    "three-quarter upper body",
+                "masterpiece, best quality, anime illustration, beautiful detailed face, " +
+                    "clear expressive eyes, soft lighting, three-quarter upper body, " +
+                    "facing viewer, centered composition",
             ),
         )
         assertTrue(prompt.contains("1girl, female, solo"))
