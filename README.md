@@ -6,9 +6,20 @@
 
 当前 Android 发布版：[GitHub Release `v0.18.22`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.22)
 
-![拾语 PC 当前界面](docs/images/PC-0.18-home.png)
+## 项目展示
 
-![拾语：AI 虚拟角色陪伴系统框架](docs/images/shiyu-ai-companion-architecture-2026-11-04.png)
+<p align="center">
+  <img src="docs/images/shiyu-ai-companion-architecture-2026-11-04.png" alt="拾语：AI 虚拟角色陪伴系统框架" width="900">
+</p>
+
+<p align="center">
+  <img src="docs/images/PC-0.18-home.png" alt="拾语 PC 工作台" width="900">
+</p>
+
+<p align="center">
+  <img src="docs/images/Android-0.18.22-chat.jpg" alt="拾语 Android 李白角色聊天界面" width="42%">
+  <img src="docs/images/Android-0.18.22-chat-xiao-chengyuan.jpg" alt="拾语 Android 萧承渊角色聊天界面" width="42%">
+</p>
 
 ### 三种运行形态
 
@@ -145,8 +156,6 @@ PC 语音优先调用本机 CosyVoice 2 FastAPI；服务或角色参考音频不
 
 从 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/latest)
 下载 `Shiyu-0.18.22-Android-arm64-v8a.apk`。
-
-![拾语 Android 0.18.22 角色聊天界面](docs/images/Android-0.18.22-chat.jpg)
 
 本机构建调试包：
 
