@@ -4,9 +4,9 @@
 
 当前主线使用 **OpenCode Go `deepseek-v4.1-flash`**，同时支持独立 DeepSeek Provider。API Key 由使用者在本机填写，不会写入源码、数据库快照或 Git 仓库。
 
-当前 Android 本地候选：`0.18.23`（尚未上传 GitHub Release）
+当前 Android 发布版：`0.18.23`
 
-最近已发布：[GitHub Release `v0.18.22`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.22)
+最近已发布：[GitHub Release `v0.18.23`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.23)
 
 ## 项目展示
 
@@ -178,7 +178,7 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 - 当前源码：`0.18.23 / versionCode 53`
 - Room schema：13
-- 当前 APK SHA-256：`9A2DDA53BE979FD9F1B40FB7C4CBE0FD097C9A298B5ABB318972222A99CD4E8E`
+- 当前 APK SHA-256：`48644B306ABB6400F3080F2CBDF2264C3CB2F506647458046A5D5E61E74FBFFE`
 - 安装后请在设置中填写自己的 OpenCode Go 或 DeepSeek Key。
 
 APK 包含本地语音运行库、VITS 中文语音模型、Qwen MNN 运行库和 Dream SD1.5/QNN 后端。本地 Qwen 与 MeinaMix V12 等模型权重不随 APK 分发，需要用户按应用设置中的说明导入。
@@ -238,7 +238,7 @@ cd android
 - PC 前端状态测试：40 项通过。
 - React 生产构建通过。
 - Android JVM：89 项通过。
-- Android APK 构建、Lint、真机覆盖安装和启动检查通过；本地 Dream 生图仍取决于设备 NPU 与导入模型。
+- Android APK 构建和 Lint 通过；本次构建未连接 ADB，尚未执行 0.18.23 真机覆盖安装。本地 Dream 生图仍取决于设备 NPU 与导入模型。
 - 自然记忆冻结回放：结构化事实、摘要、混合检索和混合状态均为 90/90；仅最近消息为 23/90。
 - 一条合成案例的真实 API 端到端记忆链路通过；该结果不是准确率基准。
 - 固定角色质量评测仍为：基础条件 18/24，长期记忆条件 22/24。
