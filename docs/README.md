@@ -16,6 +16,7 @@
 - [PC 网页版安装与复现](PC网页版安装与复现.md)
 - [Windows 桌面版安装与使用](Windows桌面版安装与使用.md)
 - [使用与复现总览](使用与复现.md)
+- [将 Android APK 发布到 GitHub Release](GITHUB_APK_RELEASE.md)
 
 ## 当前架构与角色系统
 

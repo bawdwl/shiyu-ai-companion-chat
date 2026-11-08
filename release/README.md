@@ -10,9 +10,12 @@ release/
 └─ README.md
 ```
 
-## Android 0.18.23
+## Android 0.18.23 待发布
 
-- GitHub：[`v0.18.23`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.23)
+本地 APK 已构建并通过测试，但截至本说明更新时尚未推送对应提交，也尚未创建
+GitHub Release。正式上传步骤见 `docs/GITHUB_APK_RELEASE.md`。
+
+- GitHub：上传成功后为 `https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.23`
 - 文件：`apk-0.18.23/Shiyu-0.18.23-Android-arm64-v8a.apk`
 - 大小：`299,852,020` 字节
 - SHA-256：`48644B306ABB6400F3080F2CBDF2264C3CB2F506647458046A5D5E61E74FBFFE`
@@ -20,6 +23,25 @@ release/
 
 当前 APK 内置 12 个初始角色及头像、背景。聊天、记忆、API Key 和个人图片不在
 发布包中。
+
+## 上传 APK
+
+先提交并推送源码，再运行发布脚本：
+
+```powershell
+git push origin main
+
+.\scripts\publish_android_release.ps1 `
+  -Version 0.18.23 `
+  -NotesFile release\notes-v0.18.23.md `
+  -WhatIf
+
+.\scripts\publish_android_release.ps1 `
+  -Version 0.18.23 `
+  -NotesFile release\notes-v0.18.23.md
+```
+
+完整说明见 `docs/GITHUB_APK_RELEASE.md`。APK 不提交到 Git。
 
 重新构建：
 

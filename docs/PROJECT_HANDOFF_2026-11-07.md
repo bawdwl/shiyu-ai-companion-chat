@@ -25,8 +25,9 @@
 
 当前 GitHub 发布：
 
-- Android：[`v0.18.23`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.23)
-- Android APK：`release/apk-0.18.23/Shiyu-0.18.23-Android-arm64-v8a.apk`
+- 最近已发布：Android [`v0.18.22`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.22)
+- 本地待发布候选：`0.18.23`
+- 待发布 APK：`release/apk-0.18.23/Shiyu-0.18.23-Android-arm64-v8a.apk`
 - Windows：`release/windows/Shiyu-0.18.0-Windows-x64.zip`
 
 ## 2. 项目是什么
@@ -359,7 +360,26 @@ Android：
 5. 计算 SHA-256。
 6. 更新 `README.md`、`docs/Android安装与演示.md`、`CHANGELOG.md` 和
    `release/README.md`。
-7. 用户明确要求后，再推送 GitHub 和创建 Release。
+7. 用户明确要求后，先运行 `git push origin main`。
+8. 用无网络预检验证版本与 APK：
+
+```powershell
+.\scripts\publish_android_release.ps1 `
+  -Version <version> `
+  -NotesFile release\notes-v<version>.md `
+  -WhatIf
+```
+
+9. 正式创建 Release 并上传：
+
+```powershell
+.\scripts\publish_android_release.ps1 `
+  -Version <version> `
+  -NotesFile release\notes-v<version>.md
+```
+
+详细说明见 `docs/GITHUB_APK_RELEASE.md`。本机没有 `gh`；脚本使用 Git
+Credential Manager 中的凭据调用 GitHub API，不打印 Token。
 
 Windows：
 

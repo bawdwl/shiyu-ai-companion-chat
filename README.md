@@ -4,7 +4,9 @@
 
 当前主线使用 **OpenCode Go `deepseek-v4.1-flash`**，同时支持独立 DeepSeek Provider。API Key 由使用者在本机填写，不会写入源码、数据库快照或 Git 仓库。
 
-当前 Android 发布版：[GitHub Release `v0.18.23`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.23)
+当前 Android 本地候选：`0.18.23`（尚未上传 GitHub Release）
+
+最近已发布：[GitHub Release `v0.18.22`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.22)
 
 ## 项目展示
 
@@ -232,10 +234,10 @@ cd android
 
 当前发布前验证结果：
 
-- PC 全量 Python 回归：296 项通过。
+- PC 全量 Python 回归：307 项通过。
 - PC 前端状态测试：40 项通过。
 - React 生产构建通过。
-- Android JVM：80 项通过。
+- Android JVM：89 项通过。
 - Android APK 构建、Lint、真机覆盖安装和启动检查通过；本地 Dream 生图仍取决于设备 NPU 与导入模型。
 - 自然记忆冻结回放：结构化事实、摘要、混合检索和混合状态均为 90/90；仅最近消息为 23/90。
 - 一条合成案例的真实 API 端到端记忆链路通过；该结果不是准确率基准。
