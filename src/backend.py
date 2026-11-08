@@ -55,7 +55,7 @@ from chat_trace import make_turn_trace
 from roleplay_response import tts_text_from_content
 from session_memory import refresh_memory,retrieve_covered_history
 from memory_records import validate_candidate
-from memory_query import compose_memory_retrieval_query
+from experience_policy import memory_need
 from memory_semantics import (
     SEMANTIC_MEMORY_VERIFICATION_PROMPT,
     apply_verification,
@@ -1132,49 +1132,62 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             return
         memory=memory or {}
         character_id=current.get('character_id','assistant')
-        retrieval_query, retrieval_source_ids=compose_memory_retrieval_query(
-            current.get('messages',[]),
-            question,
-        )
+        need=memory_need(current.get('messages',[]),question)
+        retrieval_query=need.get('query',str(question or '').strip())
+        retrieval_source_ids=need.get('expanded_source_ids',[])
         trace['memory_retrieval_query_hash']=hashlib.sha256(
             retrieval_query.encode('utf-8')
         ).hexdigest()
         trace['memory_retrieval_expanded']=retrieval_query != str(question or '').strip()
         trace['memory_retrieval_source_message_ids']=retrieval_source_ids
+        trace['memory_needed']=bool(need.get('retrieve'))
+        trace['memory_need_reason']=need.get('reason','')
         if '_unified_memory_context' not in memory:
-            excerpts=[]
-            seen=set()
-            for item in memory.get('items',[]):
-                key=(item.get('message_id'),item.get('role'),item.get('quote'))
-                if key not in seen:
-                    excerpts.append(item)
-                    seen.add(key)
-            covered=memory.get('covered_message_id',0)
-            if covered:
-                for item in retrieve_covered_history(
-                    current.get('messages',[]),
-                    covered,
-                    question,
-                    excluded_message_ids=memory.get('excluded_message_ids',[]),
-                ):
+            if need.get('retrieve'):
+                excerpts=[]
+                seen=set()
+                for item in memory.get('items',[]):
                     key=(item.get('message_id'),item.get('role'),item.get('quote'))
                     if key not in seen:
                         excerpts.append(item)
                         seen.add(key)
-            context,memory_trace=build_unified_memory_context(
-                store,
-                character_id,
-                retrieval_query,
-                excerpts=excerpts,
-                summary_notes=memory.get('notes',''),
-                max_facts=8,
-                max_excerpts=4,
-                max_chars=1600,
-                max_tokens=480,
-                token_estimator=lambda text: estimate_tokens([
-                    {'role':'system','content':str(text)}
-                ]),
-            )
+                covered=memory.get('covered_message_id',0)
+                if covered:
+                    for item in retrieve_covered_history(
+                        current.get('messages',[]),
+                        covered,
+                        question,
+                        excluded_message_ids=memory.get('excluded_message_ids',[]),
+                    ):
+                        key=(item.get('message_id'),item.get('role'),item.get('quote'))
+                        if key not in seen:
+                            excerpts.append(item)
+                            seen.add(key)
+                context,memory_trace=build_unified_memory_context(
+                    store,
+                    character_id,
+                    retrieval_query,
+                    excerpts=excerpts,
+                    summary_notes=memory.get('notes',''),
+                    max_facts=8,
+                    max_excerpts=4,
+                    max_chars=1600,
+                    max_tokens=480,
+                    token_estimator=lambda text: estimate_tokens([
+                        {'role':'system','content':str(text)}
+                    ]),
+                )
+            else:
+                context=''
+                memory_trace={
+                    'selected_ids':[],
+                    'selected_excerpt_ids':[],
+                    'characters':0,
+                    'estimated_tokens':0,
+                    'token_budget':480,
+                    'retrieval_mode':'skipped',
+                    'scores':[],
+                }
             memory['_unified_memory_context']=context
             memory['_unified_memory_trace']=memory_trace
             state_text,internal_state=store.internal_state.render_prompt(character_id)
@@ -1206,6 +1219,23 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
         messages[0]['content']+=(
             '\n\n【角色内部状态】\n'+state_text
         )
+        events=store.relevant_memory_events(
+            character_id,
+            retrieval_query,
+            limit=3,
+        )
+        trace['memory_event_ids']=[event['id'] for event in events]
+        if events:
+            messages[0]['content']+=(
+                '\n\n【相关事件进展】\n'+
+                '\n'.join(
+                    f"- {event['title']}（"
+                    f"{'未完成' if event['status']=='open' else '已完成'}）："
+                    f"{event['summary']}"
+                    for event in events
+                )+
+                '\n只在当前话题自然相关时承接，不要为了表现记忆而反复追问。'
+            )
         if context:
             messages[0]['content']+=(
                 '\n\n【统一长期记忆】\n'+context+
@@ -1305,6 +1335,16 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
         applied=[]
         rejected=[]
         store=structured_memory_store()
+        runtime_card=(
+            runtime_characters()
+            .get(character_id,{})
+            .get('custom_card',{})
+        )
+        reality_mode=(
+            'story'
+            if runtime_card.get('interaction_mode')=='immersive'
+            else 'daily'
+        )
         for validated in validated_items:
             source_max=max(
                 evidence['message_id'] for evidence in validated['evidence']
@@ -1320,6 +1360,12 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
                 outcome=store.auto_ingest(
                     character_id,validated,job_id=job_id
                 )
+                if outcome.get('item'):
+                    store.record_event_from_memory(
+                        character_id,
+                        outcome['item'],
+                        reality_mode=reality_mode,
+                    )
                 applied.append({
                     'action':outcome['action'],
                     'item_id':outcome['item']['id'] if outcome.get('item') else None,
@@ -2621,6 +2667,21 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
                     )
                 )
             result=store.auto_ingest(character_id,reviewed[0])
+            if result.get('item'):
+                runtime_card=(
+                    runtime_characters()
+                    .get(character_id,{})
+                    .get('custom_card',{})
+                )
+                store.record_event_from_memory(
+                    character_id,
+                    result['item'],
+                    reality_mode=(
+                        'story'
+                        if runtime_card.get('interaction_mode')=='immersive'
+                        else 'daily'
+                    ),
+                )
         except ValueError as exc:
             raise HTTPException(422,str(exc)) from exc
         except (ProviderConfigurationError,ProviderError) as exc:

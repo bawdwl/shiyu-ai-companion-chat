@@ -121,4 +121,5 @@ class DreamPromptPolicyTest {
         )
         assertTrue(prompt.contains("1boy, male, solo"))
     }
+
 }

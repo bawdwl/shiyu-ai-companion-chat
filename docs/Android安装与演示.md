@@ -8,7 +8,7 @@ Android Keystore 实现。云端模式直接调用所选大模型 API，不要�
 
 从
 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases)
-下载最新 APK。当前公开版为 `0.18.22`。
+下载最新 APK。当前公开版为 `0.18.23`。
 
 ![拾语 Android 角色聊天界面](images/Android-0.18.22-chat.jpg)
 

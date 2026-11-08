@@ -27,6 +27,7 @@ data class CharacterEntity(
     val forbiddenKnowledge: String,
     val forbiddenTerms: String,
     val worldbookJson: String = "[]",
+    @ColumnInfo(defaultValue = "'{}'") val roleContextJson: String = "{}",
     val canLearnFromUser: Boolean = true,
     val allowEverydayInvention: Boolean = true,
     val custom: Boolean = false,
@@ -266,6 +267,41 @@ data class StateTransitionEntity(
     val relationshipAfterJson: String,
     val reason: String,
     val createdAt: Long = System.currentTimeMillis(),
+)
+
+@Entity(
+    tableName = "memory_events",
+    indices = [
+        Index("characterId"),
+        Index(value = ["characterId", "status"]),
+        Index(value = ["characterId", "topicKey"], unique = true),
+    ],
+)
+data class MemoryEventEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val characterId: String,
+    val topicKey: String,
+    val title: String,
+    val summary: String,
+    val status: String = "open",
+    val realityMode: String = "daily",
+    val participantsJson: String = "[]",
+    val sourceMessageIds: String = "",
+    val timelineJson: String = "[]",
+    val lastMentionedAt: Long? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+)
+
+@Entity(tableName = "scene_states")
+data class SceneStateEntity(
+    @PrimaryKey val characterId: String,
+    val mode: String = "daily",
+    val location: String = "",
+    val participantsJson: String = "[]",
+    val activity: String = "",
+    val sourceMessageIds: String = "",
+    val updatedAt: Long = System.currentTimeMillis(),
 )
 
 data class StructuredMemoryUsageTotal(

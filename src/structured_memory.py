@@ -18,6 +18,7 @@ from pathlib import Path
 from threading import RLock
 
 from internal_state import InternalStateService, render_state_snapshot
+from experience_policy import derive_event_update
 from memory_embeddings import load_default_embedder
 from memory_semantics import classify_candidate
 
@@ -277,6 +278,23 @@ class CandidateStore:
                 created_at TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS memory_admin_events_character
                 ON memory_admin_events(character_id,id);
+            CREATE TABLE IF NOT EXISTS memory_events (
+                id INTEGER PRIMARY KEY,
+                character_id TEXT NOT NULL,
+                topic_key TEXT NOT NULL,
+                title TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                status TEXT NOT NULL,
+                reality_mode TEXT NOT NULL DEFAULT 'daily',
+                participants_json TEXT NOT NULL DEFAULT '[]',
+                source_message_ids TEXT NOT NULL DEFAULT '[]',
+                timeline_json TEXT NOT NULL DEFAULT '[]',
+                last_mentioned_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(character_id,topic_key));
+            CREATE INDEX IF NOT EXISTS memory_events_character
+                ON memory_events(character_id,status,updated_at);
         ''')
         self._migrate_legacy_schema()
         self.internal_state = InternalStateService(self.db, self._lock)
@@ -2441,6 +2459,125 @@ class CandidateStore:
         snapshot['relationship'].setdefault('warmth', 0.50)
         return render_state_snapshot(snapshot)
 
+    def record_event_from_memory(
+        self,
+        character_id,
+        item,
+        *,
+        reality_mode='daily',
+    ):
+        update = derive_event_update(item)
+        if not update:
+            return None
+        now = datetime.now(timezone.utc).isoformat()
+        source_ids = sorted({
+            int(evidence.get('message_id', 0))
+            for evidence in item.get('evidence', [])
+            if int(evidence.get('message_id', 0)) > 0
+        })
+        with self._lock, self.db:
+            existing = self.db.execute(
+                '''SELECT * FROM memory_events
+                   WHERE character_id=? AND topic_key=?''',
+                (character_id, update['topic_key']),
+            ).fetchone()
+            previous_sources = []
+            timeline = []
+            title = update['title']
+            if existing:
+                title = existing['title'] or title
+                previous_sources = [
+                    int(value)
+                    for value in json.loads(
+                        existing['source_message_ids'] or '[]'
+                    )
+                ]
+                timeline = json.loads(existing['timeline_json'] or '[]')
+            merged_sources = sorted(set(previous_sources) | set(source_ids))
+            if not timeline or timeline[-1].get('summary') != update['summary']:
+                timeline.append({
+                    'summary': update['summary'],
+                    'status': update['status'],
+                    'message_ids': source_ids,
+                    'recorded_at': now,
+                })
+            self.db.execute(
+                '''INSERT INTO memory_events(
+                       character_id,topic_key,title,summary,status,
+                       reality_mode,participants_json,source_message_ids,
+                       timeline_json,created_at,updated_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(character_id,topic_key) DO UPDATE SET
+                       title=excluded.title,
+                       summary=excluded.summary,
+                       status=excluded.status,
+                       reality_mode=excluded.reality_mode,
+                       participants_json=excluded.participants_json,
+                       source_message_ids=excluded.source_message_ids,
+                       timeline_json=excluded.timeline_json,
+                       updated_at=excluded.updated_at''',
+                (
+                    character_id,
+                    update['topic_key'],
+                    title[:120],
+                    update['summary'][:600],
+                    update['status'],
+                    reality_mode,
+                    json.dumps(update['participants'], ensure_ascii=False),
+                    json.dumps(merged_sources),
+                    json.dumps(timeline, ensure_ascii=False),
+                    existing['created_at'] if existing else now,
+                    now,
+                ),
+            )
+        return update
+
+    def relevant_memory_events(self, character_id, query, *, limit=3):
+        current = str(query or '')
+        with self._lock:
+            rows = self.db.execute(
+                '''SELECT * FROM memory_events
+                   WHERE character_id=? AND status='open'
+                   ORDER BY updated_at DESC,id DESC''',
+                (character_id,),
+            ).fetchall()
+        continuation = any(
+            cue in current
+            for cue in ('后来', '然后', '上次', '那件事', '那个事',
+                        '怎么样了', '结果', '进展', '约定', '计划')
+        )
+        terms = set()
+        for match in re.findall(
+            r'[\u3400-\u9fff]+|[a-z0-9]+',
+            current.lower(),
+        ):
+            if re.fullmatch(r'[\u3400-\u9fff]+', match):
+                if len(match) <= 3:
+                    terms.add(match)
+                else:
+                    for size in (2, 3):
+                        terms.update(
+                            match[index:index + size]
+                            for index in range(len(match) - size + 1)
+                        )
+            else:
+                terms.add(match)
+        ranked = []
+        for row in rows:
+            body = f"{row['title']} {row['summary']}".lower()
+            hits = sum(1 for term in terms if term in body)
+            if hits > 0:
+                ranked.append((hits, row))
+        ranked.sort(key=lambda pair: (pair[0], pair[1]['updated_at']), reverse=True)
+        if ranked or not continuation:
+            return [dict(row) for _, row in ranked[:limit]]
+        recent = sorted(
+            rows,
+            key=lambda row: (row['updated_at'], row['id']),
+            reverse=True,
+        )
+        return [dict(recent[0])] if recent else []
+
     def clear_scope(self, character_id):
         with self._lock, self.db:
             self.internal_state.clear_scope(character_id)
@@ -2452,6 +2589,10 @@ class CandidateStore:
             self.db.execute('DELETE FROM memory_admin_events WHERE character_id=?', (character_id,))
             self.db.execute(
                 'DELETE FROM memory_analysis_usage WHERE character_id=?',
+                (character_id,),
+            )
+            self.db.execute(
+                'DELETE FROM memory_events WHERE character_id=?',
                 (character_id,),
             )
             cursor = self.db.execute(

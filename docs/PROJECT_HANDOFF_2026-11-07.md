@@ -1,9 +1,15 @@
 # 拾语项目交接文档
 
-更新日期：2026-11-07
+更新日期：2026-11-08
 仓库：`bawdwl/shiyu-ai-companion-chat`
 当前分支：`main`
-当前 Android：`0.18.22 / versionCode 52`
+当前 Android：`0.18.23 / versionCode 53`
+
+`0.18.23` 包含 2026-11-07 角色体验优化：
+版本化角色上下文、轻量对话策略、记忆需求判断、事件链、当前轮临时情绪、
+场景状态和 PC 对齐。详情见
+`docs/角色体验与连续性优化_2026-11-07.md`。该版本还包含首页 pager、
+背景/头像两步裁剪和透明启动图标修复；Windows 仍为 `0.18.0`。
 
 ## 1. 新对话先读什么
 
@@ -19,8 +25,8 @@
 
 当前 GitHub 发布：
 
-- Android：[`v0.18.22`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.22)
-- Android APK：`release/apk-0.18.22/Shiyu-0.18.22-Android-arm64-v8a.apk`
+- Android：[`v0.18.23`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.23)
+- Android APK：`release/apk-0.18.23/Shiyu-0.18.23-Android-arm64-v8a.apk`
 - Windows：`release/windows/Shiyu-0.18.0-Windows-x64.zip`
 
 ## 2. 项目是什么
@@ -63,7 +69,7 @@ shiyu-ai-companion-chat-final/
 - `src/`、`frontend/`、`web/`、`desktop/`、`android/`：应用源码与内置资源。
 - `tests/`、`evaluation/`：回归和角色质量评测。
 - `docs/`：设计决策、踩坑记录和交接信息。
-- `release/apk-0.18.22/`：当前 APK。
+- `release/apk-0.18.23/`：当前 APK。
 - `release/windows/`：当前 Windows 发布 ZIP。
 - `outputs/image-runtime/`：PC 本地 Diffusers 生图运行库。
 - `outputs/secret-runtime/`：Windows EXE 需要的隔离密钥运行库。
@@ -90,6 +96,7 @@ shiyu-ai-companion-chat-final/
 - 固定角色精简 Prompt；
 - 世界书关键词触发、优先级和启用开关；
 - 角色级云端/本地模型来源切换；
+- 固定事实、示例对话、场景、动机、边界和稳定目标；
 - 时代外知识和禁止词守卫。
 
 ### 聊天
@@ -98,6 +105,7 @@ shiyu-ai-companion-chat-final/
 - PC SSE 流式回答、Android 流式回答与停止生成；
 - 本地 Qwen3-1.7B MNN；
 - 图片输入；
+- 当前轮即时语气与按需交流策略，不增加主聊天模型调用；
 - 长期记忆、会话摘要和最近原文共同进入上下文；
 - 当前回答与滚动摘要分开，不阻塞主聊天；
 - Prompt、模型、记忆、状态、Token 和延迟 Trace。
@@ -114,6 +122,7 @@ shiyu-ai-companion-chat-final/
 - Android FTS4 + 中文词法检索；
 - 每个角色每日 30,000 Token 后台记忆预算；
 - 网页端记忆纠错、标记错误、恢复历史、遗忘主题和删除审计。
+- 最小事件链与未完成事项，只在相关话题出现时进入 Prompt。
 
 ### 内部状态
 
@@ -122,6 +131,7 @@ shiyu-ai-companion-chat-final/
 - 用户命令不能直接提高信任；
 - 状态只以自然语言进入 Prompt，不展示好感度数值；
 - 冲突、修复和边界事件可影响关系阶段。
+- 好消息、困难、冲突、修复和边界可即时影响本轮语气，但不直接永久修改关系数值。
 
 ### 语音与图片
 
@@ -309,17 +319,22 @@ python desktop/build_desktop.py
 
 最近一次 Android 发布前验证：
 
-- 80 项 Android JVM 测试通过；
+- 89 项 Android JVM 测试通过；
 - `assembleDebug` 通过；
 - `lintDebug` 通过；
-- `0.18.22` APK 覆盖安装并成功启动；
+- `0.18.23` APK 已构建；当前没有 ADB 设备，尚未执行本次真机覆盖安装；
 - APK 包含 12 个角色和 24 张头像/背景，不含聊天、Key 或设备路径。
 
 PC 既有回归结果：
 
-- Python 全量回归 296 项；
+- Python 全量回归 307 项；
 - 前端状态测试 40 项；
 - React 生产构建通过。
+
+未发布体验优化的真实 40 场景对照位于
+`evaluation/reports/2026-11-07-experience-suite-final/`。最终规则下
+Experience V2 为 39/40，旧 Prompt 为 39/40；这是一轮产品回归信号，
+不是论文级显著性结论。
 
 清理构建缓存后第一次重建会更慢，不代表依赖或源码损坏。
 
@@ -469,5 +484,5 @@ Windows：
 - 删除测试聊天数据库、结构化记忆实验库、日志、临时 URL 和本地测试密钥；
 - 删除重复的中文技术评审副本，保留 ASCII 文件名的可打开版本；
 - 合计释放约 6.8 GB；
-- 保留当前 Android `0.18.22`、Windows `0.18.0`、模型运行库、评测证据、
+- 保留当前 Android `0.18.23`、Windows `0.18.0`、模型运行库、评测证据、
   前端依赖和全部源码。

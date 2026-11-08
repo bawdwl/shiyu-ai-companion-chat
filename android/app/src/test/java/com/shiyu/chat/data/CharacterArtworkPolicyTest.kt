@@ -57,4 +57,19 @@ class CharacterArtworkPolicyTest {
         assertEquals(0.28125f, frame.centerY, 0.0001f)
         assertEquals(0.5625f, frame.diameterRatio, 0.0001f)
     }
+
+    @Test
+    fun squareSourceAvatarIsCroppedInsideSelectedBackground() {
+        val crop = CharacterArtworkPolicy.avatarCropInSource(
+            width = 512,
+            height = 512,
+            backgroundSelection = CharacterArtworkPolicy.DEFAULT_BACKGROUND,
+            avatarSelection = CharacterArtworkPolicy.DEFAULT_AVATAR,
+        )
+
+        assertEquals(112, crop.left)
+        assertEquals(0, crop.top)
+        assertEquals(288, crop.width)
+        assertEquals(288, crop.height)
+    }
 }

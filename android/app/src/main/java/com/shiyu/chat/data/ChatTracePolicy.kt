@@ -3,7 +3,7 @@ package com.shiyu.chat.data
 import java.security.MessageDigest
 
 
-internal const val PROMPT_PIPELINE_VERSION = "api-role-chat/android-2026-10-30.1"
+internal const val PROMPT_PIPELINE_VERSION = "api-role-chat/android-2026-11-07.2"
 
 internal fun sha256Text(text: String): String =
     MessageDigest.getInstance("SHA-256")

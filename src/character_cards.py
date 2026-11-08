@@ -156,6 +156,22 @@ def normalize_card(data, *, generating=False):
         # Name-only placeholders are not useful demonstrations and teach a broken response pattern.
         if user and len(reply) >= 6 and reply.casefold() != name.casefold():
             examples.append({'user': user, 'character': reply})
+    raw_goals = data.get('goals', [])
+    if not isinstance(raw_goals, list) or len(raw_goals) > 8:
+        raise ValueError('角色目标必须是最多8项的列表')
+    goals = list(dict.fromkeys(
+        _text(goal, 160, '角色目标', required=True)
+        for goal in raw_goals
+        if isinstance(goal, str) and goal.strip()
+    ))
+    interaction_mode = _text(
+        data.get('interaction_mode', 'daily'),
+        20,
+        '互动模式',
+        required=True,
+    )
+    if interaction_mode not in ('daily', 'immersive'):
+        raise ValueError('互动模式只能是 daily 或 immersive')
     character_id = _text(data.get('id') or ('custom-' + uuid4().hex[:12]), 80, '角色编号', required=True)
     if not re.fullmatch(r'custom-[A-Za-z0-9_-]{3,72}', character_id):
         raise ValueError('自定义角色编号格式无效')
@@ -173,6 +189,7 @@ def normalize_card(data, *, generating=False):
         'knowledge_boundary': knowledge_boundary,
         'boundaries': boundaries, 'fixed_facts': facts, 'worldbook': worldbook,
         'example_dialogue': examples, 'use_examples': use_examples,
+        'goals': goals, 'interaction_mode': interaction_mode,
         'draft_notice': (_text(data.get('draft_notice') or '由本地模型生成的内容需由作者检查；proposal 项未确认前不作为固定事实。',
                                500, '草稿说明') if generating else ''),
     }
@@ -222,6 +239,11 @@ def card_to_runtime(card):
         prompt_parts.append('与用户的关系：' + card['relationship'])
     if card['motivation']:
         prompt_parts.append('人物动机：' + card['motivation'])
+    if card.get('goals'):
+        prompt_parts.append(
+            '【角色自己的稳定关注与目标】\n' +
+            '\n'.join('- ' + goal for goal in card['goals'])
+        )
     if confirmed:
         prompt_parts.append('【作者确认的角色事实】\n' + '\n'.join(f"- {f['key']}：{f['value']}" for f in confirmed))
     if proposals:
@@ -282,13 +304,23 @@ def parse_generated_card(text, inspiration):
         'tagline': ('tagline', 'tag'),
         'speech_style': ('speech_style', 'speechStyle'),
         'appearance_prompt': ('appearance_prompt', 'appearancePrompt'),
+        'fixed_facts': ('fixed_facts', 'fixedFacts'),
+        'example_dialogue': ('example_dialogue', 'exampleDialogue'),
+        'use_examples': ('use_examples', 'useExamples'),
+        'interaction_mode': ('interaction_mode', 'interactionMode'),
+        'scenario': ('scenario',),
+        'motivation': ('motivation',),
+        'goals': ('goals',),
+        'worldbook': ('worldbook',),
     }
     for target, candidates in aliases.items():
         if not card.get(target):
-            card[target] = next(
+            value = next(
                 (card.get(name) for name in candidates if card.get(name)),
-                '',
+                None,
             )
+            if value is not None:
+                card[target] = value
 
     boundary = card.get('knowledge_boundary')
     if not isinstance(boundary, dict):
@@ -370,7 +402,8 @@ def build_generation_messages(inspiration):
 只返回一个合法 JSON 对象，不要 Markdown 或解释。字段为：
 name, tagline, description, background, personality, speech_style,
 relationship, appearance, appearance_prompt, greeting, boundaries,
-knowledge_boundary, fixed_facts, worldbook, example_dialogue。
+scenario, motivation, knowledge_boundary, fixed_facts, worldbook,
+example_dialogue, goals, use_examples, interaction_mode。
 knowledge_boundary 包含 character_kind, era, knowledge_cutoff, universe,
 allowed_knowledge, forbidden_knowledge, forbidden_terms, can_learn_from_user,
 allow_everyday_invention。
@@ -380,6 +413,9 @@ description 用100至200个中文字符完整说明角色身份和当前处境�
 personality 用80至220个中文字符写明性格、行为方式和矛盾点；
 speech_style 用60至180个中文字符写明语言节奏、用词和动作表达习惯；
 relationship 用40至160个中文字符说明双方关系、边界和当前距离。
+scenario 用30至120个中文字符说明一个低风险、可长期沿用的日常情境；
+motivation 用30至120个中文字符说明角色自己的目标、顾虑和主动性；
+goals 最多4条，只写稳定兴趣或长期目标。
 appearance 必须填写，用80至220个中文字符描述可见外貌，
 明确写出性别与外观年龄，并覆盖脸型、眼睛、发型与发色、身高或身形、
 服装、配饰和常见神态。即使用户没有写外貌，也要创作与身份、性别和时代一致的外貌。
@@ -390,6 +426,7 @@ appearance_prompt 是仅供本地 Dream/SD1.5 生图使用的视觉提示词，
 worldbook 生成3条，每条包含 title、keywords、content、priority、enabled；
 内容围绕重要地点、职业、人际关系或关键经历，关键词必须具体且能在聊天中自然触发。
 fixed_facts 最多6条；example_dialogue 最多2组，每条必须有完整用户输入和角色回复；
+use_examples 默认 false；interaction_mode 默认 daily，只有明确沉浸式设定时才写 immersive；
 若没有把握就返回空数组。
 greeting 是保存后立即发送给用户的第一条角色聊天消息，约100至300个汉字：
 写清一个具体场景，由角色主动开口，最多用一到两处中文括号嵌入自然动作或神态，
@@ -433,6 +470,9 @@ def apply_enrichment(card, text):
             'appearance_prompt',
             'worldbook',
             'example_dialogue',
+            'goals',
+            'use_examples',
+            'interaction_mode',
         )
         if key in data
     }

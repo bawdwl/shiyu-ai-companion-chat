@@ -24,6 +24,9 @@ class ShiyuApplication : Application() {
                 AppDatabase.MIGRATION_11_12,
                 AppDatabase.MIGRATION_12_13,
                 AppDatabase.MIGRATION_13_14,
+                AppDatabase.MIGRATION_14_15,
+                AppDatabase.MIGRATION_15_16,
+                AppDatabase.MIGRATION_16_17,
             )
             .addCallback(AppDatabase.CREATE_SEARCH_INDEX_CALLBACK)
             .build()

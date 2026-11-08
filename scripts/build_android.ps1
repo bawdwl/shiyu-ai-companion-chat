@@ -1,8 +1,11 @@
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
+$parent = Split-Path -Parent $root
+$grandparent = Split-Path -Parent $parent
 $toolchainCandidates = @(
     (Join-Path $root "outputs/android-toolchain"),
-    (Join-Path (Split-Path -Parent $root) "outputs/android-toolchain")
+    (Join-Path $parent "outputs/android-toolchain"),
+    (Join-Path $grandparent "outputs/android-toolchain")
 )
 $toolchain = $toolchainCandidates |
     Where-Object { Test-Path -LiteralPath $_ } |

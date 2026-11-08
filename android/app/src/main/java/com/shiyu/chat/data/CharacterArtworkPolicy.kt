@@ -78,13 +78,18 @@ internal object CharacterArtworkPolicy {
         avatarSelection: ArtworkCropSelection = DEFAULT_AVATAR,
     ): AvatarFrame {
         val background = crop(width, height, ASPECT_RATIO, backgroundSelection)
-        val avatar = crop(width, height, 1.0, avatarSelection)
+        val avatar = crop(
+            background.width,
+            background.height,
+            1.0,
+            avatarSelection,
+        )
         return AvatarFrame(
             centerX = (
-                (avatar.left + avatar.width / 2f) - background.left
+                avatar.left + avatar.width / 2f
                 ) / background.width,
             centerY = (
-                (avatar.top + avatar.height / 2f) - background.top
+                avatar.top + avatar.height / 2f
                 ) / background.height,
             diameterRatio = avatar.height.toFloat() / background.height,
         ).let {
@@ -94,6 +99,27 @@ internal object CharacterArtworkPolicy {
                 diameterRatio = it.diameterRatio.coerceIn(0.08f, 0.92f),
             )
         }
+    }
+
+    fun avatarCropInSource(
+        width: Int,
+        height: Int,
+        backgroundSelection: ArtworkCropSelection = DEFAULT_BACKGROUND,
+        avatarSelection: ArtworkCropSelection = DEFAULT_AVATAR,
+    ): ArtworkCrop {
+        val background = crop(width, height, ASPECT_RATIO, backgroundSelection)
+        val avatar = crop(
+            background.width,
+            background.height,
+            1.0,
+            avatarSelection,
+        )
+        return ArtworkCrop(
+            left = background.left + avatar.left,
+            top = background.top + avatar.top,
+            width = avatar.width,
+            height = avatar.height,
+        )
     }
 
     fun toPortrait(

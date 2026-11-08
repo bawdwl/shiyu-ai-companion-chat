@@ -5,17 +5,17 @@
 
 ```text
 release/
-├─ apk-0.18.22/   当前 Android APK
+├─ apk-0.18.23/   当前 Android APK
 ├─ windows/       当前 Windows onedir ZIP
 └─ README.md
 ```
 
-## Android 0.18.22
+## Android 0.18.23
 
-- GitHub：[`v0.18.22`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.22)
-- 文件：`apk-0.18.22/Shiyu-0.18.22-Android-arm64-v8a.apk`
-- 大小：`299,731,904` 字节
-- SHA-256：`9A2DDA53BE979FD9F1B40FB7C4CBE0FD097C9A298B5ABB318972222A99CD4E8E`
+- GitHub：[`v0.18.23`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.23)
+- 文件：`apk-0.18.23/Shiyu-0.18.23-Android-arm64-v8a.apk`
+- 大小：`299,852,020` 字节
+- SHA-256：`48644B306ABB6400F3080F2CBDF2264C3CB2F506647458046A5D5E61E74FBFFE`
 - 要求：Android 8.0+、ARM64；API Key 由用户在应用内填写
 
 当前 APK 内置 12 个初始角色及头像、背景。聊天、记忆、API Key 和个人图片不在

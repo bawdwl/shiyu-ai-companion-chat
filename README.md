@@ -4,7 +4,7 @@
 
 当前主线使用 **OpenCode Go `deepseek-v4.1-flash`**，同时支持独立 DeepSeek Provider。API Key 由使用者在本机填写，不会写入源码、数据库快照或 Git 仓库。
 
-当前 Android 发布版：[GitHub Release `v0.18.22`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.22)
+当前 Android 发布版：[GitHub Release `v0.18.23`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.23)
 
 ## 项目展示
 
@@ -31,7 +31,7 @@ Windows EXE 的“基础版”不是完整研究环境。需要本地大模型�
 
 ## 当前版本
 
-Android `0.18.22` 内置 12 个可编辑、可删除的初始角色与完整头像、背景资源。
+Android `0.18.23` 内置 12 个可编辑、可删除的初始角色与完整头像、背景资源。
 升级只补充缺失的初次见面简介，不覆盖已有角色档案。重置对话会清除聊天记录、
 长期记忆、内部状态和 Trace，但保留角色档案、头像与背景。详细版本记录见
 [CHANGELOG](CHANGELOG.md)。
@@ -55,6 +55,8 @@ Android `0.18.22` 内置 12 个可编辑、可删除的初始角色与完整头�
 - Android 原生流式读取、停止生成与本地历史。
 - 图片输入，可交给支持视觉的云端模型。
 - 删除、重置角色及其消息、记忆、图片和状态。
+- 角色上下文包含固定事实、示例对话、场景、动机、边界和稳定目标。
+- 轻量对话策略按倾听、庆祝、讨论、承接和结束等情境调整表达，不增加额外模型调用。
 
 ### 长期记忆
 
@@ -70,10 +72,13 @@ Android `0.18.22` 内置 12 个可编辑、可删除的初始角色与完整头�
 - 每个角色每天有独立的后台记忆 Token 预算。
 - 候选事实经过确定性证据校验和一次批量语义审核。
 - 角色自述、计划、假设和观点保留各自权限，不能自动升级为确定事实。
+- 计划和共同事件可形成最小事件链与未完成事项，只在相关话题出现时承接。
 
 ### 内部状态
 
 双端可保存心情、熟悉度、信任度、温暖度、关系阶段和用户边界。状态变化必须绑定证据，受单次变化幅度和自然衰减限制。状态作为自然语言提示影响角色表达，不默认在聊天界面展示数字。
+
+当前轮的好消息、压力、冲突、修复和边界会即时影响本轮语气，但不会直接永久修改关系数值。日常模式不自动编造双方所在场景；只有用户明确建立或退出剧情时才更新场景状态。
 
 ### 语音、图片与本地模型
 
@@ -161,7 +166,7 @@ PC 语音优先调用本机 CosyVoice 2 FastAPI；服务或角色参考音频不
 ## 安装 Android 端
 
 从 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/latest)
-下载 `Shiyu-0.18.22-Android-arm64-v8a.apk`。
+下载 `Shiyu-0.18.23-Android-arm64-v8a.apk`。
 
 本机构建调试包：
 
@@ -169,7 +174,7 @@ PC 语音优先调用本机 CosyVoice 2 FastAPI；服务或角色参考音频不
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-- 当前源码：`0.18.22 / versionCode 52`
+- 当前源码：`0.18.23 / versionCode 53`
 - Room schema：13
 - 当前 APK SHA-256：`9A2DDA53BE979FD9F1B40FB7C4CBE0FD097C9A298B5ABB318972222A99CD4E8E`
 - 安装后请在设置中填写自己的 OpenCode Go 或 DeepSeek Key。

@@ -490,6 +490,50 @@ interface InternalStateDao {
     suspend fun deleteTransitionsFromMessage(characterId: String, messageId: Long): Int
 }
 
+@Dao
+interface MemoryEventDao {
+    @Query("SELECT * FROM memory_events WHERE characterId=:characterId ORDER BY updatedAt DESC,id DESC")
+    suspend fun forCharacter(characterId: String): List<MemoryEventEntity>
+
+    @Query("SELECT * FROM memory_events WHERE characterId=:characterId AND topicKey=:topicKey LIMIT 1")
+    suspend fun byTopicKey(characterId: String, topicKey: String): MemoryEventEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(event: MemoryEventEntity): Long
+
+    @Query("UPDATE memory_events SET status=:status,summary=:summary,timelineJson=:timelineJson,sourceMessageIds=:sourceMessageIds,updatedAt=:updatedAt WHERE id=:id AND characterId=:characterId")
+    suspend fun update(
+        id: Long,
+        characterId: String,
+        status: String,
+        summary: String,
+        timelineJson: String,
+        sourceMessageIds: String,
+        updatedAt: Long,
+    ): Int
+
+    @Query("UPDATE memory_events SET lastMentionedAt=:mentionedAt WHERE id=:id AND characterId=:characterId")
+    suspend fun markMentioned(id: Long, characterId: String, mentionedAt: Long): Int
+
+    @Query("DELETE FROM memory_events WHERE id=:id AND characterId=:characterId")
+    suspend fun delete(id: Long, characterId: String): Int
+
+    @Query("DELETE FROM memory_events WHERE characterId=:characterId")
+    suspend fun clear(characterId: String): Int
+}
+
+@Dao
+interface SceneStateDao {
+    @Query("SELECT * FROM scene_states WHERE characterId=:characterId")
+    suspend fun get(characterId: String): SceneStateEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(state: SceneStateEntity)
+
+    @Query("DELETE FROM scene_states WHERE characterId=:characterId")
+    suspend fun clear(characterId: String): Int
+}
+
 @Database(
     entities = [
         CharacterEntity::class,
@@ -504,10 +548,12 @@ interface InternalStateDao {
         CharacterStateEntity::class,
         RelationshipStateEntity::class,
         StateTransitionEntity::class,
+        MemoryEventEntity::class,
+        SceneStateEntity::class,
         TurnTraceEntity::class,
         AppMetaEntity::class,
     ],
-    version = 14,
+    version = 17,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -518,6 +564,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun structuredMemoryJobs(): StructuredMemoryJobDao
     abstract fun structuredMemorySupport(): StructuredMemorySupportDao
     abstract fun internalStates(): InternalStateDao
+    abstract fun memoryEvents(): MemoryEventDao
+    abstract fun sceneStates(): SceneStateDao
     abstract fun turnTraces(): TurnTraceDao
     abstract fun meta(): MetaDao
 
@@ -865,6 +913,65 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
                     "ALTER TABLE characters ADD COLUMN publicIntro TEXT NOT NULL DEFAULT ''",
+                )
+            }
+        }
+
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE characters ADD COLUMN roleContextJson TEXT NOT NULL DEFAULT '{}'",
+                )
+            }
+        }
+
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS memory_events(
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        characterId TEXT NOT NULL,
+                        topicKey TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        summary TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        realityMode TEXT NOT NULL,
+                        participantsJson TEXT NOT NULL,
+                        sourceMessageIds TEXT NOT NULL,
+                        timelineJson TEXT NOT NULL,
+                        lastMentionedAt INTEGER,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_memory_events_characterId ON memory_events(characterId)",
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_memory_events_characterId_status ON memory_events(characterId,status)",
+                )
+                database.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_memory_events_characterId_topicKey ON memory_events(characterId,topicKey)",
+                )
+            }
+        }
+
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS scene_states(
+                        characterId TEXT PRIMARY KEY NOT NULL,
+                        mode TEXT NOT NULL,
+                        location TEXT NOT NULL,
+                        participantsJson TEXT NOT NULL,
+                        activity TEXT NOT NULL,
+                        sourceMessageIds TEXT NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
                 )
             }
         }

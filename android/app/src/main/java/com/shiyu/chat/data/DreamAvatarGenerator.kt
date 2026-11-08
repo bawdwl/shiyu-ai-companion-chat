@@ -29,6 +29,11 @@ data class CharacterArtworkPaths(
     val avatarPath: String,
 )
 
+data class GeneratedArtworkResult(
+    val character: CharacterEntity,
+    val sourcePath: String,
+)
+
 /**
  * Adapter around the Local Dream SD1.5 NPU process bundled in this app.
  * It imports the QNN model package directly and talks to the private loopback
@@ -148,7 +153,7 @@ class DreamAvatarGenerator(private val context: Context) {
                 backgroundSelection,
             )
             avatar = CharacterArtworkPolicy.toAvatar(
-                oriented,
+                requireNotNull(portrait),
                 avatarSelection,
             )
             saveWebp(
@@ -169,6 +174,50 @@ class DreamAvatarGenerator(private val context: Context) {
             portrait?.recycle()
             avatar?.recycle()
             oriented.recycle()
+        }
+    }
+
+    suspend fun applyArtwork(
+        characterId: String,
+        sourcePath: String,
+        backgroundSelection: ArtworkCropSelection,
+        avatarSelection: ArtworkCropSelection,
+    ): CharacterArtworkPaths = withContext(Dispatchers.IO) {
+        val source = BitmapFactory.decodeFile(sourcePath)
+            ?: error("无法读取生成的角色原图")
+        avatarDirectory.mkdirs()
+        val safeId = characterId.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        val backgroundOutput = File(avatarDirectory, "$safeId-background.webp")
+        val avatarOutput = File(avatarDirectory, "$safeId-avatar.webp")
+        var portrait: Bitmap? = null
+        var avatar: Bitmap? = null
+        try {
+            portrait = CharacterArtworkPolicy.toPortrait(
+                source,
+                backgroundSelection,
+            )
+            avatar = CharacterArtworkPolicy.toAvatar(
+                requireNotNull(portrait),
+                avatarSelection,
+            )
+            saveWebp(
+                requireNotNull(portrait),
+                backgroundOutput,
+                "背景图片保存失败",
+            )
+            saveWebp(
+                requireNotNull(avatar),
+                avatarOutput,
+                "头像图片保存失败",
+            )
+            CharacterArtworkPaths(
+                backgroundPath = backgroundOutput.absolutePath,
+                avatarPath = avatarOutput.absolutePath,
+            )
+        } finally {
+            portrait?.recycle()
+            avatar?.recycle()
+            source.recycle()
         }
     }
 
@@ -501,11 +550,13 @@ class DreamAvatarGenerator(private val context: Context) {
             pixels[index] = (0xff shl 24) or (red shl 16) or (green shl 8) or blue
         }
         val bitmap = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
-        val portrait = CharacterArtworkPolicy.toPortrait(bitmap)
         return try {
             avatarDirectory.mkdirs()
             val safeId = characterId.replace(Regex("[^A-Za-z0-9._-]"), "_")
-            val output = File(avatarDirectory, "$safeId.webp")
+            val output = File(
+                avatarDirectory,
+                "$safeId-generated-source.webp",
+            )
             val temporary = File.createTempFile("dream-avatar-", ".tmp", avatarDirectory)
             try {
                 val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -514,18 +565,17 @@ class DreamAvatarGenerator(private val context: Context) {
                     Bitmap.CompressFormat.WEBP
                 }
                 temporary.outputStream().buffered().use { stream ->
-                    check(portrait.compress(format, 92, stream)) {
-                        "头像文件写入失败"
+                    check(bitmap.compress(format, 94, stream)) {
+                        "生成原图写入失败"
                     }
                 }
                 if (output.exists()) output.delete()
-                check(temporary.renameTo(output)) { "头像保存失败" }
+                check(temporary.renameTo(output)) { "生成原图保存失败" }
                 output.absolutePath
             } finally {
                 temporary.delete()
             }
         } finally {
-            portrait.recycle()
             bitmap.recycle()
         }
     }

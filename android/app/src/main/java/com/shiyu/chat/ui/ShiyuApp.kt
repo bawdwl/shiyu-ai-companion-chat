@@ -287,6 +287,7 @@ fun ShiyuApp(repository: ChatRepository) {
     var homeNavigationTargetId by remember { mutableStateOf<String?>(null) }
     var fullScreenChat by remember { mutableStateOf(false) }
     var homeComposerFocused by remember { mutableStateOf(false) }
+    var homeHistoryVisible by remember { mutableStateOf(false) }
     var showMemory by remember { mutableStateOf(false) }
     var showTrace by remember { mutableStateOf(false) }
     var showEdit by remember { mutableStateOf(false) }
@@ -304,6 +305,7 @@ fun ShiyuApp(repository: ChatRepository) {
     fun navigateToTab(tab: RootTab) {
         activeTab = tab
         homeComposerFocused = false
+        homeHistoryVisible = false
         focusManager.clearFocus()
         keyboardController?.hide()
     }
@@ -392,6 +394,7 @@ fun ShiyuApp(repository: ChatRepository) {
                             state = state,
                             preferredCharacterId =
                                 homeNavigationTargetId ?: homeCharacterId,
+                            userScrollEnabled = !homeHistoryVisible,
                             onCharacterActivated = activated@{ character ->
                                 val targetId = homeNavigationTargetId
                                 if (targetId != null && character.id != targetId) {
@@ -402,6 +405,7 @@ fun ShiyuApp(repository: ChatRepository) {
                                 }
                                 homeCharacterId = character.id
                                 homeComposerFocused = false
+                                homeHistoryVisible = false
                                 focusManager.clearFocus()
                                 keyboardController?.hide()
                                 if (state.selected?.id != character.id) {
@@ -463,6 +467,10 @@ fun ShiyuApp(repository: ChatRepository) {
                                             homeComposerFocused = true
                                         },
                                         composerBottomInset = composerInset,
+                                        messageListScrollEnabled = false,
+                                        onHistoryVisibilityChange = {
+                                            homeHistoryVisible = it
+                                        },
                                         onSend = vm::send,
                                         onStop = vm::stop,
                                         onMemory = { showMemory = true },
@@ -627,15 +635,15 @@ fun ShiyuApp(repository: ChatRepository) {
                 pendingCharacter = null
             },
             onGenerateLocalAvatar = { edited, onGenerated ->
-                vm.generateLocalAvatar(edited) { updated ->
+                vm.generateLocalAvatar(edited) { updated, sourcePath ->
                     pendingCharacter = updated
-                    onGenerated(updated)
+                    onGenerated(updated, sourcePath)
                 }
             },
             onGenerateCloudAvatar = { edited, onGenerated ->
                 vm.generateCloudAvatar(edited) { updated ->
                     pendingCharacter = updated
-                    onGenerated(updated)
+                    onGenerated(updated, updated.backgroundPath)
                 }
             },
             onImportArtwork = { edited, uri, backgroundSelection, avatarSelection ->
@@ -648,8 +656,18 @@ fun ShiyuApp(repository: ChatRepository) {
                     pendingCharacter = updated
                 }
             },
-            onApplyAvatarCrop = { edited, selection ->
-                vm.applyAvatarCrop(edited, selection) { updated ->
+            onApplyGeneratedArtwork = {
+                    edited,
+                    sourcePath,
+                    backgroundSelection,
+                    avatarSelection,
+                ->
+                vm.applyGeneratedArtwork(
+                    edited,
+                    sourcePath,
+                    backgroundSelection,
+                    avatarSelection,
+                ) { updated ->
                     pendingCharacter = updated
                 }
             },
@@ -688,6 +706,7 @@ fun ShiyuApp(repository: ChatRepository) {
 private fun CharacterDiscoveryPager(
     state: ShiyuUiState,
     preferredCharacterId: String?,
+    userScrollEnabled: Boolean,
     onCharacterActivated: (CharacterEntity) -> Unit,
     onCreate: () -> Unit,
     chatContent: @Composable (CharacterEntity, Boolean) -> Unit,
@@ -735,10 +754,11 @@ private fun CharacterDiscoveryPager(
         state = pagerState,
         modifier = Modifier.fillMaxSize(),
         beyondViewportPageCount = 1,
+        userScrollEnabled = userScrollEnabled,
         flingBehavior = PagerDefaults.flingBehavior(
             state = pagerState,
             pagerSnapDistance = PagerSnapDistance.atMost(1),
-            snapPositionalThreshold = 0.1f,
+            snapPositionalThreshold = 0.5f,
         ),
     ) { page ->
         val character = state.characters[Math.floorMod(page, count)]
@@ -761,6 +781,17 @@ private fun CharacterDiscoveryPage(
     val background = character.backgroundPath?.takeIf { File(it).isFile }
         ?: character.avatarPath
     val avatarPath = character.avatarPath
+    LaunchedEffect(background) {
+        background?.let { path ->
+            withContext(Dispatchers.IO) {
+                loadCachedArtwork(
+                    path,
+                    File(path).lastModified(),
+                    1024,
+                )
+            }
+        }
+    }
     LaunchedEffect(avatarPath) {
         avatarPath?.let { path ->
             withContext(Dispatchers.IO) {
@@ -785,6 +816,7 @@ private fun CharacterDiscoveryPage(
             path = background,
             modifier = Modifier.fillMaxSize(),
             cropTop = true,
+            maxDimensionOverride = 1024,
         )
         chatContent(active)
     }
@@ -1877,6 +1909,8 @@ private fun ChatScreen(
     showBackground: Boolean = true,
     interactive: Boolean = true,
     allowFirstChatIntro: Boolean = true,
+    messageListScrollEnabled: Boolean = true,
+    onHistoryVisibilityChange: (Boolean) -> Unit = {},
     onSend: (String, Uri?) -> Unit,
     onStop: () -> Unit,
     onMemory: () -> Unit,
@@ -1990,6 +2024,10 @@ private fun ChatScreen(
     ) { imageUri = it }
     val density = LocalDensity.current
     val imeBottom = WindowInsets.ime.getBottom(density)
+
+    LaunchedEffect(historyVisible) {
+        onHistoryVisibilityChange(historyVisible)
+    }
 
     var initialPositionApplied by remember(character.id) { mutableStateOf(false) }
     LaunchedEffect(character.id, state.messages.isNotEmpty(), historyVisible) {
@@ -2202,6 +2240,7 @@ private fun ChatScreen(
                 LazyColumn(
                     state = latestListState,
                     modifier = Modifier.fillMaxSize(),
+                    userScrollEnabled = messageListScrollEnabled,
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         top = 64.dp,
@@ -3095,9 +3134,10 @@ private fun LocalAvatar(
     modifier: Modifier = Modifier,
     cropFace: Boolean = false,
     cropTop: Boolean = false,
+    maxDimensionOverride: Int? = null,
 ) {
     val modified = path?.let { File(it).lastModified() } ?: 0L
-    val maxDimension = if (cropFace) 640 else 2048
+    val maxDimension = maxDimensionOverride ?: if (cropFace) 640 else 2048
     var bitmap by remember(path, modified, maxDimension) {
         mutableStateOf(
             cachedArtworkOrNull(path, modified, maxDimension),
@@ -3366,7 +3406,7 @@ private fun SettingsDialog(
                     }
                 }
                 HorizontalDivider()
-                Text("DeepSeek 备用接口", fontWeight = FontWeight.SemiBold)
+                Text("DeepSeek 兼容接口（未用于本轮验证）", fontWeight = FontWeight.SemiBold)
                 OutlinedTextField(
                     value = deepSeekKey,
                     onValueChange = { deepSeekKey = it },
@@ -3894,15 +3934,26 @@ private fun EditCharacterDialog(
     imageApiConfigured: Boolean,
     localModelReady: Boolean,
     onDismiss: () -> Unit,
-    onGenerateLocalAvatar: (CharacterEntity, (CharacterEntity) -> Unit) -> Unit,
-    onGenerateCloudAvatar: (CharacterEntity, (CharacterEntity) -> Unit) -> Unit,
+    onGenerateLocalAvatar: (
+        CharacterEntity,
+        (CharacterEntity, String?) -> Unit,
+    ) -> Unit,
+    onGenerateCloudAvatar: (
+        CharacterEntity,
+        (CharacterEntity, String?) -> Unit,
+    ) -> Unit,
     onImportArtwork: (
         CharacterEntity,
         Uri,
         ArtworkCropSelection,
         ArtworkCropSelection,
     ) -> Unit,
-    onApplyAvatarCrop: (CharacterEntity, ArtworkCropSelection) -> Unit,
+    onApplyGeneratedArtwork: (
+        CharacterEntity,
+        String,
+        ArtworkCropSelection,
+        ArtworkCropSelection,
+    ) -> Unit,
     onModelSourceChange: (String) -> Unit,
     onSave: (CharacterEntity) -> Unit,
 ) {
@@ -3926,6 +3977,9 @@ private fun EditCharacterDialog(
     var forbidden by remember(character.id) { mutableStateOf(character.forbiddenKnowledge) }
     var forbiddenTerms by remember(character.id) { mutableStateOf(character.forbiddenTerms) }
     var worldbookJson by remember(character.id) { mutableStateOf(character.worldbookJson) }
+    var roleContextJson by remember(character.id) {
+        mutableStateOf(character.roleContextJson)
+    }
     var modelSource by remember(character.id) { mutableStateOf(character.modelSource) }
     var avatarPath by remember(character.id, character.avatarPath) {
         mutableStateOf(character.avatarPath)
@@ -3998,6 +4052,7 @@ private fun EditCharacterDialog(
             .filter(String::isNotEmpty)
             .joinToString(","),
         worldbookJson = worldbookJson.trim().ifBlank { "[]" },
+        roleContextJson = roleContextJson.trim().ifBlank { "{}" },
         modelSource = modelSource,
         avatarPath = avatarPath,
         backgroundPath = backgroundPath,
@@ -4186,27 +4241,29 @@ private fun EditCharacterDialog(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 onClick = {
-                                    onGenerateLocalAvatar(editedCharacter()) { updated ->
+                                    onGenerateLocalAvatar(editedCharacter()) { updated, sourcePath ->
                                         avatarPath = updated.avatarPath
                                         backgroundPath = updated.backgroundPath
-                                        generatedArtwork = updated.backgroundPath
+                                        generatedArtwork = sourcePath
+                                            ?: updated.backgroundPath
                                     }
                                 },
                                 enabled = avatarModelReady && !avatarBusy && name.isNotBlank(),
                             ) {
-                                Text(if (avatarBusy) "生成中…" else "NPU 生成竖屏图")
+                                Text(if (avatarBusy) "生成中…" else "NPU 生成角色原图")
                             }
                             Button(
                                 onClick = {
-                                    onGenerateCloudAvatar(editedCharacter()) { updated ->
+                                    onGenerateCloudAvatar(editedCharacter()) { updated, sourcePath ->
                                         avatarPath = updated.avatarPath
                                         backgroundPath = updated.backgroundPath
-                                        generatedArtwork = updated.backgroundPath
+                                        generatedArtwork = sourcePath
+                                            ?: updated.backgroundPath
                                     }
                                 },
                                 enabled = imageApiConfigured && !avatarBusy && name.isNotBlank(),
                             ) {
-                                Text(if (avatarBusy) "生成中…" else "云端生成竖屏图")
+                                Text(if (avatarBusy) "生成中…" else "云端生成角色原图")
                             }
                         }
                         if (imageGenerationActive) {
@@ -4320,6 +4377,28 @@ private fun EditCharacterDialog(
                 )
             }
             item {
+                OutlinedTextField(
+                    roleContextJson,
+                    { roleContextJson = it },
+                    label = { Text("角色上下文 JSON（固定事实 / 示例 / 场景 / 动机）") },
+                    placeholder = {
+                        Text(
+                            "{\"fixed_facts\":[{\"key\":\"身份\",\"value\":\"书店老板\",\"status\":\"confirmed\"}]," +
+                                "\"example_dialogue\":[{\"user\":\"今天好累\",\"character\":\"先坐下歇会儿吧。\"}]," +
+                                "\"use_examples\":false,\"interaction_mode\":\"daily\"}",
+                        )
+                    },
+                    minLines = 7,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "固定事实优先于世界书和聊天记忆；示例默认关闭，仅在前两轮按需注入。",
+                    fontSize = 9.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            item {
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
@@ -4340,7 +4419,6 @@ private fun EditCharacterDialog(
     pendingImportArtwork?.let { uri ->
         ArtworkCropDialog(
             sourceUri = uri,
-            avatarOnly = false,
             onDismiss = { pendingImportArtwork = null },
             onApply = {
                     backgroundSelection,
@@ -4367,7 +4445,6 @@ private fun EditCharacterDialog(
     generatedArtwork?.let { path ->
         ArtworkCropDialog(
             sourcePath = path,
-            avatarOnly = true,
             onDismiss = { generatedArtwork = null },
             onApply = {
                     backgroundSelection,
@@ -4381,9 +4458,14 @@ private fun EditCharacterDialog(
                     backgroundSelection,
                     avatarSelection,
                 )
-                val base = editedCharacter().copy(backgroundPath = path)
+                val base = editedCharacter()
                 generatedArtwork = null
-                onApplyAvatarCrop(base, avatarSelection)
+                onApplyGeneratedArtwork(
+                    base,
+                    path,
+                    backgroundSelection,
+                    avatarSelection,
+                )
             },
         )
     }
@@ -4394,7 +4476,6 @@ private fun EditCharacterDialog(
 private fun ArtworkCropDialog(
     sourceUri: Uri? = null,
     sourcePath: String? = null,
-    avatarOnly: Boolean,
     onDismiss: () -> Unit,
     onApply: (
         ArtworkCropSelection,
@@ -4411,16 +4492,14 @@ private fun ArtworkCropDialog(
     DisposableEffect(bitmap) {
         onDispose { bitmap?.recycle() }
     }
-    var step by remember(sourceKey, avatarOnly) {
-        mutableIntStateOf(if (avatarOnly) 1 else 0)
-    }
+    var step by remember(sourceKey) { mutableIntStateOf(0) }
     var backgroundSelection by remember(sourceKey) {
         mutableStateOf(CharacterArtworkPolicy.DEFAULT_BACKGROUND)
     }
     var avatarSelection by remember(sourceKey) {
         mutableStateOf(CharacterArtworkPolicy.DEFAULT_AVATAR)
     }
-    val selectingBackground = step == 0 && !avatarOnly
+    val selectingBackground = step == 0
     val previewSelection = if (selectingBackground) {
         backgroundSelection
     } else {
@@ -4437,10 +4516,13 @@ private fun ArtworkCropDialog(
     FullScreenPage(
         title = when {
             selectingBackground -> "裁剪聊天背景"
-            avatarOnly -> "选择角色头像"
             else -> "选择角色头像"
         },
-        onBack = onDismiss,
+        onBack = if (step > 0) {
+            { step = 0 }
+        } else {
+            onDismiss
+        },
     ) { modifier ->
         LazyColumn(
             modifier = modifier,
@@ -4456,11 +4538,9 @@ private fun ArtworkCropDialog(
                 Text(
                     when {
                         selectingBackground ->
-                            "背景会以 9:16 手机竖屏显示。调整左右、上下和缩放，让角色在聊天界面中处于合适位置。"
-                        avatarOnly ->
-                            "使用刚刚生成的手机竖屏图选择头像区域。建议让脸部和眼睛位于圆形头像中央。"
+                            "先选择要显示的 9:16 背景区域。左右、上下和缩放都由你决定，不再默认裁中间。"
                         else ->
-                            "头像使用 1:1 正方形裁切。可以直接把脸部移到圆形预览中央。"
+                            "从刚刚裁好的背景中选择 1:1 头像区域。建议让脸部和眼睛位于圆形预览中央。"
                     },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
@@ -4488,6 +4568,11 @@ private fun ArtworkCropDialog(
                             bitmap = bitmap,
                             aspectRatio = ratio,
                             selection = previewSelection,
+                            avatarBackgroundSelection = if (selectingBackground) {
+                                null
+                            } else {
+                                backgroundSelection
+                            },
                             roundAvatar = !selectingBackground,
                             modifier = Modifier
                                 .fillMaxHeight()
@@ -4508,7 +4593,7 @@ private fun ArtworkCropDialog(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (!avatarOnly && selectingBackground) {
+                    if (selectingBackground) {
                         TextButton(
                             onClick = {
                                 updateSelection(CharacterArtworkPolicy.DEFAULT_BACKGROUND)
@@ -4523,6 +4608,9 @@ private fun ArtworkCropDialog(
                             },
                         ) {
                             Text("脸部居中")
+                        }
+                        TextButton(onClick = { step = 0 }) {
+                            Text("上一步")
                         }
                     }
                     Spacer(Modifier.weight(1f))
@@ -4556,6 +4644,7 @@ private fun ArtworkCropPreview(
     bitmap: android.graphics.Bitmap,
     aspectRatio: Float,
     selection: ArtworkCropSelection,
+    avatarBackgroundSelection: ArtworkCropSelection?,
     roundAvatar: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -4566,12 +4655,21 @@ private fun ArtworkCropPreview(
             .clip(shape)
             .background(Color(0xFF241A39)),
     ) {
-        val crop = CharacterArtworkPolicy.crop(
-            width = bitmap.width,
-            height = bitmap.height,
-            aspectRatio = aspectRatio.toDouble(),
-            selection = selection,
-        )
+        val crop = if (avatarBackgroundSelection != null) {
+            CharacterArtworkPolicy.avatarCropInSource(
+                width = bitmap.width,
+                height = bitmap.height,
+                backgroundSelection = avatarBackgroundSelection,
+                avatarSelection = selection,
+            )
+        } else {
+            CharacterArtworkPolicy.crop(
+                width = bitmap.width,
+                height = bitmap.height,
+                aspectRatio = aspectRatio.toDouble(),
+                selection = selection,
+            )
+        }
         drawImage(
             image = image,
             srcOffset = IntOffset(crop.left, crop.top),

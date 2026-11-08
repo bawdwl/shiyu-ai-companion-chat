@@ -32,7 +32,7 @@ data class ShiyuUiState(
     val memories: List<MemoryEntity> = emptyList(),
     val structuredMemories: List<StructuredMemoryEntity> = emptyList(),
     val turnTraces: List<TurnTraceEntity> = emptyList(),
-    val cloudProvider: String = "deepseek",
+    val cloudProvider: String = "opencode",
     val showDevProviders: Boolean = false,
     val apiConfigured: Boolean = false,
     val openCodeConfigured: Boolean = false,
@@ -436,9 +436,16 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
 
     fun saveCharacter(character: CharacterEntity, onSaved: (() -> Unit)? = null) {
         viewModelScope.launch {
-            repository.saveCharacter(character)
-            _state.value = _state.value.copy(status = "角色已保存")
-            onSaved?.invoke()
+            runCatching {
+                repository.saveCharacter(character)
+            }.onSuccess {
+                _state.value = _state.value.copy(status = "角色已保存")
+                onSaved?.invoke()
+            }.onFailure { error ->
+                _state.value = _state.value.copy(
+                    status = error.message ?: "角色上下文 JSON 格式无效",
+                )
+            }
         }
     }
 
@@ -763,18 +770,23 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
             imageGenerationActive = true,
             imageGenerationProgress = 0f,
             imageGenerationLabel = "千问图片生成",
-            status = "正在通过千问 AI 平台生成角色头像…",
+            status = "正在通过千问 AI 平台生成角色原图…",
         )
-        generateAvatar(character, cloud = true, onComplete)
+        generateAvatar(character, cloud = true) { updated, _ ->
+            onComplete(updated)
+        }
     }
 
-    fun generateLocalAvatar(character: CharacterEntity, onComplete: (CharacterEntity) -> Unit) {
+    fun generateLocalAvatar(
+        character: CharacterEntity,
+        onComplete: (CharacterEntity, String?) -> Unit,
+    ) {
         _state.value = _state.value.copy(
             avatarBusy = true,
             imageGenerationActive = true,
             imageGenerationProgress = 0f,
             imageGenerationLabel = "Local Dream 生成",
-            status = "正在用手机 NPU 运行 MeinaMix V12 生成角色头像…",
+            status = "正在用手机 NPU 运行 MeinaMix V12 生成角色原图…",
         )
         generateAvatar(character, cloud = false, onComplete)
     }
@@ -782,37 +794,72 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
     private fun generateAvatar(
         character: CharacterEntity,
         cloud: Boolean,
-        onComplete: (CharacterEntity) -> Unit,
+        onComplete: (CharacterEntity, String?) -> Unit,
     ) {
         viewModelScope.launch {
             try {
                 repository.saveCharacter(character)
-                val updated = if (cloud) {
-                    repository.generateCloudAvatar(character) { progress ->
+                val (updated, sourcePath) = if (cloud) {
+                    val cloudResult = repository.generateCloudAvatar(character) { progress ->
                         _state.value = _state.value.copy(
                             imageGenerationProgress = progress,
                         )
                     }
+                    cloudResult to cloudResult.backgroundPath
                 } else {
-                    repository.generateLocalAvatar(character) { progress ->
+                    val generated = repository.generateLocalAvatar(character) { progress ->
                         _state.value = _state.value.copy(
                             imageGenerationProgress = progress,
                         )
                     }
+                    generated.character to generated.sourcePath
                 }
                 _state.value = _state.value.copy(
                     avatarBusy = false,
                     imageGenerationActive = false,
                     imageGenerationProgress = 1f,
                     selected = if (_state.value.selected?.id == updated.id) updated else _state.value.selected,
-                    status = "角色头像已保存",
+                    status = "角色原图已生成，请选择背景和头像",
                 )
-                onComplete(updated)
+                onComplete(updated, sourcePath)
             } catch (error: Exception) {
                 _state.value = _state.value.copy(
                     avatarBusy = false,
                     imageGenerationActive = false,
                     status = error.message ?: "角色头像生成失败",
+                )
+            }
+        }
+    }
+
+    fun applyGeneratedArtwork(
+        character: CharacterEntity,
+        sourcePath: String,
+        backgroundSelection: ArtworkCropSelection,
+        avatarSelection: ArtworkCropSelection,
+        onComplete: (CharacterEntity) -> Unit,
+    ) {
+        viewModelScope.launch {
+            runCatching {
+                repository.applyGeneratedArtwork(
+                    character,
+                    sourcePath,
+                    backgroundSelection,
+                    avatarSelection,
+                )
+            }.onSuccess { updated ->
+                _state.value = _state.value.copy(
+                    selected = if (_state.value.selected?.id == updated.id) {
+                        updated
+                    } else {
+                        _state.value.selected
+                    },
+                    status = "角色背景和头像已保存",
+                )
+                onComplete(updated)
+            }.onFailure { error ->
+                _state.value = _state.value.copy(
+                    status = error.message ?: "角色背景和头像保存失败",
                 )
             }
         }

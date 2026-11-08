@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-11-08 — Android `0.18.23`
+
+- Added versioned role context, deterministic dialogue policy, memory-need
+  gating, event memory, current-turn affect, explicit scene state and matching
+  PC experience policies.
+- Fixed Home vertical character paging so the latest-reply list no longer
+  steals the gesture; expanded history temporarily pauses character paging.
+- Local Dream now keeps the square source, then asks the user to select a 9:16
+  background followed by a 1:1 avatar cropped from that background.
+- Removed the opaque black corner background from all launcher icon densities,
+  eliminating the App startup black frame.
+- Reverted the experimental new-character `image_composition` prompt rule to
+  the previous English prompt-generation behavior.
+- Verification: 307 Python tests, 89 Android JVM tests, 40 frontend state tests,
+  React production build, `assembleDebug` and `lintDebug` passed. The Android
+  package was built but not installed in this release run because no ADB device
+  was connected.
+
+## 2026-11-07 — Roleplay experience V2 implementation notes
+
+- Added a frozen 40-scene experience suite and a live OpenCode Go runner. The
+  final fixed run passed 39/40 objective checks for both the legacy and V2
+  prompts, while average interactive question marks fell from 0.73 to 0.64.
+- Added versioned Android `roleContextJson` with fixed facts, examples,
+  scenario, motivation, background, boundaries, stable goals and interaction
+  mode. Room migrates losslessly from schema 14 to 17.
+- Added deterministic dialogue, memory-need, current-turn affect and explicit
+  scene policies. No extra main-chat model request is introduced.
+- Added Android `memory_events` and `scene_states`, plus equivalent event
+  timelines in the PC structured-memory store. Events and scenes are cleared on
+  reset, rollback or character deletion.
+- Added matching PC experience policies and prompt sections while preserving
+  the exact fixed training prompts for Song Zhiyi and Pei Jiming.
+- Fixed the Home vertical character pager competing with the latest-message
+  list: latest-only view no longer consumes vertical paging gestures, history
+  view temporarily pauses character paging, and snap distance is centred.
+- Local Dream now keeps its square generated source. Users choose a 9:16
+  background crop first and then choose a 1:1 avatar from that selected
+  background, instead of accepting an automatic centre crop.
+- Removed the opaque black corner background from every launcher icon density,
+  eliminating the black frame shown by the Android 12 startup splash.
+- Verification: 307 Python tests, 89 Android JVM tests, `assembleDebug` and
+  `lintDebug` passed. No APK, GitHub Release or version number was published.
+
 ## 2026-11-07 — Android `0.18.22`
 
 - Added 12 editable, deletable initial characters with separate avatar and chat-background artwork.

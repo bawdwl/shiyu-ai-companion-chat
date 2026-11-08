@@ -11,7 +11,8 @@ internal object CharacterGenerationPolicy {
 只返回一个合法 JSON 对象，不要 Markdown 或解释。字段为：
 name, tagline, description, public_intro, background, personality, speech_style,
 relationship, appearance, appearance_prompt, greeting, boundaries,
-knowledge_boundary, fixed_facts, worldbook, example_dialogue。
+scenario, motivation, knowledge_boundary, fixed_facts, worldbook,
+example_dialogue, goals, use_examples。
 knowledge_boundary 包含 character_kind, era, knowledge_cutoff, universe,
 allowed_knowledge, forbidden_knowledge, forbidden_terms, can_learn_from_user,
 allow_everyday_invention。
@@ -25,6 +26,10 @@ public_intro 用120至220个中文字符写成首次聊天时展示给用户的�
 personality 用80至220个中文字符写明性格、行为方式和矛盾点；
 speech_style 用60至180个中文字符写明语言节奏、用词和动作表达习惯；
 relationship 用40至160个中文字符说明双方关系、边界和当前距离。
+scenario 用30至120个中文字符说明一个低风险、可长期沿用的日常情境；
+motivation 用30至120个中文字符说明角色自己的目标、顾虑和主动性，不写成为用户服务的口号；
+background 用80至300个中文字符补充身份、经历和当前处境；
+boundaries 用40至160个中文字符写清隐私、拒绝和关系边界。
 appearance 必须填写，用80至150个中文字符描述角色整体可见外貌。
 优先保留性别与外观年龄、整体脸型与五官印象、发色发型、身形、主服装轮廓与配色、
 一个高辨识度配饰，以及必要的神态、姿势或简单场景；细节交给生图模型补全，
@@ -41,6 +46,8 @@ appearance_prompt 是仅供本地 Dream/SD1.5 生图使用的视觉提示词。
 worldbook 生成3条，每条包含 title、keywords、content、priority、enabled；
 内容围绕重要地点、职业、人际关系或关键经历，关键词必须具体且能在聊天中自然触发。
 fixed_facts 最多6条；example_dialogue 最多2组，每条必须有完整用户输入和角色回复；
+goals 最多4条，只写稳定兴趣或长期目标；use_examples 默认 false，
+只有示例质量足够且不会形成模板腔时才设为 true；
 若没有把握就返回空数组。
 greeting 是保存后立即发送给用户的第一条角色聊天消息，约100至300个汉字：
 写清一个具体场景，由角色主动开口，最多用一到两处中文括号嵌入自然动作或神态，
