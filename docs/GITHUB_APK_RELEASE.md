@@ -112,6 +112,10 @@ release/notes-v0.18.23.md
 7. 再次读取 Release，核对资产大小和下载地址。
 
 如果在 Codex 中执行，网络访问可能要求命令审批；这是正常的安全边界。
+脚本会自动定位 Git，并在自身进程内默认绕过环境中的
+`HTTP_PROXY`、`HTTPS_PROXY` 和 `ALL_PROXY`，让 GitHub 直连。
+只有本机必须经过代理才能访问 GitHub 时，才添加 `-UseEnvironmentProxy`。
+也可以用 `-GitExe` 显式指定 `git.exe`。
 
 ## 7. 验证
 
@@ -149,3 +153,51 @@ gh release create v0.18.23 `
 
 不要用同一版本号上传内容不同的 APK；正确做法是提升 `versionCode` 和
 `versionName` 后重新发布。
+
+## 10. Git 网络与登录恢复
+
+2026-11-08 排查确认，旧发布流程不是 APK 上传本身慢，而是同时遇到两个环境问题：
+
+- Git Credential Manager 中没有可用的 GitHub 账户凭据。交互式补登录会在后台
+  等待授权窗口，看起来像命令卡住。
+- 用户环境把 Git 流量指向 `127.0.0.1:7890` 的本机代理。该代理路径出现 TLS
+  握手失败，而 GitHub 直连返回 `200`。
+
+当前脚本已经处理这两点：
+
+- 子进程默认移除 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY` 及小写同名变量，
+  GitHub API、上传接口和 Git 查询都走直连。
+- 设置 `GCM_INTERACTIVE=Never`，凭据缺失时立即失败，不再无限等待登录窗口。
+- `HttpClientHandler.UseProxy` 也会关闭，避免上传接口重新读取系统代理。
+- 自动查找 Git for Windows、用户目录 Git 或本机 Codex Git 运行时。
+
+首次登录或凭据失效时运行：
+
+```powershell
+git-credential-manager github login `
+  --device `
+  --no-ui `
+  --username bawdwl `
+  --force
+```
+
+浏览器完成设备授权后，如果 GitHub 要求 sudo 密码确认，需要由账户本人输入。
+Token 只写入 Windows Credential Manager，不写入仓库或脚本输出。
+
+不在发布脚本内执行普通 `git push` 时，可以永久为本仓库设置直连并关闭不需要的
+LFS 锁验证：
+
+```powershell
+git config --local http.https://github.com.proxy ""
+git config --local `
+  lfs.https://github.com/bawdwl/shiyu-ai-companion-chat.git/info/lfs.locksverify `
+  false
+```
+
+验证凭据只检查是否存在，不输出 Token：
+
+```powershell
+$credential = @("protocol=https", "host=github.com", "", "") |
+  git -c credential.interactive=never credential fill
+[bool]($credential | Where-Object { $_ -like "password=*" })
+```

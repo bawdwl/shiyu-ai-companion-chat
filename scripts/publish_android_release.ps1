@@ -5,14 +5,58 @@ param(
     [string]$NotesFile,
     [string]$Title,
     [string]$TargetBranch = "main",
+    [string]$GitExe,
     [switch]$Draft,
     [switch]$Prerelease,
+    [switch]$UseEnvironmentProxy,
     [switch]$WhatIf
 )
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
+
+function Resolve-GitExecutable {
+    param([string]$RequestedPath)
+
+    if ($RequestedPath) {
+        if (-not (Test-Path -LiteralPath $RequestedPath)) {
+            throw "指定的 Git 不存在：$RequestedPath"
+        }
+        return (Resolve-Path -LiteralPath $RequestedPath).Path
+    }
+
+    $command = Get-Command git.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($command -and $command.Source) {
+        return $command.Source
+    }
+
+    $candidates = @(
+        "$env:ProgramFiles\Git\cmd\git.exe",
+        "${env:ProgramFiles(x86)}\Git\cmd\git.exe",
+        "$env:LOCALAPPDATA\Programs\Git\cmd\git.exe",
+        "$env:USERPROFILE\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\git\cmd\git.exe"
+    )
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate)) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+
+    throw "未找到 git.exe。请安装 Git，或通过 -GitExe 指定完整路径。"
+}
+
+$git = Resolve-GitExecutable -RequestedPath $GitExe
+
+if (-not $UseEnvironmentProxy) {
+    foreach ($name in @("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy")) {
+        Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue
+    }
+    Write-Host "Network    : direct for GitHub"
+} else {
+    Write-Host "Network    : using environment proxy"
+}
+$env:GCM_INTERACTIVE = "Never"
 
 if (-not $Version) {
     $gradle = Get-Content "android/app/build.gradle.kts" -Raw
@@ -49,7 +93,7 @@ if ($NotesFile -and -not (Test-Path -LiteralPath $NotesFile)) {
     throw "Release 说明文件不存在：$NotesFile"
 }
 
-$remote = git remote get-url origin
+$remote = & $git remote get-url origin
 if ($LASTEXITCODE -ne 0 -or -not $remote) {
     throw "当前目录没有可用的 origin。"
 }
@@ -65,13 +109,13 @@ if ($slug -notmatch '^[^/]+/[^/]+$') {
     throw "无法识别 GitHub 仓库：$slug"
 }
 
-$head = (git rev-parse HEAD).Trim()
+$head = (& $git rev-parse HEAD).Trim()
 $targetCommit = $head
-$localTagCommit = (git rev-list -n 1 $tag 2>$null)
+$localTagCommit = & $git rev-list -n 1 $tag 2>$null
 if ($LASTEXITCODE -eq 0 -and $localTagCommit) {
     $targetCommit = $localTagCommit.Trim()
 }
-$branch = (git branch --show-current).Trim()
+$branch = (& $git branch --show-current).Trim()
 if ($branch -and $branch -ne $TargetBranch) {
     throw "当前分支是 $branch，但目标分支是 $TargetBranch。请先切换或显式修改 -TargetBranch。"
 }
@@ -106,12 +150,19 @@ if ($WhatIf) {
     return
 }
 
-$credential = @("protocol=https", "host=github.com", "", "") | git credential fill 2>$null
+$credential = @("protocol=https", "host=github.com", "", "") |
+    & $git -c credential.interactive=never credential fill 2>$null
+if ($LASTEXITCODE -ne 0) {
+    throw @"
+未取得 GitHub 凭据。请先在本机完成一次登录：
+git-credential-manager github login --device --no-ui --force
+"@
+}
 $tokenLine = $credential |
     Where-Object { $_ -like "password=*" } |
     Select-Object -First 1
 if (-not $tokenLine) {
-    throw "未取得 GitHub 凭据。请先让 Git Credential Manager 完成 GitHub 登录。"
+    throw "GitHub 凭据为空。请重新运行 Git Credential Manager 的 GitHub 登录。"
 }
 $token = $tokenLine -replace "^password=", ""
 $userLine = $credential |
@@ -131,15 +182,45 @@ $headers = @{
 }
 $api = "https://api.github.com/repos/$slug"
 
+function Invoke-GitHubRestMethod {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Method,
+        [Parameter(Mandatory = $true)]
+        [string]$Uri,
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Headers,
+        [string]$Body,
+        [string]$ContentType
+    )
+
+    $parameters = @{
+        Method = $Method
+        Uri = $Uri
+        Headers = $Headers
+        ErrorAction = "Stop"
+    }
+    if ($Body) {
+        $parameters.Body = $Body
+    }
+    if ($ContentType) {
+        $parameters.ContentType = $ContentType
+    }
+    if (-not $UseEnvironmentProxy -and $PSVersionTable.PSVersion.Major -ge 6) {
+        $parameters.NoProxy = $true
+    }
+    Invoke-RestMethod @parameters
+}
+
 try {
-    Invoke-RestMethod -Method Get -Uri "$api/commits/$targetCommit" -Headers $headers | Out-Null
+    Invoke-GitHubRestMethod -Method Get -Uri "$api/commits/$targetCommit" -Headers $headers | Out-Null
 } catch {
     throw "标签目标提交 $targetCommit 尚未出现在 GitHub。请先运行：git push origin $TargetBranch"
 }
 
 $release = $null
 try {
-    $release = Invoke-RestMethod -Method Get -Uri "$api/releases/tags/$tag" -Headers $headers
+    $release = Invoke-GitHubRestMethod -Method Get -Uri "$api/releases/tags/$tag" -Headers $headers
     Write-Host "Release 已存在：$($release.html_url)"
 } catch {
     if ($_.Exception.Response.StatusCode.value__ -ne 404) {
@@ -157,7 +238,7 @@ if (-not $release) {
         prerelease = [bool]$Prerelease
         generate_release_notes = $false
     } | ConvertTo-Json -Depth 5
-    $release = Invoke-RestMethod `
+    $release = Invoke-GitHubRestMethod `
         -Method Post `
         -Uri "$api/releases" `
         -Headers $headers `
@@ -176,7 +257,11 @@ if ($existingAsset.Count -gt 0) {
 }
 
 Add-Type -AssemblyName System.Net.Http
-$client = [System.Net.Http.HttpClient]::new()
+$handler = [System.Net.Http.HttpClientHandler]::new()
+if (-not $UseEnvironmentProxy) {
+    $handler.UseProxy = $false
+}
+$client = [System.Net.Http.HttpClient]::new($handler)
 $client.Timeout = [TimeSpan]::FromMinutes(20)
 $client.DefaultRequestHeaders.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new("Bearer", $token)
 $client.DefaultRequestHeaders.UserAgent.ParseAdd("shiyu-release-$githubUser")
@@ -214,9 +299,10 @@ try {
     if ($request) { $request.Dispose() }
     if ($content) { $content.Dispose() } elseif ($stream) { $stream.Dispose() }
     $client.Dispose()
+    $handler.Dispose()
 }
 
-$final = Invoke-RestMethod -Method Get -Uri "$api/releases/tags/$tag" -Headers $headers
+$final = Invoke-GitHubRestMethod -Method Get -Uri "$api/releases/tags/$tag" -Headers $headers
 Write-Host "Release URL：$($final.html_url)"
 Write-Host "Draft       ：$($final.draft)"
 Write-Host "Prerelease  ：$($final.prerelease)"
