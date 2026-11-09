@@ -219,7 +219,7 @@ class ChatStore:
         return self.get(sid)
 
     def get_or_create_role_conversation(self,character_id,mode='base',
-                                        model_id='deepseek-flash',provider='deepseek'):
+                                        model_id='deepseek-chat',provider='deepseek'):
         """Return the single persistent conversation for one character.
 
         Older versions could create many sessions per character. They remain

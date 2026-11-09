@@ -9,7 +9,7 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 
 ## 已实现
 
-- Debug 与 Release 都支持 OpenCode Go `deepseek-v4.1-flash` 与 DeepSeek `deepseek-flash`。
+- Debug 与 Release 都支持 OpenCode Go `deepseek-v4.1-flash` 与 DeepSeek 官方 `deepseek-chat`。
 - 首页、消息、创建、设置四个固定底部页签；首页支持上下循环浏览角色，聊天返回时回到进入前页签。
 - 每个角色可独立选择云端 API 或手机本地 MNN 模型。
 - 创建、编辑、删除角色；角色卡、世界书、知识边界和固定事实。

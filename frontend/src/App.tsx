@@ -2361,7 +2361,7 @@ function SettingsModal({
           />
         </label>
         <div className="provider-facts">
-          <span>模型 <strong>{settings?.deepseek.model_id ?? "deepseek-flash"}</strong></span>
+          <span>模型 <strong>{settings?.deepseek.model_id ?? "deepseek-chat"}</strong></span>
           <span>支持文字、图片</span>
         </div>
         <button

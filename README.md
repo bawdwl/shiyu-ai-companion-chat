@@ -4,7 +4,7 @@
 
 当前主线使用 **OpenCode Go `deepseek-v4.1-flash`**，同时支持独立 DeepSeek Provider。API Key 由使用者在本机填写，不会写入源码、数据库快照或 Git 仓库。
 
-当前 Android 发布版：`0.18.23`
+当前 Android 本地候选：`0.18.24`
 
 最近已发布：[GitHub Release `v0.18.23`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.23)
 
@@ -33,7 +33,8 @@ Windows EXE 的“基础版”不是完整研究环境。需要本地大模型�
 
 ## 当前版本
 
-Android `0.18.23` 内置 12 个可编辑、可删除的初始角色与完整头像、背景资源。
+Android `0.18.24` 修复了使用 DeepSeek 官方 API 创建角色时错误路由到
+OpenCode Go 的问题。发布版 `0.18.23` 内置 12 个可编辑、可删除的初始角色与完整头像、背景资源。
 升级只补充缺失的初次见面简介，不覆盖已有角色档案。重置对话会清除聊天记录、
 长期记忆、内部状态和 Trace，但保留角色档案、头像与背景。详细版本记录见
 [CHANGELOG](CHANGELOG.md)。
@@ -170,15 +171,22 @@ PC 语音优先调用本机 CosyVoice 2 FastAPI；服务或角色参考音频不
 从 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/latest)
 下载 `Shiyu-0.18.23-Android-arm64-v8a.apk`。
 
+本地候选 `0.18.24`：
+
+```text
+release/apk-0.18.24/Shiyu-0.18.24-Android-arm64-v8a.apk
+```
+
 本机构建调试包：
 
 ```text
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-- 当前源码：`0.18.23 / versionCode 53`
+- 当前源码：`0.18.24 / versionCode 54`
 - Room schema：13
-- 当前 APK SHA-256：`48644B306ABB6400F3080F2CBDF2264C3CB2F506647458046A5D5E61E74FBFFE`
+- 本地候选 APK SHA-256：`FBEEC4F8F754164D966E498F3204EC31A5195F778DC5A70C27E3D2920CB57202`
+- 已发布 `0.18.23` APK SHA-256：`48644B306ABB6400F3080F2CBDF2264C3CB2F506647458046A5D5E61E74FBFFE`
 - 安装后请在设置中填写自己的 OpenCode Go 或 DeepSeek Key。
 
 APK 包含本地语音运行库、VITS 中文语音模型、Qwen MNN 运行库和 Dream SD1.5/QNN 后端。本地 Qwen 与 MeinaMix V12 等模型权重不随 APK 分发，需要用户按应用设置中的说明导入。
@@ -234,11 +242,11 @@ cd android
 
 当前发布前验证结果：
 
-- PC 全量 Python 回归：307 项通过。
+- PC 全量 Python 回归：308 项通过。
 - PC 前端状态测试：40 项通过。
 - React 生产构建通过。
-- Android JVM：89 项通过。
-- Android APK 构建和 Lint 通过；本次构建未连接 ADB，尚未执行 0.18.23 真机覆盖安装。本地 Dream 生图仍取决于设备 NPU 与导入模型。
+- Android JVM：94 项通过。
+- Android APK 构建和 Lint 通过；本轮构建尚未执行 0.18.24 真机覆盖安装。本地 Dream 生图仍取决于设备 NPU 与导入模型。
 - 自然记忆冻结回放：结构化事实、摘要、混合检索和混合状态均为 90/90；仅最近消息为 23/90。
 - 一条合成案例的真实 API 端到端记忆链路通过；该结果不是准确率基准。
 - 固定角色质量评测仍为：基础条件 18/24，长期记忆条件 22/24。

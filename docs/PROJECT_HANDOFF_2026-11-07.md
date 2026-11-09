@@ -1,11 +1,12 @@
 # 拾语项目交接文档
 
-更新日期：2026-11-08
+更新日期：2026-11-09
 仓库：`bawdwl/shiyu-ai-companion-chat`
 当前分支：`main`
-当前 Android：`0.18.23 / versionCode 53`
+当前 Android：`0.18.24 / versionCode 54`
 
-`0.18.23` 包含 2026-11-07 角色体验优化：
+`0.18.24` 修复 Android 创建角色错误固定使用 OpenCode Go，以及官方 DeepSeek
+使用无效模型名和 OpenCode 专用字段的问题。`0.18.23` 包含 2026-11-07 角色体验优化：
 版本化角色上下文、轻量对话策略、记忆需求判断、事件链、当前轮临时情绪、
 场景状态和 PC 对齐。详情见
 `docs/角色体验与连续性优化_2026-11-07.md`。该版本还包含首页 pager、
@@ -25,9 +26,9 @@
 
 当前 GitHub 发布：
 
-- 最近已发布：Android [`v0.18.22`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.22)
-- 本地待发布候选：`0.18.23`
-- 待发布 APK：`release/apk-0.18.23/Shiyu-0.18.23-Android-arm64-v8a.apk`
+- 最近已发布：Android [`v0.18.23`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.23)
+- 本地待发布候选：`0.18.24`
+- 待发布 APK：`release/apk-0.18.24/Shiyu-0.18.24-Android-arm64-v8a.apk`
 - Windows：`release/windows/Shiyu-0.18.0-Windows-x64.zip`
 
 ## 2. 项目是什么
@@ -70,7 +71,7 @@ shiyu-ai-companion-chat-final/
 - `src/`、`frontend/`、`web/`、`desktop/`、`android/`：应用源码与内置资源。
 - `tests/`、`evaluation/`：回归和角色质量评测。
 - `docs/`：设计决策、踩坑记录和交接信息。
-- `release/apk-0.18.23/`：当前 APK。
+- `release/apk-0.18.24/`：当前待发布候选 APK。
 - `release/windows/`：当前 Windows 发布 ZIP。
 - `outputs/image-runtime/`：PC 本地 Diffusers 生图运行库。
 - `outputs/secret-runtime/`：Windows EXE 需要的隔离密钥运行库。

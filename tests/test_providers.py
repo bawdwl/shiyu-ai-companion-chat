@@ -14,7 +14,7 @@ from providers import (
 
 
 class DeepSeekProviderTests(unittest.TestCase):
-    def test_reply_uses_deepseek_flash_and_reports_usage(self):
+    def test_reply_uses_deepseek_chat_without_opencode_thinking_override(self):
         seen = {}
 
         def handler(request):
@@ -24,7 +24,7 @@ class DeepSeekProviderTests(unittest.TestCase):
                 200,
                 json={
                     "id": "chatcmpl-test",
-                    "model": "deepseek-flash",
+                    "model": "deepseek-chat",
                     "system_fingerprint": "fp-test",
                     "choices": [
                         {
@@ -51,8 +51,8 @@ class DeepSeekProviderTests(unittest.TestCase):
 
         self.assertEqual(answer, "测试回答")
         self.assertEqual(seen["authorization"], "Bearer sk-test")
-        self.assertEqual(seen["payload"]["model"], "deepseek-flash")
-        self.assertEqual(seen["payload"]["thinking"], {"type": "disabled"})
+        self.assertEqual(seen["payload"]["model"], "deepseek-chat")
+        self.assertNotIn("thinking", seen["payload"])
         self.assertEqual(seen["payload"]["temperature"], 0.7)
         self.assertEqual(metrics["input_tokens"], 12)
         self.assertEqual(metrics["output_tokens"], 4)
@@ -65,8 +65,8 @@ class DeepSeekProviderTests(unittest.TestCase):
             self.assertTrue(payload["stream"])
             self.assertEqual(payload["stream_options"], {"include_usage": True})
             body = (
-                'data: {"model":"deepseek-flash","choices":[{"delta":{"content":"你"},"finish_reason":null}]}\n\n'
-                'data: {"model":"deepseek-flash","choices":[{"delta":{"content":"好"},"finish_reason":"stop"}],'
+                'data: {"model":"deepseek-chat","choices":[{"delta":{"content":"你"},"finish_reason":null}]}\n\n'
+                'data: {"model":"deepseek-chat","choices":[{"delta":{"content":"好"},"finish_reason":"stop"}],'
                 '"usage":{"prompt_tokens":5,"completion_tokens":2}}\n\n'
                 "data: [DONE]\n\n"
             )
@@ -100,7 +100,7 @@ class DeepSeekProviderTests(unittest.TestCase):
             return httpx.Response(
                 200,
                 json={
-                    "model": "deepseek-flash",
+                    "model": "deepseek-chat",
                     "choices": [
                         {
                             "message": {"role": "assistant", "content": "我看到图片了"},
@@ -201,6 +201,7 @@ class DeepSeekProviderTests(unittest.TestCase):
         self.assertEqual(seen["session"], "session-test")
         self.assertEqual(seen["user_agent"], "shiyu-chat/0.18.0")
         self.assertEqual(seen["payload"]["model"], "deepseek-v4.1-flash")
+        self.assertEqual(seen["payload"]["thinking"], {"type": "disabled"})
         self.assertEqual(seen["payload"]["seed"], 20261030)
         self.assertNotIn("_opencode_session_id", seen["payload"])
         self.assertEqual(metrics["provider"], "opencode")

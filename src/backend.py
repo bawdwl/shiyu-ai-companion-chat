@@ -514,7 +514,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
         app.state.deepseek_provider=deepseek_provider or DeepSeekProvider(
             lambda: app.state.secret_store.get('deepseek_api_key'),
             base_url=os.environ.get('DEEPSEEK_BASE_URL','https://api.deepseek.com'),
-            model=os.environ.get('DEEPSEEK_MODEL','deepseek-flash'),
+            model=os.environ.get('DEEPSEEK_MODEL','deepseek-chat'),
         )
         app.state.deepseek_engine=DeepSeekChatEngine(
             app.state.deepseek_provider,
@@ -1056,7 +1056,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             return
         try:
             app.state.store.record_usage(
-                str(request_id),provider,metrics.get('model','deepseek-flash'),
+                str(request_id),provider,metrics.get('model','deepseek-chat'),
                 session_id,int(metrics.get('input_tokens',0)),
                 int(metrics.get('output_tokens',0)),
                 int(metrics.get('cached_tokens',0)))

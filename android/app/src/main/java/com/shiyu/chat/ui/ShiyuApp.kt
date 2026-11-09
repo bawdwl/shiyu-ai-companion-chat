@@ -146,6 +146,7 @@ import com.shiyu.chat.data.CharacterEntity
 import com.shiyu.chat.data.ChatRepository
 import com.shiyu.chat.data.ArtworkCropSelection
 import com.shiyu.chat.data.CharacterArtworkPolicy
+import com.shiyu.chat.data.DeepSeekClient
 import com.shiyu.chat.data.DreamGenerationSettings
 import com.shiyu.chat.data.insertActionBrackets
 import com.shiyu.chat.data.MemoryEntity
@@ -3406,7 +3407,7 @@ private fun SettingsDialog(
                     }
                 }
                 HorizontalDivider()
-                Text("DeepSeek 兼容接口（未用于本轮验证）", fontWeight = FontWeight.SemiBold)
+                Text("DeepSeek 官方 API", fontWeight = FontWeight.SemiBold)
                 OutlinedTextField(
                     value = deepSeekKey,
                     onValueChange = { deepSeekKey = it },
@@ -3415,7 +3416,7 @@ private fun SettingsDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text("模型：deepseek-flash · 保留原有调用路径", fontSize = 10.sp)
+                Text("模型：${DeepSeekClient.MODEL}", fontSize = 10.sp)
                 if (state.deepSeekConfigured) {
                     TextButton(onClick = onRemoveKey) {
                         Text("删除 DeepSeek Key", color = MaterialTheme.colorScheme.error)

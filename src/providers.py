@@ -138,19 +138,19 @@ class DeepSeekProvider:
     """OpenAI-compatible DeepSeek chat client.
 
     The model name intentionally remains the documented rolling alias
-    ``deepseek-flash``. Every response records the concrete model and
+    ``deepseek-chat``. Every response records the concrete model and
     system_fingerprint returned by the provider for later reproducibility.
     """
 
     name = "deepseek"
     display_name = "DeepSeek"
-    model_id = "deepseek-flash"
+    model_id = "deepseek-chat"
     capabilities = ProviderCapabilities(
         text=True,
         images=True,
         streaming=True,
         json_output=True,
-        thinking_control=True,
+        thinking_control=False,
     )
 
     def __init__(
@@ -158,7 +158,7 @@ class DeepSeekProvider:
         api_key_provider: Callable[[], str | None],
         *,
         base_url: str = "https://api.deepseek.com",
-        model: str = "deepseek-flash",
+        model: str = "deepseek-chat",
         timeout_seconds: float = 120,
         transport: httpx.BaseTransport | None = None,
     ):
@@ -196,7 +196,6 @@ class DeepSeekProvider:
             "messages": _normalize_messages(messages),
             "max_tokens": int(max_new_tokens),
             "stream": bool(stream),
-            "thinking": {"type": "enabled" if thinking else "disabled"},
         }
         if stream:
             payload["stream_options"] = {"include_usage": True}
@@ -404,6 +403,13 @@ class OpenCodeProvider(DeepSeekProvider):
     name = "opencode"
     display_name = "OpenCode Go"
     model_id = "deepseek-v4.1-flash"
+    capabilities = ProviderCapabilities(
+        text=True,
+        images=True,
+        streaming=True,
+        json_output=False,
+        thinking_control=True,
+    )
 
     def __init__(
         self,
@@ -423,6 +429,25 @@ class OpenCodeProvider(DeepSeekProvider):
             transport=transport,
         )
         self.user_agent = user_agent
+
+    def _payload(
+        self,
+        messages: list[dict],
+        *,
+        max_new_tokens: int,
+        generation_overrides: dict | None,
+        stream: bool,
+        thinking: bool,
+    ) -> dict:
+        payload = super()._payload(
+            messages,
+            max_new_tokens=max_new_tokens,
+            generation_overrides=generation_overrides,
+            stream=stream,
+            thinking=thinking,
+        )
+        payload["thinking"] = {"type": "enabled" if thinking else "disabled"}
+        return payload
 
     def _request_headers(
         self,

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-09 — Android `0.18.24`
+
+- Fixed Android character creation ignoring the selected official DeepSeek
+  provider and always routing through OpenCode Go.
+- Changed the official DeepSeek model from the invalid `deepseek-flash` alias to
+  `deepseek-chat` and removed the OpenCode-only `thinking` request field.
+- Kept OpenCode's `thinking` control isolated to the OpenCode client.
+- Left the fixed Song Zhiyi and Pei Jiming training prompts unchanged.
+- Added PC and Android regression tests for provider routing and request
+  payloads.
+- Verification: 308 Python tests, 94 Android JVM tests, 40 frontend state tests,
+  React production build, `assembleDebug` and `lintDebug` passed.
+
 ## 2026-11-08 — Android `0.18.23`
 
 - Added versioned role context, deterministic dialogue policy, memory-need

@@ -11,6 +11,26 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
+internal object DeepSeekRequestPolicy {
+    const val MODEL = "deepseek-chat"
+
+    fun fields(
+        maxTokens: Int,
+        stream: Boolean,
+        json: Boolean,
+    ): Map<String, Any> = buildMap {
+        put("model", MODEL)
+        put("max_tokens", maxTokens)
+        put("stream", stream)
+        if (stream) {
+            put("stream_options", mapOf("include_usage" to true))
+        }
+        if (json) {
+            put("response_format", mapOf("type" to "json_object"))
+        }
+    }
+}
+
 class DeepSeekClient {
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -26,15 +46,9 @@ class DeepSeekClient {
         onDelta: (String) -> Unit,
     ): TokenUsage = withContext(Dispatchers.IO) {
         require(apiKey.isNotBlank()) { "请先在设置中填写 DeepSeek API Key" }
-        val payload = JSONObject()
-            .put("model", "deepseek-flash")
-            .put("messages", messages)
-            .put("max_tokens", maxTokens)
-            .put("stream", true)
-            .put("thinking", JSONObject().put("type", "disabled"))
-            .put("stream_options", JSONObject().put("include_usage", true))
+        val payload = buildPayload(messages, maxTokens, stream = true)
         val request = Request.Builder()
-            .url("https://api.deepseek.com/chat/completions")
+            .url("$BASE_URL/chat/completions")
             .header("Authorization", "Bearer $apiKey")
             .header("Accept", "text/event-stream")
             .post(payload.toString().toRequestBody(JSON))
@@ -85,14 +99,9 @@ class DeepSeekClient {
         json: Boolean = false,
     ): Pair<String, TokenUsage> = withContext(Dispatchers.IO) {
         require(apiKey.isNotBlank()) { "请先在设置中填写 DeepSeek API Key" }
-        val payload = JSONObject()
-            .put("model", "deepseek-flash")
-            .put("messages", messages)
-            .put("max_tokens", maxTokens)
-            .put("thinking", JSONObject().put("type", "disabled"))
-        if (json) payload.put("response_format", JSONObject().put("type", "json_object"))
+        val payload = buildPayload(messages, maxTokens, stream = false, json = json)
         val request = Request.Builder()
-            .url("https://api.deepseek.com/chat/completions")
+            .url("$BASE_URL/chat/completions")
             .header("Authorization", "Bearer $apiKey")
             .post(payload.toString().toRequestBody(JSON))
             .build()
@@ -117,6 +126,17 @@ class DeepSeekClient {
     }
 
     companion object {
+        const val MODEL = DeepSeekRequestPolicy.MODEL
+        const val BASE_URL = "https://api.deepseek.com"
+
+        internal fun buildPayload(
+            messages: JSONArray,
+            maxTokens: Int,
+            stream: Boolean,
+            json: Boolean = false,
+        ): JSONObject = JSONObject(DeepSeekRequestPolicy.fields(maxTokens, stream, json))
+            .put("messages", messages)
+
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }
 }

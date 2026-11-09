@@ -39,6 +39,12 @@ private data class BuiltInSeedCharacter(
     val backgroundAsset: String,
 )
 
+internal fun characterGenerationProvider(selectedCloudProvider: String): String =
+    when (selectedCloudProvider) {
+        "deepseek", "opencode" -> selectedCloudProvider
+        else -> error("未知云端 Provider：$selectedCloudProvider")
+    }
+
 class ChatRepository(
     private val context: Context,
     private val database: AppDatabase,
@@ -1136,7 +1142,7 @@ class ChatRepository(
                 model = when (provider) {
                     PROVIDER_LOCAL_MNN -> MnnModelManager.MODEL_ID
                     PROVIDER_OPENCODE -> OpenCodeClient.MODEL
-                    else -> "deepseek-flash"
+                    else -> DeepSeekClient.MODEL
                 },
                 promptVersion = "$PROMPT_PIPELINE_VERSION:${roleVersion.take(12)}",
                 promptHash = sha256Text(bodyMessages.toString()),
@@ -1781,7 +1787,7 @@ class ChatRepository(
                 model = if (provider == PROVIDER_OPENCODE) {
                     OpenCodeClient.MODEL
                 } else {
-                    "deepseek-flash"
+                    DeepSeekClient.MODEL
                 },
                 usageDay = java.time.LocalDate.now().toString(),
                 promptTokens = extractionPromptTokens,
@@ -1807,7 +1813,7 @@ class ChatRepository(
                 model = if (provider == PROVIDER_OPENCODE) {
                     OpenCodeClient.MODEL
                 } else {
-                    "deepseek-flash"
+                    DeepSeekClient.MODEL
                 },
                 usageDay = java.time.LocalDate.now().toString(),
                 promptTokens = promptTokens,
@@ -2516,10 +2522,9 @@ class ChatRepository(
     }
 
     suspend fun generateCharacter(idea: String): CharacterEntity {
-        // Current product testing is frozen to OpenCode Go's DeepSeek model.
-        val provider = PROVIDER_OPENCODE
-        val key = openCodeApiKey()
-            ?: error("请先配置 OpenCode Go API Key")
+        val provider = characterGenerationProvider(cloudProvider())
+        val key = (if (provider == PROVIDER_OPENCODE) openCodeApiKey() else apiKey())
+            ?: error("请先配置 ${if (provider == PROVIDER_OPENCODE) "OpenCode Go" else "DeepSeek"} API Key")
         val messages = JSONArray()
             .put(JSONObject().put("role", "system").put("content", CharacterGenerationPolicy.SYSTEM_PROMPT))
             .put(JSONObject().put("role", "user").put("content", idea.take(1800)))

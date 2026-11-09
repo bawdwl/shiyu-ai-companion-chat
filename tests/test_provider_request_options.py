@@ -21,7 +21,7 @@ class ProviderRequestOptionTests(unittest.TestCase):
             return httpx.Response(
                 200,
                 json={
-                    'model': 'deepseek-flash',
+                    'model': 'deepseek-chat',
                     'choices': [{
                         'message': {
                             'role': 'assistant',
@@ -52,6 +52,7 @@ class ProviderRequestOptionTests(unittest.TestCase):
             {'type': 'json_object'},
         )
         self.assertEqual(captured['temperature'], 0)
+        self.assertNotIn('thinking', captured)
 
 
 if __name__ == '__main__':

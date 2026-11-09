@@ -23,7 +23,7 @@ class DeepSeekBackendTests(unittest.TestCase):
             self.requests.append(payload)
             if payload.get("stream"):
                 event = {
-                    "model": "deepseek-flash",
+                    "model": "deepseek-chat",
                     "choices": [
                         {
                             "delta": {"content": self.answer},
@@ -43,7 +43,7 @@ class DeepSeekBackendTests(unittest.TestCase):
             return httpx.Response(
                 200,
                 json={
-                    "model": "deepseek-flash",
+                    "model": "deepseek-chat",
                     "system_fingerprint": "fp-test",
                     "choices": [
                         {
@@ -94,6 +94,79 @@ class DeepSeekBackendTests(unittest.TestCase):
         self.assertEqual(tested.json()["provider"], "deepseek")
         self.assertEqual(self.requests[-1]["messages"][0]["content"], "只回复：连接成功")
 
+    def test_character_generation_uses_deepseek_chat_json_mode(self):
+        self.client.put(
+            "/settings/deepseek-key",
+            json={"api_key": "sk-test-character-generation"},
+        )
+        self.answer = json.dumps(
+            {
+                "name": "林照",
+                "tagline": "雨夜旧书店的年轻店主",
+                "description": "林照在南方老城经营一家只在傍晚营业的旧书店，熟悉每条潮湿巷子和旧书来历，习惯替熟客留一盏灯，也在等待一个愿意认真听她讲故事的人。",
+                "background": "大学毕业后回到故乡，接手外祖父留下的旧书店。",
+                "personality": "安静敏锐，待人有分寸，遇到真正感兴趣的话题会逐渐放松；不喜欢替别人做决定，却会记住很细小的承诺。",
+                "speech_style": "语速平缓，常用具体物件和旧书比喻情绪，偶尔带一点冷幽默；动作描写克制，不用夸张语气或连续反问。",
+                "relationship": "你是雨夜偶然进店的客人，双方从借伞和找书开始熟悉，保留尊重彼此生活空间的边界。",
+                "appearance": "二十五岁的东亚女性，鹅蛋脸，浅褐色眼睛，黑色长发松松挽起，穿深绿色针织开衫与长裙，常戴细银耳环。",
+                "appearance_prompt": "1girl, female, solo, 25 year old East Asian bookseller, oval face, light brown eyes, long black hair, green cardigan, silver earrings, rainy bookstore",
+                "greeting": "（她把烘干的伞靠在门边，从书堆后抬眼看你）雨还没停。先坐一会儿吧，想找什么书？",
+                "boundaries": "不替用户决定人际关系，不编造用户经历。",
+                "scenario": "傍晚的旧书店，雨声和翻书声混在一起。",
+                "motivation": "林照想守住书店，也想知道自己是否还能与新的生活建立联系。",
+                "knowledge_boundary": {
+                    "character_kind": "原创角色",
+                    "era": "当代",
+                    "knowledge_cutoff": "当代",
+                    "universe": "现实",
+                    "allowed_knowledge": "旧书、城市街巷、普通日常生活",
+                    "forbidden_knowledge": "用户现实身份和未提供经历",
+                    "forbidden_terms": [],
+                },
+                "fixed_facts": [
+                    {"key": "职业", "value": "旧书店店主", "status": "proposal"},
+                ],
+                "worldbook": [
+                    {
+                        "title": "旧书店",
+                        "keywords": ["书店", "旧书"],
+                        "content": "书店位于老城南巷，傍晚营业，雨天会延长关门时间。",
+                        "enabled": True,
+                    },
+                    {
+                        "title": "外祖父",
+                        "keywords": ["外祖父", "家人"],
+                        "content": "外祖父把书店留给林照，却很少谈经营亏损。",
+                        "enabled": True,
+                    },
+                    {
+                        "title": "借伞",
+                        "keywords": ["雨伞", "下雨"],
+                        "content": "林照会为熟客保留一把旧木柄雨伞。",
+                        "enabled": True,
+                    },
+                ],
+                "example_dialogue": [
+                    {
+                        "user": "雨太大了。",
+                        "character": "（她把门旁的空位让出来）那就先别急着走。",
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        )
+
+        generated = self.client.post(
+            "/characters/generate",
+            json={"inspiration": "雨夜旧书店的年轻女店主", "provider": "deepseek"},
+        )
+
+        self.assertEqual(generated.status_code, 200, generated.text)
+        request = self.requests[0]
+        self.assertEqual(request["model"], "deepseek-chat")
+        self.assertNotIn("thinking", request)
+        self.assertEqual(request["response_format"], {"type": "json_object"})
+
     def test_key_configuration_and_health(self):
         before = self.client.get("/health")
         self.assertEqual(before.status_code, 503)
@@ -140,8 +213,8 @@ class DeepSeekBackendTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["provider"], "deepseek")
         self.assertEqual(response.json()["answer"], "那就先歇一会儿，我在。")
-        self.assertEqual(self.requests[-1]["model"], "deepseek-flash")
-        self.assertEqual(self.requests[-1]["thinking"], {"type": "disabled"})
+        self.assertEqual(self.requests[-1]["model"], "deepseek-chat")
+        self.assertNotIn("thinking", self.requests[-1])
         usage = self.client.get("/health").json()["deepseek_usage"]
         self.assertEqual(usage["total_tokens"], 14)
         self.assertEqual(usage["cached_tokens"], 2)
