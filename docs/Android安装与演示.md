@@ -8,12 +8,12 @@ Android Keystore 实现。云端模式直接调用所选大模型 API，不要�
 
 从
 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases)
-下载最新 APK。当前公开版为 `0.18.23`。
+下载最新 APK。当前公开版为 `0.18.24`。
 
 ![拾语 Android 角色聊天界面](images/Android-0.18.22-chat.jpg)
 
-安装后进入设置，在“对话与模型”中填写 DeepSeek API Key 或 OpenCode Go API
-Key（测试入口）。
+安装后进入设置，在“对话与模型”中选择 DeepSeek 官方 API 或 OpenCode Go，
+并填写对应 API Key。创建角色和新对话都会使用当前选择的 Provider。
 
 应用首次安装会显示 12 个可编辑、可删除的初始角色，每个角色都带有头像和聊天
 背景。升级只补充空白角色的初次见面简介，不覆盖已有角色档案。
@@ -38,7 +38,7 @@ Key（测试入口）。
 - 千问图片 API；
 - 导入 Local Dream 兼容的 SD1.5 QNN 模型；
 - 设置正面/负面提示词、步数、CFG、采样器和种子；
-- 在角色详情页从相册导入头像。
+- 生成立绘或从相册导入后，先选择 `9:16` 背景，再从背景中裁剪 `1:1` 头像。
 
 内置应用不分发模型权重。模型需要用户自行导入或按应用提示下载，并分别遵守
 模型和运行时许可。

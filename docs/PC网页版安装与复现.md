@@ -49,8 +49,8 @@ python launch_app.py --provider opencode --speech-provider off --asr-provider of
 浏览器打开 <http://127.0.0.1:8000/ui/>。进入“应用设置”，填写对应 API Key。
 Key 只保存在后端本机加密 Secret Store，不会返回给浏览器。
 
-首次启动会安装四个可编辑、可删除的演示角色：李白、宋知意、裴既明、萧承渊、
-萧承渊。删除后不会在下次启动时自动恢复。
+首次启动会安装四个可编辑、可删除的演示角色：李白、宋知意、裴既明、萧承渊。
+删除后不会在下次启动时自动恢复。
 
 ## 复现验收
 
