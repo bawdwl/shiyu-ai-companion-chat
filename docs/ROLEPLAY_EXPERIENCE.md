@@ -13,9 +13,9 @@ OpenCode Go `deepseek-v4.1-flash`，没有启用官方 DeepSeek API 对照，也
 - 新增 `scripts/run_experience_suite.py`，支持离线结构检查和真实 OpenCode
   API 运行。
 - 最终全量结果位于
-  `evaluation/reports/2026-11-07-experience-suite-final/`。
+  当时的一次性结果已从工作树清理，可从 Git 历史恢复。
 - 同题旧 Prompt 结果位于
-  `evaluation/reports/2026-11-07-experience-suite-legacy/`。
+  当时的一次性结果已从工作树清理，可从 Git 历史恢复。
 
 最终固定结果为：
 

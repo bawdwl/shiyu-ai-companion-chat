@@ -9,7 +9,7 @@
 使用无效模型名和 OpenCode 专用字段的问题。`0.18.23` 包含 2026-11-07 角色体验优化：
 版本化角色上下文、轻量对话策略、记忆需求判断、事件链、当前轮临时情绪、
 场景状态和 PC 对齐。详情见
-`docs/角色体验与连续性优化_2026-11-07.md`。该版本还包含首页 pager、
+`docs/ROLEPLAY_EXPERIENCE.md`。该版本还包含首页 pager、
 背景/头像两步裁剪和透明启动图标修复；Windows 仍为 `0.18.0`。
 
 ## 1. 新对话先读什么
@@ -20,9 +20,8 @@
 2. `README.md`：产品定位、当前版本和主要能力。
 3. `docs/README.md`：按主题查找详细文档。
 4. `CHANGELOG.md`：当前版本和近期改动。
-5. `docs/ROLEPLAY_TECHNICAL_REVIEW_2026-11-07.md`：角色卡、世界书、
+5. `docs/ROLEPLAY_TECHNICAL_REVIEW.md`：角色卡、世界书、
    长期记忆、内部状态和技术优化路线。
-6. `docs/当前维护指南.md`：保留的维护入口，内容较早，冲突时以本文件和源码为准。
 
 当前 GitHub 发布：
 
@@ -62,7 +61,6 @@ shiyu-ai-companion-chat-final/
 ├─ release/                  当前 APK、Windows ZIP 与发布说明
 ├─ outputs/                  本地运行库和少量评测证据，Git 忽略
 ├─ third_party/              第三方集成说明
-├─ design-system/            工作台设计系统资料
 └─ launch_app.py             PC 网页端启动入口
 ```
 
@@ -184,7 +182,7 @@ shiyu-ai-companion-chat-final/
 
 详细机制见：
 
-- `docs/ROLEPLAY_TECHNICAL_REVIEW_2026-11-07.md`
+- `docs/ROLEPLAY_TECHNICAL_REVIEW.md`
 - `src/prompt_pipeline.py`
 - `src/structured_memory.py`
 - `src/internal_state.py`
@@ -334,7 +332,7 @@ PC 既有回归结果：
 - React 生产构建通过。
 
 未发布体验优化的真实 40 场景对照位于
-`evaluation/reports/2026-11-07-experience-suite-final/`。最终规则下
+一次性评测报告已从当前工作树清理，可从 Git 历史恢复。最终规则下
 Experience V2 为 39/40，旧 Prompt 为 39/40；这是一轮产品回归信号，
 不是论文级显著性结论。
 
@@ -486,7 +484,7 @@ Windows：
 ## 15. 新对话接手检查清单
 
 1. 运行 `git status --short`，确认是否有用户未提交改动。
-2. 阅读本文件和 `docs/ROLEPLAY_TECHNICAL_REVIEW_2026-11-07.md`。
+2. 阅读本文件和 `docs/ROLEPLAY_TECHNICAL_REVIEW.md`。
 3. 确认目标平台：Android、PC 网页或 Windows EXE。
 4. Android 真机操作前先确认设备在线，再覆盖安装。
 5. 不读取或输出聊天数据库、API Key 和个人图片，除非用户明确要求诊断且只读。

@@ -41,9 +41,9 @@ OpenCode Go 的问题。发布版 `0.18.23` 内置 12 个可编辑、可删除�
 
 ## 开发与交接
 
-- [新对话接手文档](docs/PROJECT_HANDOFF_2026-11-07.md)：项目现状、目录说明、启动构建、发布流程、历史经验和下一步。
+- [新对话接手文档](docs/PROJECT_HANDOFF.md)：项目现状、目录说明、启动构建、发布流程和下一步。
 - [文档索引](docs/README.md)：按入门、架构、记忆、Android、PC、语音图片和评测分类。
-- [角色扮演技术评审](docs/ROLEPLAY_TECHNICAL_REVIEW_2026-11-07.md)：角色卡、世界书、长期记忆和优化路线。
+- [角色扮演技术评审](docs/ROLEPLAY_TECHNICAL_REVIEW.md)：角色卡、世界书、长期记忆和优化路线。
 
 ## 已实现功能
 
