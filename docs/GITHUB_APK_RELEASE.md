@@ -1,6 +1,6 @@
 # 将 Android APK 发布到 GitHub Release
 
-更新日期：2026-11-08
+更新日期：2026-11-09
 
 APK 不进入 Git。正确流程是先把源码和版本提交推送，再由 GitHub Release
 创建标签并上传 APK。
@@ -22,7 +22,7 @@ release/apk-<version>/
 
 ```powershell
 Select-String android\app\build.gradle.kts -Pattern "versionCode|versionName"
-Get-FileHash release\apk-0.18.23\Shiyu-0.18.23-Android-arm64-v8a.apk -Algorithm SHA256
+Get-FileHash release\apk-0.18.24\Shiyu-0.18.24-Android-arm64-v8a.apk -Algorithm SHA256
 ```
 
 ## 2. 测试 APK
@@ -50,7 +50,7 @@ GitHub Release 只能以 GitHub 已经存在的提交为标签目标：
 
 ```powershell
 git add .
-git commit -m "Release Android 0.18.23"
+git commit -m "Release Android 0.18.24"
 git push origin main
 ```
 
@@ -62,7 +62,7 @@ git push origin main
 建议保存为：
 
 ```text
-release/notes-v0.18.23.md
+release/notes-v0.18.24.md
 ```
 
 内容写清：
@@ -77,8 +77,8 @@ release/notes-v0.18.23.md
 
 ```powershell
 .\scripts\publish_android_release.ps1 `
-  -Version 0.18.23 `
-  -NotesFile release\notes-v0.18.23.md `
+  -Version 0.18.24 `
+  -NotesFile release\notes-v0.18.24.md `
   -WhatIf
 ```
 
@@ -97,8 +97,8 @@ release/notes-v0.18.23.md
 
 ```powershell
 .\scripts\publish_android_release.ps1 `
-  -Version 0.18.23 `
-  -NotesFile release\notes-v0.18.23.md
+  -Version 0.18.24 `
+  -NotesFile release\notes-v0.18.24.md
 ```
 
 脚本执行：
@@ -106,7 +106,7 @@ release/notes-v0.18.23.md
 1. 从本机 Git Credential Manager 读取 GitHub 凭据，不打印 Token；
 2. 若本地已有版本标签，以标签指向的提交为 Release 目标，否则使用当前 `HEAD`；
 3. 验证标签目标提交已经在 GitHub；
-4. 查询 `v0.18.23` Release 是否存在；
+4. 查询 `v0.18.24` Release 是否存在；
 5. 不存在则创建；
 6. 以流式方式上传约 286 MiB 的 APK；
 7. 再次读取 Release，核对资产大小和下载地址。
@@ -134,10 +134,10 @@ release/notes-v0.18.23.md
 
 ```powershell
 gh auth status
-gh release create v0.18.23 `
-  release\apk-0.18.23\Shiyu-0.18.23-Android-arm64-v8a.apk `
-  --title "拾语 Android 0.18.23" `
-  --notes-file release\notes-v0.18.23.md
+gh release create v0.18.24 `
+  release\apk-0.18.24\Shiyu-0.18.24-Android-arm64-v8a.apk `
+  --title "拾语 Android 0.18.24" `
+  --notes-file release\notes-v0.18.24.md
 ```
 
 但这台机器当前没有可用的 `gh`，所以本仓库默认使用

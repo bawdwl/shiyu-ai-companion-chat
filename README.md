@@ -2,11 +2,13 @@
 
 拾语是一套面向中文虚拟角色陪伴场景的 PC 与 Android 双端聊天应用。它把云端大模型、角色卡、世界书、长期记忆、情绪关系状态、语音输入和角色语音组织成一条可运行的聊天链路。
 
-当前主线使用 **OpenCode Go `deepseek-v4.1-flash`**，同时支持独立 DeepSeek Provider。API Key 由使用者在本机填写，不会写入源码、数据库快照或 Git 仓库。
+当前主线使用 **OpenCode Go `deepseek-v4.1-flash`**，同时支持 DeepSeek 官方
+`deepseek-chat`。API Key 由使用者在本机填写，不会写入源码、数据库快照或
+Git 仓库。
 
-当前 Android 本地候选：`0.18.24`
+当前 Android 发布版：`0.18.24`
 
-最近已发布：[GitHub Release `v0.18.23`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.23)
+最新发布：[GitHub Release `v0.18.24`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.24)
 
 ## 项目展示
 
@@ -34,7 +36,8 @@ Windows EXE 的“基础版”不是完整研究环境。需要本地大模型�
 ## 当前版本
 
 Android `0.18.24` 修复了使用 DeepSeek 官方 API 创建角色时错误路由到
-OpenCode Go 的问题。发布版 `0.18.23` 内置 12 个可编辑、可删除的初始角色与完整头像、背景资源。
+OpenCode Go 的问题，并将官方模型更新为 `deepseek-chat`。Android 内置 12 个
+可编辑、可删除的初始角色与完整头像、背景资源。
 升级只补充缺失的初次见面简介，不覆盖已有角色档案。重置对话会清除聊天记录、
 长期记忆、内部状态和 Trace，但保留角色档案、头像与背景。详细版本记录见
 [CHANGELOG](CHANGELOG.md)。
@@ -42,7 +45,7 @@ OpenCode Go 的问题。发布版 `0.18.23` 内置 12 个可编辑、可删除�
 ## 开发与交接
 
 - [新对话接手文档](docs/PROJECT_HANDOFF.md)：项目现状、目录说明、启动构建、发布流程和下一步。
-- [文档索引](docs/README.md)：按入门、架构、记忆、Android、PC、语音图片和评测分类。
+- [文档索引](docs/README.md)：按入门、架构、Android、PC、语音图片和评测分类。
 - [角色扮演技术评审](docs/ROLEPLAY_TECHNICAL_REVIEW.md)：角色卡、世界书、长期记忆和优化路线。
 
 ## 已实现功能
@@ -169,13 +172,7 @@ PC 语音优先调用本机 CosyVoice 2 FastAPI；服务或角色参考音频不
 ## 安装 Android 端
 
 从 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/latest)
-下载 `Shiyu-0.18.23-Android-arm64-v8a.apk`。
-
-本地候选 `0.18.24`：
-
-```text
-release/apk-0.18.24/Shiyu-0.18.24-Android-arm64-v8a.apk
-```
+下载 `Shiyu-0.18.24-Android-arm64-v8a.apk`。
 
 本机构建调试包：
 
@@ -185,8 +182,8 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 - 当前源码：`0.18.24 / versionCode 54`
 - Room schema：13
-- 本地候选 APK SHA-256：`FBEEC4F8F754164D966E498F3204EC31A5195F778DC5A70C27E3D2920CB57202`
-- 已发布 `0.18.23` APK SHA-256：`48644B306ABB6400F3080F2CBDF2264C3CB2F506647458046A5D5E61E74FBFFE`
+- 发布 APK 大小：`300,290,445` 字节
+- 发布 APK SHA-256：`FBEEC4F8F754164D966E498F3204EC31A5195F778DC5A70C27E3D2920CB57202`
 - 安装后请在设置中填写自己的 OpenCode Go 或 DeepSeek Key。
 
 APK 包含本地语音运行库、VITS 中文语音模型、Qwen MNN 运行库和 Dream SD1.5/QNN 后端。本地 Qwen 与 MeinaMix V12 等模型权重不随 APK 分发，需要用户按应用设置中的说明导入。
@@ -237,7 +234,7 @@ Android：
 
 ```powershell
 cd android
-.\gradlew.bat testDebugUnitTest assembleDebug --no-daemon
+.\gradlew.bat testDebugUnitTest assembleDebug lintDebug --no-daemon
 ```
 
 当前发布前验证结果：
@@ -275,11 +272,13 @@ launch_app.py                 PC 启动入口
 src/                          FastAPI、Provider、记忆、提示词、存储与语音
 frontend/                     React + TypeScript 源码
 web/react-dist/               已构建 PC 前端
+desktop/                      Windows WebView2 桌面启动器
 android/                      Kotlin + Compose + Room Android 项目
 tests/                        当前生产链路回归测试
 scripts/                      构建、模型下载和检查脚本
 docs/                         架构、验收、语音与复现文档
-evaluation/                   固定质量场景、记忆语义案例和结果报告
+evaluation/                   当前测试仍使用的固定评测夹具
+release/                      发布说明与本地发布物索引
 ```
 
 ## 许可证

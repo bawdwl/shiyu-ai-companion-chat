@@ -5,17 +5,17 @@
 
 ```text
 release/
-├─ apk-0.18.24/   当前本地候选 APK
-├─ apk-0.18.23/   已发布 Android APK
+├─ apk-0.18.24/   当前已发布 Android APK
 ├─ windows/       当前 Windows onedir ZIP
 └─ README.md
 ```
 
-## Android 0.18.24 本地候选
+## Android 0.18.24 已发布
 
-本地 APK 已构建并通过测试，尚未发布 GitHub Release。主要修复设置中选择
-DeepSeek 官方 API 后，创建角色仍然强制使用 OpenCode Go 的问题。
+主要修复设置中选择 DeepSeek 官方 API 后，创建角色仍然强制使用 OpenCode Go
+的问题，并将官方模型更新为 `deepseek-chat`。
 
+- GitHub：`https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.24`
 - 文件：`apk-0.18.24/Shiyu-0.18.24-Android-arm64-v8a.apk`
 - 大小：`300,290,445` 字节
 - SHA-256：`FBEEC4F8F754164D966E498F3204EC31A5195F778DC5A70C27E3D2920CB57202`
@@ -24,31 +24,11 @@ DeepSeek 官方 API 后，创建角色仍然强制使用 OpenCode Go 的问题�
 当前 APK 内置 12 个初始角色及头像、背景。聊天、记忆、API Key 和个人图片不在
 发布包中。
 
-## Android 0.18.23 已发布
+## 发布后续版本
 
-- GitHub：`https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.23`
-- 文件：`apk-0.18.23/Shiyu-0.18.23-Android-arm64-v8a.apk`
-- 大小：`299,852,020` 字节
-- SHA-256：`48644B306ABB6400F3080F2CBDF2264C3CB2F506647458046A5D5E61E74FBFFE`
-
-## 上传 APK
-
-先提交并推送源码，再运行发布脚本：
-
-```powershell
-git push origin main
-
-.\scripts\publish_android_release.ps1 `
-  -Version 0.18.24 `
-  -NotesFile release\notes-v0.18.24.md `
-  -WhatIf
-
-.\scripts\publish_android_release.ps1 `
-  -Version 0.18.24 `
-  -NotesFile release\notes-v0.18.24.md
-```
-
-完整说明见 `docs/GITHUB_APK_RELEASE.md`。APK 不提交到 Git。
+当前版本已经发布。后续版本使用
+`scripts/publish_android_release.ps1`，完整步骤见
+`docs/GITHUB_APK_RELEASE.md`。APK 不提交到 Git。
 
 重新构建：
 

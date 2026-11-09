@@ -1,6 +1,6 @@
 # 拾语 Android
 
-当前源码版本：`0.18.8 / versionCode 38`，Room schema 13，只提供一个完整安装包：
+当前源码版本：`0.18.24 / versionCode 54`，Room schema 13，只提供一个完整安装包：
 
 - `com.shiyu.chat`：内置本地语音识别、角色朗读、MNN 和图片生成入口。
 
@@ -9,7 +9,9 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 
 ## 已实现
 
-- Debug 与 Release 都支持 OpenCode Go `deepseek-v4.1-flash` 与 DeepSeek 官方 `deepseek-chat`。
+- 创建角色使用设置页当前选择的云端 Provider，不再固定走 OpenCode Go。
+- Debug 与 Release 都支持 OpenCode Go `deepseek-v4.1-flash` 与 DeepSeek 官方
+  `deepseek-chat`；OpenCode 专用 `thinking` 字段不会进入官方 DeepSeek 请求。
 - 首页、消息、创建、设置四个固定底部页签；首页支持上下循环浏览角色，聊天返回时回到进入前页签。
 - 每个角色可独立选择云端 API 或手机本地 MNN 模型。
 - 创建、编辑、删除角色；角色卡、世界书、知识边界和固定事实。
@@ -21,10 +23,12 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
   去重后提供女声 1、男声 1、女声 2、男声 2 四个选项，支持试听和按角色保存。
 - 千问图片 API 与内置 Local Dream SD1.5/QNN 生图。
 - 设置中按设备自动选择并下载 MeinaMix V12，显示进度、校验大小与 SHA-256。
-- 内置李白、宋知意、裴既明和萧承渊；删除顾清禾、江昭谌、许澄与旧实验角色。
+- 内置 12 个初始角色：李白、宋知意、裴既明、萧承渊、姜拂衣、夜神月、
+  空条承太郎、卢迪乌斯、维多利亚·冯·阿舍尔、苏砚秋、凌清鸢和沈砚。
 - API Key 使用 Android Keystore；聊天、记忆、图片和状态保存在本机。
 - 聊天页使用固定全屏角色背景、默认仅显示最新角色回复，并提供独立历史开关；键盘弹出时消息和输入栏上移。输入栏包含“（）”动作快捷插入，并可从菜单回退到任意一条用户发言之前。
-- 生成图片统一保存为 `1080×1920` 手机竖屏背景；角色头像从竖图上部裁切。Local Dream 使用所选分辨率的模型补丁，云端图片请求 `768×1344`，方形回退图使用中心裁切而不是拉伸。
+- Local Dream 保留模型生成的方形原图；用户先选择 `9:16` 聊天背景，再从该背景
+  中选择 `1:1` 头像。相册导入使用相同流程，不再自动执行中间裁切。
 - Dream 默认优先使用 `1024.patch`、50 步、DPM++ 2M SDE Karras；设置页可切换 512/768/1024、5 种调度器与 Karras。
 - 默认正面模板仅保留 `masterpiece, best quality, anime illustration, three-quarter upper body, {appearance}`；新角色要求更详细的中文外貌和 30–50 个英文视觉标签。
 
@@ -61,7 +65,7 @@ Dream 模型槽位，下载失败的临时文件会自动清理。
 ```powershell
 $env:JAVA_HOME = "C:\path\to\jdk-17"
 $env:ANDROID_HOME = "C:\path\to\Android\Sdk"
-.\gradlew.bat testDebugUnitTest assembleDebug lintRelease assembleRelease --no-daemon
+.\gradlew.bat testDebugUnitTest assembleDebug lintDebug --no-daemon
 ```
 
 也可以使用 Android Studio 打开 `android/` 并运行 `app`。
@@ -74,10 +78,10 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 ## 当前验证
 
-- `0.18.8` 源码已通过 78 项 JVM 测试、Debug Lint 和 Debug APK 构建。
-- Debug Lint 为 0 errors、2 个既有 `android.media.ExifInterface` 警告。
+- `0.18.24` 源码已通过 94 项 JVM 测试、Debug Lint 和 Debug APK 构建。
+- 当前构建未连接 ADB，因此尚未执行 `0.18.24` 真机覆盖安装。
 - 预编译 APK 仅作为 GitHub Release 附件分发，不提交到 Git：
-  <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.0>
+  <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.24>
 
 ## 已知限制
 
