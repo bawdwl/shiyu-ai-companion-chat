@@ -16,8 +16,8 @@ android {
         applicationId = "com.shiyu.chat"
         minSdk = 26
         targetSdk = 35
-        versionCode = 54
-        versionName = "0.18.24"
+        versionCode = 55
+        versionName = "0.19.0"
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -26,6 +26,22 @@ android {
     buildFeatures {
         compose = true
         buildConfig = false
+    }
+
+    flavorDimensions += "edition"
+    productFlavors {
+        create("full") {
+            dimension = "edition"
+            resValue("bool", "feature_full", "true")
+            resValue("string", "app_name", "拾语")
+        }
+        create("cloud") {
+            dimension = "edition"
+            applicationIdSuffix = ".cloud"
+            versionNameSuffix = "-cloud"
+            resValue("bool", "feature_full", "false")
+            resValue("string", "app_name", "拾语云端")
+        }
     }
 
     signingConfigs {
@@ -84,7 +100,7 @@ ksp {
 }
 
 dependencies {
-    implementation(files("libs/sherpa-onnx-1.13.8.aar"))
+    add("fullImplementation", files("libs/sherpa-onnx-1.13.8.aar"))
     val composeBom = platform("androidx.compose:compose-bom:2025.02.00")
     implementation(composeBom)
     androidTestImplementation(composeBom)

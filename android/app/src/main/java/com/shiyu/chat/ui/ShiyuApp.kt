@@ -162,6 +162,7 @@ import com.shiyu.chat.data.naturalMessageText
 import com.shiyu.chat.data.speechOnlyText
 import com.shiyu.chat.R
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -184,12 +185,22 @@ private val InkMuted = Color(0xFF746F80)
 private val Hairline = Color(0xFFEAE4F2)
 private val Apricot = Color(0xFFF8E8EF)
 private val LilacMist = Color(0xFFF3EFFF)
+private const val BADGE_ARTWORK_MAX_DIMENSION = 192
+private const val THUMBNAIL_CACHE_BYTES = 6 * 1024 * 1024
 private val artworkBitmapCache = object : LruCache<String, android.graphics.Bitmap>(
     40 * 1024 * 1024,
 ) {
     override fun sizeOf(key: String, value: android.graphics.Bitmap): Int =
         value.allocationByteCount
 }
+private val artworkThumbnailCache = object : LruCache<String, android.graphics.Bitmap>(
+    THUMBNAIL_CACHE_BYTES,
+) {
+    override fun sizeOf(key: String, value: android.graphics.Bitmap): Int =
+        value.allocationByteCount
+}
+@OptIn(ExperimentalCoroutinesApi::class)
+private val artworkLoadDispatcher = Dispatchers.IO.limitedParallelism(2)
 
 private enum class RootTab(val label: String) {
     HOME("首页"),
@@ -781,29 +792,6 @@ private fun CharacterDiscoveryPage(
 ) {
     val background = character.backgroundPath?.takeIf { File(it).isFile }
         ?: character.avatarPath
-    val avatarPath = character.avatarPath
-    LaunchedEffect(background) {
-        background?.let { path ->
-            withContext(Dispatchers.IO) {
-                loadCachedArtwork(
-                    path,
-                    File(path).lastModified(),
-                    1024,
-                )
-            }
-        }
-    }
-    LaunchedEffect(avatarPath) {
-        avatarPath?.let { path ->
-            withContext(Dispatchers.IO) {
-                loadCachedArtwork(
-                    path,
-                    File(path).lastModified(),
-                    640,
-                )
-            }
-        }
-    }
     Box(
         Modifier
             .fillMaxSize()
@@ -1200,13 +1188,16 @@ private fun CharacterManagementPage(
                 }
             }
         }
-        items(characters, key = CharacterEntity::id) { character ->
+        items(
+            items = characters,
+            key = CharacterEntity::id,
+            contentType = { "character-management-card" },
+        ) { character ->
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = Color.White.copy(alpha = 0.84f),
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(1.dp, Hairline),
-                shadowElevation = 1.dp,
             ) {
                 Column(Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1922,6 +1913,7 @@ private fun ChatScreen(
     onDelete: () -> Unit,
 ) {
     val voiceContext = LocalContext.current
+    val fullFeatures = voiceContext.resources.getBoolean(R.bool.feature_full)
     val voice = remember { LocalVoice(voiceContext.applicationContext) }
     val voiceScope = rememberCoroutineScope()
     var voiceBusy by remember { mutableStateOf(false) }
@@ -2213,16 +2205,18 @@ private fun ChatScreen(
                                 confirmReset = true
                             },
                         )
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("选择音色（${ttsVoiceLabel(speaker)}）") },
-                            leadingIcon = {
-                                Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
-                            },
-                            onClick = {
-                                menu = false
-                                showVoicePicker = true
-                            },
-                        )
+                        if (fullFeatures) {
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("选择音色（${ttsVoiceLabel(speaker)}）") },
+                                leadingIcon = {
+                                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
+                                },
+                                onClick = {
+                                    menu = false
+                                    showVoicePicker = true
+                                },
+                            )
+                        }
                         androidx.compose.material3.DropdownMenuItem(
                             text = { Text("删除角色") },
                             leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
@@ -2452,6 +2446,7 @@ private fun ChatScreen(
                         )
                     }
                     if (!hasComposerContent && !state.busy) {
+                        if (fullFeatures) {
                         IconButton(
                             onClick = {
                                 if (recording) {
@@ -2487,6 +2482,7 @@ private fun ChatScreen(
                                 },
                                 modifier = Modifier.size(20.dp),
                             )
+                        }
                         }
                         IconButton(
                             onClick = { picker.launch("image/*") },
@@ -2750,6 +2746,7 @@ private fun LatestRoleMessage(
     onPlay: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val fullFeatures = LocalContext.current.resources.getBoolean(R.bool.feature_full)
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -2761,19 +2758,21 @@ private fun LatestRoleMessage(
             Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
             verticalAlignment = Alignment.Top,
         ) {
-            IconButton(
-                onClick = onPlay,
-                modifier = Modifier.size(38.dp),
-                enabled = message.id > 0 && message.content.isNotBlank(),
-            ) {
-                Icon(
-                    if (playing()) Icons.Default.Stop else Icons.Default.PlayArrow,
-                    contentDescription = if (playing()) "停止朗读" else "播放角色语音",
-                    tint = if (message.id > 0) Forest else InkMuted,
-                    modifier = Modifier.size(22.dp),
-                )
+            if (fullFeatures) {
+                IconButton(
+                    onClick = onPlay,
+                    modifier = Modifier.size(38.dp),
+                    enabled = message.id > 0 && message.content.isNotBlank(),
+                ) {
+                    Icon(
+                        if (playing()) Icons.Default.Stop else Icons.Default.PlayArrow,
+                        contentDescription = if (playing()) "停止朗读" else "播放角色语音",
+                        tint = if (message.id > 0) Forest else InkMuted,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+                Spacer(Modifier.width(7.dp))
             }
-            Spacer(Modifier.width(7.dp))
             Text(
                 naturalMessageText(message.content, message.displayJson),
                 modifier = Modifier.weight(1f).padding(top = 2.dp),
@@ -3038,6 +3037,7 @@ private fun VoicePickerSheet(
 
 @Composable
 private fun MessageBubble(character: CharacterEntity, message: MessageEntity, onPlay: (() -> Unit)? = null, playing: () -> Boolean = { false }) {
+    val fullFeatures = LocalContext.current.resources.getBoolean(R.bool.feature_full)
     val user = message.role == "user"
     val shownContent = naturalMessageText(message.content, message.displayJson)
     Row(
@@ -3086,7 +3086,7 @@ private fun MessageBubble(character: CharacterEntity, message: MessageEntity, on
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    if (!user && message.content.isNotBlank() && onPlay != null) {
+                    if (fullFeatures && !user && message.content.isNotBlank() && onPlay != null) {
                         TextButton(onClick = onPlay) {
                             Icon(
                                 if (playing()) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
@@ -3122,6 +3122,7 @@ private fun CharacterBadge(character: CharacterEntity, size: androidx.compose.ui
             path = character.avatarPath,
             modifier = Modifier.fillMaxSize(),
             cropFace = true,
+            maxDimensionOverride = BADGE_ARTWORK_MAX_DIMENSION,
         )
         if (character.avatarPath == null || !File(character.avatarPath).isFile) {
             Text(character.name.take(1), color = Color.White, fontWeight = FontWeight.Bold)
@@ -3145,8 +3146,10 @@ private fun LocalAvatar(
         )
     }
     LaunchedEffect(path, modified, maxDimension) {
-        bitmap = withContext(Dispatchers.IO) {
-            loadCachedArtwork(path, modified, maxDimension)
+        if (bitmap == null) {
+            bitmap = withContext(artworkLoadDispatcher) {
+                loadCachedArtwork(path, modified, maxDimension)
+            }
         }
     }
     val loadedBitmap = bitmap
@@ -3167,7 +3170,7 @@ private fun LocalAvatar(
                         size.width.roundToInt(),
                         size.height.roundToInt(),
                     ),
-                    filterQuality = FilterQuality.High,
+                    filterQuality = FilterQuality.Low,
                 )
             }
         } else {
@@ -3188,10 +3191,17 @@ private fun cachedArtworkOrNull(
     maxDimension: Int,
 ): android.graphics.Bitmap? {
     val file = path?.let(::File)?.takeIf(File::isFile) ?: return null
-    return artworkBitmapCache.get(
+    return artworkCache(maxDimension).get(
         "${file.absolutePath}|$modified|$maxDimension",
     )
 }
+
+private fun artworkCache(maxDimension: Int): LruCache<String, android.graphics.Bitmap> =
+    if (maxDimension <= BADGE_ARTWORK_MAX_DIMENSION) {
+        artworkThumbnailCache
+    } else {
+        artworkBitmapCache
+    }
 
 private fun loadCachedArtwork(
     path: String?,
@@ -3200,7 +3210,8 @@ private fun loadCachedArtwork(
 ): android.graphics.Bitmap? {
     val file = path?.let(::File)?.takeIf(File::isFile) ?: return null
     val key = "${file.absolutePath}|$modified|$maxDimension"
-    artworkBitmapCache.get(key)?.let { return it }
+    val cache = artworkCache(maxDimension)
+    cache.get(key)?.let { return it }
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(file.absolutePath, bounds)
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
@@ -3215,7 +3226,7 @@ private fun loadCachedArtwork(
         file.absolutePath,
         BitmapFactory.Options().apply { inSampleSize = sample },
     ) ?: return null
-    artworkBitmapCache.put(key, bitmap)
+    cache.put(key, bitmap)
     return bitmap
 }
 
@@ -3422,6 +3433,7 @@ private fun SettingsDialog(
                         Text("删除 DeepSeek Key", color = MaterialTheme.colorScheme.error)
                     }
                 }
+                if (state.fullFeatures) {
                 HorizontalDivider()
                 Text("手机本地 Qwen3-1.7B · ${state.localModelName}", fontWeight = FontWeight.SemiBold)
                 Text(
@@ -3499,6 +3511,7 @@ private fun SettingsDialog(
                     fontSize = 10.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                }
                 HorizontalDivider()
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
@@ -3553,6 +3566,7 @@ private fun SettingsDialog(
                         Text("删除千问 AI 平台 Key", color = MaterialTheme.colorScheme.error)
                     }
                 }
+                if (state.fullFeatures) {
                 HorizontalDivider()
                 Text("Dream 本地生图 · ${state.avatarModelName}", fontWeight = FontWeight.SemiBold)
                 Text(
@@ -3808,6 +3822,7 @@ private fun SettingsDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 }
+                }
             }
             HorizontalDivider()
             Row(
@@ -3821,17 +3836,19 @@ private fun SettingsDialog(
                     if (openCodeKey.isNotBlank()) onSaveOpenCodeKey(openCodeKey)
                     if (deepSeekKey.isNotBlank()) onSaveKey(deepSeekKey)
                     if (imageKey.isNotBlank()) onSaveImageKey(imageKey)
-                    onSaveDreamSettings(
-                        DreamGenerationSettings(
-                            positiveTemplate = dreamPositive,
-                            negativePrompt = dreamNegative,
-                            steps = dreamSteps.toIntOrNull() ?: 50,
-                            cfg = dreamCfg.toFloatOrNull() ?: 7.0f,
-                            scheduler = dreamScheduler,
-                            seed = dreamSeed.toLongOrNull() ?: 20261102L,
-                            resolution = dreamResolution.toIntOrNull() ?: 1024,
-                        ),
-                    )
+                    if (state.fullFeatures) {
+                        onSaveDreamSettings(
+                            DreamGenerationSettings(
+                                positiveTemplate = dreamPositive,
+                                negativePrompt = dreamNegative,
+                                steps = dreamSteps.toIntOrNull() ?: 50,
+                                cfg = dreamCfg.toFloatOrNull() ?: 7.0f,
+                                scheduler = dreamScheduler,
+                                seed = dreamSeed.toLongOrNull() ?: 20261102L,
+                                resolution = dreamResolution.toIntOrNull() ?: 1024,
+                            ),
+                        )
+                    }
                     onSaveLimits(
                         requestLimit.toIntOrNull() ?: 12_000,
                         dailyLimit.toIntOrNull() ?: 200_000,
@@ -3958,6 +3975,7 @@ private fun EditCharacterDialog(
     onModelSourceChange: (String) -> Unit,
     onSave: (CharacterEntity) -> Unit,
 ) {
+    val fullFeatures = LocalContext.current.resources.getBoolean(R.bool.feature_full)
     var name by remember(character.id) { mutableStateOf(character.name) }
     var tag by remember(character.id) { mutableStateOf(character.tag) }
     var description by remember(character.id) { mutableStateOf(character.description) }
@@ -3981,7 +3999,11 @@ private fun EditCharacterDialog(
     var roleContextJson by remember(character.id) {
         mutableStateOf(character.roleContextJson)
     }
-    var modelSource by remember(character.id) { mutableStateOf(character.modelSource) }
+    var modelSource by remember(character.id, fullFeatures) {
+        mutableStateOf(
+            if (fullFeatures) character.modelSource else MODEL_SOURCE_API,
+        )
+    }
     var avatarPath by remember(character.id, character.avatarPath) {
         mutableStateOf(character.avatarPath)
     }
@@ -4118,6 +4140,7 @@ private fun EditCharacterDialog(
                     modifier = Modifier.padding(top = 6.dp, bottom = 8.dp),
                 )
             }
+            if (fullFeatures) {
             item {
                 Surface(
                     color = LilacMist.copy(alpha = 0.7f),
@@ -4181,6 +4204,7 @@ private fun EditCharacterDialog(
                 }
             }
             }
+            }
             if (editSection == 0) {
             item {
                 Surface(
@@ -4231,7 +4255,9 @@ private fun EditCharacterDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            if (avatarModelReady) {
+                            if (!fullFeatures) {
+                                "云端生成角色原图需要千问 AI 平台图片 Key。"
+                            } else if (avatarModelReady) {
                                 "本地 Dream 生图模型已就绪，可在手机 NPU 上离线生成；也可以切换千问图片 API。"
                             } else {
                                 "先在应用设置中导入 SD1.5 QNN 模型；云端生成需要千问 AI 平台图片 Key。"
@@ -4240,18 +4266,20 @@ private fun EditCharacterDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = {
-                                    onGenerateLocalAvatar(editedCharacter()) { updated, sourcePath ->
-                                        avatarPath = updated.avatarPath
-                                        backgroundPath = updated.backgroundPath
-                                        generatedArtwork = sourcePath
-                                            ?: updated.backgroundPath
-                                    }
-                                },
-                                enabled = avatarModelReady && !avatarBusy && name.isNotBlank(),
-                            ) {
-                                Text(if (avatarBusy) "生成中…" else "NPU 生成角色原图")
+                            if (fullFeatures) {
+                                Button(
+                                    onClick = {
+                                        onGenerateLocalAvatar(editedCharacter()) { updated, sourcePath ->
+                                            avatarPath = updated.avatarPath
+                                            backgroundPath = updated.backgroundPath
+                                            generatedArtwork = sourcePath
+                                                ?: updated.backgroundPath
+                                        }
+                                    },
+                                    enabled = avatarModelReady && !avatarBusy && name.isNotBlank(),
+                                ) {
+                                    Text(if (avatarBusy) "生成中…" else "NPU 生成角色原图")
+                                }
                             }
                             Button(
                                 onClick = {

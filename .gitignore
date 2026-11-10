@@ -27,7 +27,6 @@ archive/
 *.safetensors
 *.ckpt
 *.bin
-!android/app/src/main/assets/speech/kokoro/voices.bin
 !android/app/src/full/assets/speech/kokoro/voices.bin
 *.sqlite
 *.sqlite3

@@ -6,9 +6,9 @@
 `deepseek-chat`。API Key 由使用者在本机填写，不会写入源码、数据库快照或
 Git 仓库。
 
-当前 Android 发布版：`0.18.24`
+当前 Android 发布版：`0.19.0`
 
-最新发布：[GitHub Release `v0.18.24`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.24)
+最新发布：[GitHub Release `v0.19.0`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.19.0)
 
 ## 项目展示
 
@@ -29,18 +29,19 @@ Git 仓库。
 
 - **Windows EXE 基础版**：解压即可运行，提供 DeepSeek / OpenCode Go 云端角色生成和聊天、四个内置角色、角色编辑与删除、世界书、长期记忆管理及云端图片输入。发布包不附带本地大语言模型、生图模型或完整本地语音模型。
 - **PC 网页完整环境**：与 EXE 共用 React 和 FastAPI 核心，额外支持自行安装 MeinaMix V12、本地 Qwen/LoRA、BGE、CosyVoice 2、GPT-SoVITS、MeloTTS 和 Whisper 等完整实验链路。
-- **Android**：除云端 API 外，可导入 MNN 大语言模型和 Local Dream SD1.5/QNN 生图模型；APK 内置 12 个可编辑、可删除的初始角色及对应头像和背景，并包含本地语音识别与 VITS 角色语音运行库。模型权重按设置页要求由用户导入。
+- **Android 完整版**：除云端 API 外，可导入 MNN 大语言模型和 Local Dream SD1.5/QNN 生图模型；APK 内置 8 个可编辑、可删除的初始角色及对应头像和背景，并包含本地语音识别与 VITS 角色语音运行库。模型权重按设置页要求由用户导入。
+- **Android 云端版**：独立包名，可与完整版共存，只保留云端聊天、角色生成、长期记忆、内部状态、场景、图片输入和千问云端生图；不包含 MNN、QNN、Local Dream、ASR 和 TTS 运行库。
 
 Windows EXE 的“基础版”不是完整研究环境。需要本地大模型、本地生图、高质量角色音色或完整语音识别时，请按下方 PC 源码流程安装对应运行库和模型权重。
 
 ## 当前版本
 
-Android `0.18.24` 修复了使用 DeepSeek 官方 API 创建角色时错误路由到
-OpenCode Go 的问题，并将官方模型更新为 `deepseek-chat`。Android 内置 12 个
-可编辑、可删除的初始角色与完整头像、背景资源。
-升级只补充缺失的初次见面简介，不覆盖已有角色档案。重置对话会清除聊天记录、
-长期记忆、内部状态和 Trace，但保留角色档案、头像与背景。详细版本记录见
-[CHANGELOG](CHANGELOG.md)。
+Android `0.19.0` 新增约 21.9 MiB 的云端精简版，并把完整版与云端版的初始角色
+统一为 8 人：宋知意、裴既明、李白、萧承渊、姜拂衣、空条承太郎、凌清鸢和
+沈砚辞。角色档案、头像和聊天背景来自作者本地云端版角色库。
+本次还优化了角色管理页的头像解码、缩略图缓存和列表绘制，减少快速滑动时的卡顿。
+升级会同步这 8 个默认角色，并移除旧版中不属于当前初始角色库的默认角色；
+用户自建角色不在此清理范围内。详细版本记录见 [CHANGELOG](CHANGELOG.md)。
 
 ## 文档
 
@@ -170,21 +171,33 @@ PC 语音优先调用本机 CosyVoice 2 FastAPI；服务或角色参考音频不
 ## 安装 Android 端
 
 从 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/latest)
-下载 `Shiyu-0.18.24-Android-arm64-v8a.apk`。
+下载 `Shiyu-0.19.0-Android-arm64-v8a.apk`，或云端精简版
+`Shiyu-0.19.0-cloud-Android-arm64-v8a.apk`。
 
 本机构建调试包：
 
 ```text
-android/app/build/outputs/apk/debug/app-debug.apk
+android/app/build/outputs/apk/full/debug/app-full-debug.apk
 ```
 
-- 当前源码：`0.18.24 / versionCode 54`
+- 当前源码：`0.19.0 / versionCode 55`
 - Room schema：13
-- 发布 APK 大小：`300,290,445` 字节
-- 发布 APK SHA-256：`FBEEC4F8F754164D966E498F3204EC31A5195F778DC5A70C27E3D2920CB57202`
+- 完整版 APK：`299,207,736` 字节，约 285.35 MiB
+- 完整版 SHA-256：`D06A7C1A85298B77CDEA9227E679FD9388625C7F3B79706DAA791D87F43EA2B1`
 - 安装后请在设置中填写自己的 OpenCode Go 或 DeepSeek Key。
 
 APK 包含本地语音运行库、VITS 中文语音模型、Qwen MNN 运行库和 Dream SD1.5/QNN 后端。本地 Qwen 与 MeinaMix V12 等模型权重不随 APK 分发，需要用户按应用设置中的说明导入。
+
+### 云端精简版
+
+发布包：`release/apk-0.19.0-cloud/Shiyu-0.19.0-cloud-Android-arm64-v8a.apk`
+
+- 包名：`com.shiyu.chat.cloud`，可与完整版同时安装，数据独立。
+- 版本：`0.19.0-cloud / versionCode 55`
+- 大小：`22,310,896` 字节，约 21.28 MiB。
+- SHA-256：`D922F63B110C5F5BC6801D684ED639926CF9F2612A38494D0D9CC3D47285B41D`
+- 保留云端角色生成、聊天、长期记忆、内部状态、事件、场景、图片输入和千问云端生图。
+- 不包含 MNN、Local Dream/QNN、本地 ASR、角色朗读模型和相关原生运行库。
 
 ### 从源码构建 Android
 
@@ -194,12 +207,14 @@ APK 包含本地语音运行库、VITS 中文语音模型、Qwen MNN 运行库�
 $env:JAVA_HOME = "C:\path\to\jdk-17"
 $env:ANDROID_HOME = "C:\Users\<you>\AppData\Local\Android\Sdk"
 .\scripts\build_android.ps1
+.\scripts\build_android_cloud.ps1
 ```
 
 输出：
 
 ```text
-android/app/build/outputs/apk/debug/app-debug.apk
+android/app/build/outputs/apk/full/debug/app-full-debug.apk
+android/app/build/outputs/apk/cloud/debug/app-cloud-debug.apk
 ```
 
 也可以直接在 Android Studio 中打开 `android/` 并运行 `app` 配置。
@@ -232,7 +247,8 @@ Android：
 
 ```powershell
 cd android
-.\gradlew.bat testDebugUnitTest assembleDebug lintDebug --no-daemon
+.\gradlew.bat testFullDebugUnitTest assembleFullDebug lintFullDebug --no-daemon
+.\gradlew.bat testCloudDebugUnitTest assembleCloudDebug lintCloudDebug --no-daemon
 ```
 
 当前发布前验证结果：
@@ -241,7 +257,7 @@ cd android
 - PC 前端状态测试：40 项通过。
 - React 生产构建通过。
 - Android JVM：94 项通过。
-- Android APK 构建和 Lint 通过；本轮构建尚未执行 0.18.24 真机覆盖安装。本地 Dream 生图仍取决于设备 NPU 与导入模型。
+- Android APK 构建和 Lint 通过；完整版与云端版均会执行真机覆盖安装验证。本地 Dream 生图仍取决于设备 NPU 与导入模型。
 
 这些结果证明主要工程流程可运行，不等同于大规模真实聊天质量评估。
 

@@ -1,8 +1,9 @@
 # 拾语 Android
 
-当前源码版本：`0.18.24 / versionCode 54`，Room schema 13，只提供一个完整安装包：
+当前源码版本：`0.19.0 / versionCode 55`，Room schema 13，提供两个安装版本：
 
-- `com.shiyu.chat`：内置本地语音识别、角色朗读、MNN 和图片生成入口。
+- `com.shiyu.chat`：完整版，内置本地语音识别、角色朗读、MNN 和 Local Dream。
+- `com.shiyu.chat.cloud`：云端精简版，移除 MNN、QNN、Local Dream、ASR 和 TTS。
 
 技术栈：Kotlin、Jetpack Compose、Room schema 13、WorkManager、OkHttp、
 Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
@@ -23,8 +24,9 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
   去重后提供女声 1、男声 1、女声 2、男声 2 四个选项，支持试听和按角色保存。
 - 千问图片 API 与内置 Local Dream SD1.5/QNN 生图。
 - 设置中按设备自动选择并下载 MeinaMix V12，显示进度、校验大小与 SHA-256。
-- 内置 12 个初始角色：李白、宋知意、裴既明、萧承渊、姜拂衣、夜神月、
-  空条承太郎、卢迪乌斯、维多利亚·冯·阿舍尔、苏砚秋、凌清鸢和沈砚。
+- 内置 8 个初始角色：宋知意、裴既明、李白、萧承渊、姜拂衣、
+  空条承太郎、凌清鸢和沈砚辞，并使用同一套角色档案、头像和聊天背景。
+- 角色管理页使用独立缩略图缓存，限制并发图片解码并减少列表绘制开销。
 - API Key 使用 Android Keystore；聊天、记忆、图片和状态保存在本机。
 - 聊天页使用固定全屏角色背景、默认仅显示最新角色回复，并提供独立历史开关；键盘弹出时消息和输入栏上移。输入栏包含“（）”动作快捷插入，并可从菜单回退到任意一条用户发言之前。
 - Local Dream 保留模型生成的方形原图；用户先选择 `9:16` 聊天背景，再从该背景
@@ -65,7 +67,8 @@ Dream 模型槽位，下载失败的临时文件会自动清理。
 ```powershell
 $env:JAVA_HOME = "C:\path\to\jdk-17"
 $env:ANDROID_HOME = "C:\path\to\Android\Sdk"
-.\gradlew.bat testDebugUnitTest assembleDebug lintDebug --no-daemon
+.\gradlew.bat testFullDebugUnitTest assembleFullDebug lintFullDebug --no-daemon
+.\gradlew.bat testCloudDebugUnitTest assembleCloudDebug lintCloudDebug --no-daemon
 ```
 
 也可以使用 Android Studio 打开 `android/` 并运行 `app`。
@@ -73,15 +76,17 @@ $env:ANDROID_HOME = "C:\path\to\Android\Sdk"
 输出：
 
 ```text
-android/app/build/outputs/apk/debug/app-debug.apk
+android/app/build/outputs/apk/full/debug/app-full-debug.apk
+android/app/build/outputs/apk/cloud/debug/app-cloud-debug.apk
 ```
 
 ## 当前验证
 
-- `0.18.24` 源码已通过 94 项 JVM 测试、Debug Lint 和 Debug APK 构建。
-- 当前构建未连接 ADB，因此尚未执行 `0.18.24` 真机覆盖安装。
+- `0.19.0` 源码通过完整版与云端版 JVM 测试、Debug Lint 和 Debug APK 构建。
+- 完整版与云端版均执行覆盖安装验证，不清理已有用户数据。
+- 覆盖安装后两个包均确认只保留上述 8 个默认角色，头像与背景路径有效。
 - 预编译 APK 仅作为 GitHub Release 附件分发，不提交到 Git：
-  <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.24>
+  <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.19.0>
 
 ## 已知限制
 

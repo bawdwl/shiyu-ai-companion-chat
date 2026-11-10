@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-11-10 — Android `0.19.0`
+
+- Added a cloud-only Android flavor (`com.shiyu.chat.cloud`) that can coexist
+  with the full app and removes MNN, QNN, Local Dream, ASR and TTS assets and
+  native libraries.
+- Unified both Android flavors around the same eight initial characters:
+  Song Zhiyi, Pei Jiming, Li Bai, Xiao Chengyuan, Jiang Fuyi, Jotaro Kujo,
+  Ling Qingyuan and Shen Yanci.
+- Imported the eight character profiles, avatars and backgrounds from the
+  author's local cloud app. Retired default characters are removed on upgrade;
+  user-created characters are preserved.
+- Improved character-management scrolling with smaller badge thumbnails, a
+  separate thumbnail cache, bounded image decoding, fewer duplicate preloads
+  and lighter card rendering.
+- Kept the fixed Song Zhiyi and Pei Jiming training prompts unchanged.
+
 ## 2026-11-09 — Android `0.18.24`
 
 - Fixed Android character creation ignoring the selected official DeepSeek

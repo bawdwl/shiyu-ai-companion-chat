@@ -33,6 +33,7 @@ data class ShiyuUiState(
     val structuredMemories: List<StructuredMemoryEntity> = emptyList(),
     val turnTraces: List<TurnTraceEntity> = emptyList(),
     val cloudProvider: String = "opencode",
+    val fullFeatures: Boolean = false,
     val showDevProviders: Boolean = false,
     val apiConfigured: Boolean = false,
     val openCodeConfigured: Boolean = false,
@@ -76,6 +77,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
             val provider = repository.cloudProvider()
             _state.value = _state.value.copy(
                 cloudProvider = provider,
+                fullFeatures = repository.fullFeatures,
                 showDevProviders = repository.showDevProviders,
                 apiConfigured = !repository.activeApiKey().isNullOrBlank(),
                 openCodeConfigured = !repository.openCodeApiKey().isNullOrBlank(),

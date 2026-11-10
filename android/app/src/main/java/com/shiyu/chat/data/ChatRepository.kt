@@ -66,6 +66,7 @@ class ChatRepository(
     val conversationSummaries: Flow<List<ConversationSummaryRow>> =
         database.messages().observeConversationSummaries()
     val showDevProviders: Boolean = context.resources.getBoolean(R.bool.show_dev_providers)
+    val fullFeatures: Boolean = context.resources.getBoolean(R.bool.feature_full)
 
     init {
         memoryScope.launch {
@@ -132,6 +133,8 @@ class ChatRepository(
         val deletedBuiltIns = prefs
             .getStringSet(KEY_DELETED_BUILTIN_CHARACTERS, emptySet())
             .orEmpty()
+        val seedVersion = prefs.getInt(KEY_CHARACTER_SEED_VERSION, 0)
+        val refreshSeedContent = seedVersion < CHARACTER_SEED_VERSION
         seeds.forEach { seed ->
             val character = seed.character
             if (character.id in deletedBuiltIns) return@forEach
@@ -140,6 +143,31 @@ class ChatRepository(
                 val installed = installSeedArtwork(character, seed)
                 database.characters().upsert(installed)
                 ensureOpening(installed)
+            } else if (refreshSeedContent) {
+                val installed = installSeedArtwork(character, seed, force = true)
+                val updated = installed.copy(
+                    modelSource = if (fullFeatures) {
+                        existing.modelSource
+                    } else {
+                        MODEL_SOURCE_API
+                    },
+                    createdAt = existing.createdAt,
+                )
+                database.characters().upsert(updated)
+                if (existing.avatarPath != updated.avatarPath) {
+                    avatarGenerator.deleteAvatar(existing.avatarPath)
+                }
+                if (
+                    existing.backgroundPath != updated.backgroundPath &&
+                    existing.backgroundPath != existing.avatarPath
+                ) {
+                    avatarGenerator.deleteAvatar(existing.backgroundPath)
+                }
+                val messages = database.messages().getAllForCharacter(character.id)
+                if (messages.size == 1 && messages.single().role == "assistant") {
+                    database.messages().clear(character.id)
+                    ensureOpening(updated)
+                }
             } else if (
                 existing.publicIntro.isBlank() &&
                 character.publicIntro.isNotBlank()
@@ -148,7 +176,12 @@ class ChatRepository(
                     character.id,
                     character.publicIntro,
                 )
+            } else if (!fullFeatures && existing.modelSource != MODEL_SOURCE_API) {
+                database.characters().upsert(existing.copy(modelSource = MODEL_SOURCE_API))
             }
+        }
+        if (refreshSeedContent) {
+            prefs.edit().putInt(KEY_CHARACTER_SEED_VERSION, CHARACTER_SEED_VERSION).apply()
         }
     }
 
@@ -207,9 +240,14 @@ class ChatRepository(
                 for (index in 0 until array.length()) {
                     val json = array.getJSONObject(index)
                     val id = json.getString("id")
-                    val modelSource = json.optString("modelSource")
+                    val seededModelSource = json.optString("modelSource")
                         .takeIf { it in setOf(MODEL_SOURCE_API, MODEL_SOURCE_LOCAL_MNN) }
                         ?: MODEL_SOURCE_API
+                    val modelSource = if (fullFeatures) {
+                        seededModelSource
+                    } else {
+                        MODEL_SOURCE_API
+                    }
                     add(
                         BuiltInSeedCharacter(
                             character = CharacterEntity(
@@ -259,6 +297,7 @@ class ChatRepository(
     private suspend fun installSeedArtwork(
         character: CharacterEntity,
         seed: BuiltInSeedCharacter,
+        force: Boolean = false,
     ): CharacterEntity = withContext(Dispatchers.IO) {
         val directory = File(context.filesDir, "character-avatars").apply { mkdirs() }
         val safeId = character.id.replace(Regex("[^A-Za-z0-9._-]"), "_")
@@ -267,12 +306,14 @@ class ChatRepository(
             seed.avatarAsset,
             character.avatarPath,
             "$safeId-avatar",
+            force,
         )
         val backgroundPath = installSeedAsset(
             directory,
             seed.backgroundAsset,
             character.backgroundPath,
             "$safeId-background",
+            force,
         )
         character.copy(
             avatarPath = avatarPath,
@@ -285,9 +326,10 @@ class ChatRepository(
         assetName: String,
         currentPath: String?,
         outputStem: String,
+        force: Boolean = false,
     ): String {
         val current = currentPath?.let(::File)
-        if (current?.isFile == true) return current.absolutePath
+        if (!force && current?.isFile == true) return current.absolutePath
         val extension = assetName.substringAfterLast('.', "webp")
         val output = File(directory, "$outputStem.$extension")
         val temporary = File.createTempFile("seed-artwork-", ".tmp", directory)
@@ -914,7 +956,7 @@ class ChatRepository(
     ): MessageEntity {
         val turnStartedNs = System.nanoTime()
         val runId = UUID.randomUUID().toString()
-        val localMode = character.modelSource == MODEL_SOURCE_LOCAL_MNN
+        val localMode = fullFeatures && character.modelSource == MODEL_SOURCE_LOCAL_MNN
         val provider = if (localMode) PROVIDER_LOCAL_MNN else cloudProvider()
         val key = if (localMode) {
             null
@@ -1626,7 +1668,7 @@ class ChatRepository(
             )
             return 0
         }
-        if (character.modelSource == MODEL_SOURCE_LOCAL_MNN) {
+        if (fullFeatures && character.modelSource == MODEL_SOURCE_LOCAL_MNN) {
             database.structuredMemoryJobs().complete(
                 job.id,
                 "local MNN mode skips cloud memory extraction",
@@ -2780,10 +2822,10 @@ class ChatRepository(
         runCatching { normalizeEnglishAppearancePrompt(raw) }.getOrDefault("")
 
     suspend fun saveCharacter(character: CharacterEntity) {
-        require(character.modelSource in setOf(MODEL_SOURCE_API, MODEL_SOURCE_LOCAL_MNN)) {
-            "未知角色模型来源"
-        }
+        val modelSource = if (fullFeatures) character.modelSource else MODEL_SOURCE_API
+        require(modelSource in setOf(MODEL_SOURCE_API, MODEL_SOURCE_LOCAL_MNN)) { "未知角色模型来源" }
         val normalized = character.copy(
+            modelSource = modelSource,
             roleContextJson = RoleContextPolicy.normalizeJson(
                 character.roleContextJson,
             ),
@@ -2806,6 +2848,9 @@ class ChatRepository(
         characterId: String,
         modelSource: String,
     ): CharacterEntity {
+        require(fullFeatures || modelSource == MODEL_SOURCE_API) {
+            "云端版不支持本地 MNN 模型"
+        }
         require(modelSource in setOf(MODEL_SOURCE_API, MODEL_SOURCE_LOCAL_MNN)) {
             "未知角色模型来源"
         }
@@ -3078,13 +3123,9 @@ class ChatRepository(
             LI_BAI_CHARACTER_ID,
             XIAO_CHENGYUAN_CHARACTER_ID,
             "custom-c9b73e57-ba4",
-            "custom-5941ca69-ca2",
             "custom-a8c37ce5-13d",
-            "custom-1abbfae9-595",
-            "custom-e807e8f2-59b",
-            "custom-55ddf99f-5b6",
             "custom-42654713-fec",
-            "custom-631529e4-490",
+            "custom-1e6b334c-dc9",
         )
         private val FORCED_AVATAR_REFRESH_IDS = setOf(
             XIAO_CHENGYUAN_CHARACTER_ID,
@@ -3150,8 +3191,15 @@ class ChatRepository(
             "custom-d2b69a3a-84e",
             "custom-9d00d120-aa0",
             "custom-gu-qinghe-v1",
+            "custom-5941ca69-ca2",
+            "custom-1abbfae9-595",
+            "custom-e807e8f2-59b",
+            "custom-55ddf99f-5b6",
+            "custom-631529e4-490",
         )
         private const val KEY_DELETED_BUILTIN_CHARACTERS = "deleted_builtin_characters_v1"
+        private const val KEY_CHARACTER_SEED_VERSION = "character_seed_version"
+        private const val CHARACTER_SEED_VERSION = 1
         private const val KEY_BUILTIN_AVATAR_SEED_VERSION = "builtin_avatar_seed_version"
         private const val BUILTIN_AVATAR_SEED_VERSION = 1
         private const val KEY_DEEPSEEK_API = "deepseek_api_key"

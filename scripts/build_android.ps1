@@ -1,3 +1,8 @@
+param(
+    [ValidateSet("full", "cloud")]
+    [string]$Edition = "full"
+)
+
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $parent = Split-Path -Parent $root
@@ -43,11 +48,12 @@ if (-not $env:GRADLE_USER_HOME -and (Test-Path $toolchain)) {
 }
 $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 
-& (Join-Path $root "android/gradlew.bat") -p (Join-Path $root "android") assembleDebug --no-daemon
+$task = if ($Edition -eq "cloud") { "assembleCloudDebug" } else { "assembleFullDebug" }
+& (Join-Path $root "android/gradlew.bat") -p (Join-Path $root "android") $task --no-daemon
 if ($LASTEXITCODE -ne 0) {
     throw "Android 构建失败"
 }
 
-$apk = Join-Path $root "android/app/build/outputs/apk/debug/app-debug.apk"
+$apk = Join-Path $root "android/app/build/outputs/apk/$Edition/debug/app-$Edition-debug.apk"
 Get-Item $apk
 Get-FileHash $apk -Algorithm SHA256

@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $adb = Join-Path $root "outputs/platform-tools/adb.exe"
-$apk = Join-Path $root "android/app/build/outputs/apk/debug/app-debug.apk"
+$apk = Join-Path $root "android/app/build/outputs/apk/full/debug/app-full-debug.apk"
 if ([string]::IsNullOrWhiteSpace($ModelZip)) {
     $ModelZip = Join-Path $root "outputs/local-dream-dreamshaper-test/MeinaMixV12_qnn2.28_8gen2.zip"
 }
@@ -49,5 +49,5 @@ if ($LASTEXITCODE -ne 0) {
 
 & $adb shell dumpsys package com.shiyu.chat |
     Select-String "versionCode=|versionName="
-Write-Host "0.14.3 APK 已安装，MeinaMix V12 ZIP 已推送到手机 Download 目录。"
+Write-Host "完整版 APK 已安装，MeinaMix V12 ZIP 已推送到手机 Download 目录。"
 Write-Host "请在拾语“应用设置 → Dream 本地生图”中选择 $remoteZip 导入。"

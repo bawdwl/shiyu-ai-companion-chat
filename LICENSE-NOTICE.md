@@ -12,11 +12,11 @@ PC记忆检索可选用 `BAAI/bge-small-zh-v1.5`。该模型卡当前标注MIT�
 Android 本地角色头像直接嵌入 Local Dream v2.8.1 的 SD1.5/QNN 推理后端，
 包含其编译后的后端可执行文件、Qualcomm QNN 运行库与安全检查器。Local Dream
 代码及随附编译产物采用 **CC BY-NC 4.0**，只允许非商业使用；许可与集成说明位于
-`android/app/src/main/assets/third_party/local-dream/`。MeinaMix V12、
+`android/app/src/full/assets/third_party/local-dream/`。MeinaMix V12、
 DreamShaper 等 QNN 模型包不包含在 APK、Git 仓库或普通发布包中，由用户在应用内
 单独导入，并分别遵守模型卡许可。若要商业发布，必须替换这部分 CC BY-NC 组件。
 
-Android 当前内置的 `sherpa-onnx-vits-zh-ll` 来自 k2-fsa 的公开模型归档，归档注明由社区使用 `Plachtaa/VITS-fast-fine-tuning` 转换。模型包含 `suyingxue / gunian / fushiyu / bingjiao / bazong` 五个 speaker，其中 `bazong` 与 `gunian` 是同一男声；应用只显示去重后的女声 1、男声 1、女声 2、男声 2。该归档没有单独声明模型权重许可或声音身份授权；项目只将其用于当前非商业 Demo，不据此声称可以商业使用或再授权这些声音。文件来源、哈希和边界记录在 `android/app/src/main/assets/speech/vits-zh-ll/MODEL_NOTICE.md`。
+Android 当前内置的 `sherpa-onnx-vits-zh-ll` 来自 k2-fsa 的公开模型归档，归档注明由社区使用 `Plachtaa/VITS-fast-fine-tuning` 转换。模型包含 `suyingxue / gunian / fushiyu / bingjiao / bazong` 五个 speaker，其中 `bazong` 与 `gunian` 是同一男声；应用只显示去重后的女声 1、男声 1、女声 2、男声 2。该归档没有单独声明模型权重许可或声音身份授权；项目只将其用于当前非商业 Demo，不据此声称可以商业使用或再授权这些声音。文件来源、哈希和边界记录在 `android/app/src/full/assets/speech/vits-zh-ll/MODEL_NOTICE.md`。
 
 Qwen3、MNN/GPTQ衍生产物、Whisper、VITS 模型、PyTorch、Transformers、PEFT以及其他依赖，保留各自上游许可和来源信息。项目许可不覆盖第三方模型或数据。当前公开代码仓库的代码可公开，但模型权重的再分发和商业使用仍需根据对应模型卡和权利来源单独判断。
 

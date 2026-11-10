@@ -22,7 +22,8 @@ release/apk-<version>/
 
 ```powershell
 Select-String android\app\build.gradle.kts -Pattern "versionCode|versionName"
-Get-FileHash release\apk-0.18.24\Shiyu-0.18.24-Android-arm64-v8a.apk -Algorithm SHA256
+Get-FileHash release\apk-0.19.0\Shiyu-0.19.0-Android-arm64-v8a.apk -Algorithm SHA256
+Get-FileHash release\apk-0.19.0-cloud\Shiyu-0.19.0-cloud-Android-arm64-v8a.apk -Algorithm SHA256
 ```
 
 ## 2. 测试 APK
@@ -35,7 +36,8 @@ $env:GRADLE_USER_HOME='C:\Users\31153\Documents\Qwen3 IM Chat\outputs\android-to
 $env:Path="$env:JAVA_HOME\bin;$env:Path"
 
 cd android
-.\gradlew.bat testDebugUnitTest assembleDebug lintDebug --no-daemon --offline
+.\gradlew.bat testFullDebugUnitTest assembleFullDebug lintFullDebug --no-daemon --offline
+.\gradlew.bat testCloudDebugUnitTest assembleCloudDebug lintCloudDebug --no-daemon --offline
 ```
 
 设备在线时覆盖安装，不使用清除数据：
@@ -50,7 +52,7 @@ GitHub Release 只能以 GitHub 已经存在的提交为标签目标：
 
 ```powershell
 git add .
-git commit -m "Release Android 0.18.24"
+git commit -m "Release Android 0.19.0"
 git push origin main
 ```
 
@@ -62,7 +64,7 @@ git push origin main
 建议保存为：
 
 ```text
-release/notes-v0.18.24.md
+release/notes-v0.19.0.md
 ```
 
 内容写清：
@@ -77,8 +79,8 @@ release/notes-v0.18.24.md
 
 ```powershell
 .\scripts\publish_android_release.ps1 `
-  -Version 0.18.24 `
-  -NotesFile release\notes-v0.18.24.md `
+  -Version 0.19.0 `
+  -NotesFile release\notes-v0.19.0.md `
   -WhatIf
 ```
 
@@ -97,8 +99,8 @@ release/notes-v0.18.24.md
 
 ```powershell
 .\scripts\publish_android_release.ps1 `
-  -Version 0.18.24 `
-  -NotesFile release\notes-v0.18.24.md
+  -Version 0.19.0 `
+  -NotesFile release\notes-v0.19.0.md
 ```
 
 脚本执行：
@@ -106,10 +108,14 @@ release/notes-v0.18.24.md
 1. 从本机 Git Credential Manager 读取 GitHub 凭据，不打印 Token；
 2. 若本地已有版本标签，以标签指向的提交为 Release 目标，否则使用当前 `HEAD`；
 3. 验证标签目标提交已经在 GitHub；
-4. 查询 `v0.18.24` Release 是否存在；
+4. 查询 `v0.19.0` Release 是否存在；
 5. 不存在则创建；
-6. 以流式方式上传约 286 MiB 的 APK；
+6. 以流式方式上传指定的 APK；
 7. 再次读取 Release，核对资产大小和下载地址。
+
+同一版本需要发布完整版和云端版时，先上传完整版，再用
+`-ApkPath release\apk-0.19.0-cloud\Shiyu-0.19.0-cloud-Android-arm64-v8a.apk`
+运行一次脚本。第二次会复用同一 Release 并追加云端 APK。
 
 如果在 Codex 中执行，网络访问可能要求命令审批；这是正常的安全边界。
 脚本会自动定位 Git，并在自身进程内默认绕过环境中的
@@ -134,10 +140,11 @@ release/notes-v0.18.24.md
 
 ```powershell
 gh auth status
-gh release create v0.18.24 `
-  release\apk-0.18.24\Shiyu-0.18.24-Android-arm64-v8a.apk `
-  --title "拾语 Android 0.18.24" `
-  --notes-file release\notes-v0.18.24.md
+gh release create v0.19.0 `
+  release\apk-0.19.0\Shiyu-0.19.0-Android-arm64-v8a.apk `
+  release\apk-0.19.0-cloud\Shiyu-0.19.0-cloud-Android-arm64-v8a.apk `
+  --title "拾语 Android 0.19.0 · 云端精简版与八角色初始库" `
+  --notes-file release\notes-v0.19.0.md
 ```
 
 但这台机器当前没有可用的 `gh`，所以本仓库默认使用

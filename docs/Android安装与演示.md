@@ -8,7 +8,16 @@ Android Keystore 实现。云端模式直接调用所选大模型 API，不要�
 
 从
 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases)
-下载最新 APK。当前公开版为 `0.18.24`。
+下载最新 APK。当前公开版为 `0.19.0`。
+
+Android 现在有两个构建版本：
+
+- 完整版：包名 `com.shiyu.chat`，包含本地 MNN、Local Dream/QNN、ASR 和角色朗读。
+- 云端精简版：包名 `com.shiyu.chat.cloud`，约 22 MiB，只保留云端聊天、角色、
+  记忆、状态、场景、图片输入和千问云端生图。
+
+两个包可以同时安装，数据彼此独立，并且使用相同的 8 个初始角色：
+宋知意、裴既明、李白、萧承渊、姜拂衣、空条承太郎、凌清鸢和沈砚辞。
 
 ![拾语 Android 角色聊天界面](images/Android-0.18.22-chat.jpg)
 
