@@ -13,7 +13,7 @@ Git 仓库。
 ## 项目展示
 
 <p align="center">
-  <img src="docs/images/shiyu-ai-companion-architecture-2026-11-04.png" alt="拾语：AI 虚拟角色陪伴系统框架" width="900">
+  <img src="docs/images/shiyu-virtual-companion-method.png" alt="拾语：虚拟角色陪伴系统核心方法图" width="100%">
 </p>
 
 <p align="center">
@@ -25,7 +25,7 @@ Git 仓库。
   <img src="docs/images/Android-0.18.22-chat-xiao-chengyuan.jpg" alt="拾语 Android 萧承渊角色聊天界面" width="42%">
 </p>
 
-### 三种运行形态
+### 四种运行形态
 
 - **Windows EXE 基础版**：解压即可运行，提供 DeepSeek / OpenCode Go 云端角色生成和聊天、四个内置角色、角色编辑与删除、世界书、长期记忆管理及云端图片输入。发布包不附带本地大语言模型、生图模型或完整本地语音模型。
 - **PC 网页完整环境**：与 EXE 共用 React 和 FastAPI 核心，额外支持自行安装 MeinaMix V12、本地 Qwen/LoRA、BGE、CosyVoice 2、GPT-SoVITS、MeloTTS 和 Whisper 等完整实验链路。
@@ -46,6 +46,9 @@ Android `0.19.0` 新增约 21.9 MiB 的云端精简版，并把完整版与云�
 ## 文档
 
 完整的安装、配置、构建和功能说明见 [文档索引](docs/README.md)。
+
+项目从角色创建、Prompt 编排、长期记忆、内部状态到多端运行原理的完整说明见
+[项目技术架构与运行原理](docs/项目技术架构与运行原理.md)。
 
 ## 已实现功能
 
@@ -87,15 +90,15 @@ Android `0.19.0` 新增约 21.9 MiB 的云端精简版，并把完整版与云�
 
 ### 语音、图片与本地模型
 
-| 能力 | Windows EXE 基础版 | PC 网页完整环境 | Android |
-|---|---|---|---|
-| 云端角色与记忆 | 支持 | 支持 | 支持 |
-| 本地大语言模型 | 不附带、不支持 | 可自行配置 Qwen / LoRA | 可导入 MNN 模型 |
-| 语音识别 | 仅 WebView2 系统回退，不作为核心保证 | 安装 Whisper 后启用 | sherpa-onnx 本地 ASR |
-| 角色语音 | 仅 Windows 系统回退，不作为核心保证 | 配置 CosyVoice 2、GPT-SoVITS 或 MeloTTS | 内置 VITS zh-ll 本地 TTS |
-| 图片输入 | 支持，交给云端视觉模型 | 支持 | 支持；本地 MNN 模式不支持图片 |
-| 图片生成 | 不附带 | 安装 MeinaMix V12 / Diffusers 后启用 | 千问图片 API，或导入 Local Dream SD1.5/QNN 模型 |
-| 模型权重 | 不含 | 用户自行下载 | MNN 与 Dream 权重由用户导入 |
+| 能力 | Windows EXE 基础版 | PC 网页完整环境 | Android 完整版 | Android 云端版 |
+|---|---|---|---|---|
+| 云端角色与记忆 | 支持 | 支持 | 支持 | 支持 |
+| 本地大语言模型 | 不附带、不支持 | 可自行配置 Qwen / LoRA | 可导入 MNN 模型 | 不支持 |
+| 语音识别 | 仅 WebView2 系统回退，不作为核心保证 | 安装 Whisper 后启用 | sherpa-onnx 本地 ASR | 不包含 |
+| 角色语音 | 仅 Windows 系统回退，不作为核心保证 | 配置 CosyVoice 2、GPT-SoVITS 或 MeloTTS | 内置 VITS zh-ll 本地 TTS | 不包含 |
+| 图片输入 | 支持，交给云端视觉模型 | 支持 | 支持；本地 MNN 模式不支持图片 | 支持，交给云端视觉模型 |
+| 图片生成 | 不附带 | 安装 MeinaMix V12 / Diffusers 后启用 | 千问图片 API，或导入 Local Dream SD1.5/QNN 模型 | 千问图片 API |
+| 模型权重 | 不含 | 用户自行下载 | MNN 与 Dream 权重由用户导入 | 不含 |
 
 语音目前不是实时电话式双向通话，也没有自动打断。
 

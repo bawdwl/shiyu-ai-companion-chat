@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-11 — Documentation
+
+- Added a complete project architecture and runtime guide covering character
+  creation, Prompt composition, layered memory, internal state, Providers,
+  background jobs and Android full/cloud variants.
+- Replaced the README architecture image with the new virtual-companion method
+  diagram and linked the detailed guide from the main and documentation indexes.
+- Updated the guide to the Android `0.19.0` source baseline and the eight-role
+  initial library.
+
 ## 2026-11-10 — Android `0.19.0`
 
 - Added a cloud-only Android flavor (`com.shiyu.chat.cloud`) that can coexist
