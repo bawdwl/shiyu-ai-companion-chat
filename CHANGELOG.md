@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-11-12 — Android `0.19.1`
+
+- Root bottom-bar tabs are now composed ahead of navigation and switch directly
+  without a state-triggered second frame.
+- Home character pages use identical fixed-height preview and active compose
+  bars, preventing the composer and bottom-aligned chat cards from shifting
+  when vertical character switching completes.
+- The `自由输入…` placeholder is vertically centered from its first composed
+  frame, so switching into a homepage character no longer moves the text.
+- The chat header now shows only the role tag under the character name; the
+  provider and `唯一对话` labels were removed.
+- Verification: 106 Android JVM tests per flavor, Android lint and APK builds.
+
+## 2026-11-11 — Android `0.19.4`
+
+- Background memory extraction no longer requests or applies `state_update`.
+  Explicit user boundaries are stored as evidence-backed
+  `user.boundary.*` structured memories and injected independently.
+- Added recovery of complete candidate objects when a PC extraction response is
+  truncated; Android recovery behavior is unchanged.
+- Added indexed candidate prefiltering for large memory scopes. PC and Android
+  keep full scoring for small stores, then switch to FTS, lexical matches,
+  recent records and pinned boundary/core candidates above 500 rows.
+- Expanded anaphoric retrieval with the last four user/assistant turns instead
+  of only the last two user messages.
+- Event correction no longer implies completion. Cancellation language creates
+  a `cancelled` event state, and historical questions can retrieve completed or
+  cancelled events.
+- Android request preflight now estimates the complete message body, including
+  character context, history, worldbook and memory.
+- Added full memory-related Prompt character counts to PC and Android traces.
+- Fixed-training characters Song Zhiyi and Pei Jiming remain unchanged.
+- Verification: 313 Python tests, 40 frontend state tests, 106 Android JVM
+  tests per flavor, Android lint and APK builds.
+
 ## 2026-11-11 — Android `0.19.3`
 
 - Removed persistent mood, familiarity, trust, warmth and relationship-stage

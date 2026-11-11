@@ -1132,6 +1132,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
         store=app.state.structured_memory
         trace['structured_memory_ids']=[]
         trace['structured_memory_chars']=0
+        trace['memory_related_prompt_chars']=0
         if trace.get('prompt_mode')=='fixed_training':
             trace['memory_retrieval_mode']='fixed_prompt'
             trace['internal_state_description']='不注入（固定训练提示词）'
@@ -1144,6 +1145,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
         trace['internal_state_mode']='off'
         trace['internal_state_injected']=False
         trace['user_boundary_injected']=False
+        memory_prompt_start=len(str(messages[0].get('content') or ''))
         memory=memory or {}
         character_id=current.get('character_id','assistant')
         need=memory_need(current.get('messages',[]),question)
@@ -1241,7 +1243,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
                 '\n\n【相关事件进展】\n'+
                 '\n'.join(
                     f"- {event['title']}（"
-                    f"{'未完成' if event['status']=='open' else '已完成'}）："
+                    f"{'未完成' if event['status']=='open' else '已取消' if event['status']=='cancelled' else '已完成'}）："
                     f"{event['summary']}"
                     for event in events
                 )+
@@ -1253,6 +1255,10 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
                 '\n用户在当前消息中明确更正的内容'
                 '优先于任何长期记忆。若本轮消息与旧记忆冲突，以本轮消息为准。'
             )
+        trace['memory_related_prompt_chars']=max(
+            0,
+            len(str(messages[0].get('content') or ''))-memory_prompt_start,
+        )
 
     def unify_session_and_structured_memory(current,memory):
         store=app.state.structured_memory
@@ -1494,7 +1500,6 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             )
             extraction=parse_extraction_result(raw)
             candidates=extraction['candidates']
-            state_update=extraction.get('state_update')
         except (ProviderConfigurationError,ProviderError) as exc:
             return {
                 'defer': True,
@@ -1569,19 +1574,6 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             store.warm_candidate_embeddings(character_id)
         except Exception:
             logger.exception('后台记忆向量索引失败，下一次检索将回退或重试')
-        state_result=None
-        state_error=None
-        if state_update is not None:
-            try:
-                state_result=store.internal_state.apply_update(
-                    character_id,
-                    state_update,
-                    new_batch,
-                    job_id=job['id'],
-                    message_end=batch_through,
-                )
-            except (TypeError,ValueError,KeyError) as exc:
-                state_error=str(exc)
         store.advance_cursor(character_id,batch_through)
         has_more=int(job['message_end'])>batch_through
         result = {
@@ -1592,8 +1584,6 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             'processed_to':batch_through,
             'applied':applied,
             'rejected':rejected,
-            'state_update':state_result,
-            **({'state_error':state_error} if state_error else {}),
             'usage':{'prompt_tokens':prompt_tokens,
                      'completion_tokens':completion_tokens},
             'requeue':has_more,
@@ -1607,8 +1597,6 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
                     'job_id':job['id'],
                     'applied':applied,
                     'rejected':rejected,
-                    'state_update':state_result,
-                    'state_error':state_error,
                     'requeue':has_more,
                 },
             )

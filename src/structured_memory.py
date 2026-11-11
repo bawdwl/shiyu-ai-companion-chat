@@ -103,31 +103,86 @@ STRUCTURED_MEMORY_EXTRACTION_PROMPT = (
     '有长期价值时使用 belief、plan 或 role_claim，否则省略。'
     '“如果、假如、可能、也许、打算、计划”等表述必须忠实标记为 hypothesis 或 plan，'
     '不能改写成已经发生的事实。'
-    '同时输出 state_update。只有出现有长期关系或当前心情价值的具体事件时才把 '
-    'significant 设为 true；普通寒暄、问路、一次完成任务或没有证据的猜测必须为 false。'
-    'state_update 格式为 {"significant":布尔值,"event_type":"casual、'
-    'user_shared_good_news、user_shared_distress、meaningful_self_disclosure、'
-    'shared_memory、conflict、repair或boundary_set",'
-    '"importance":"low、medium或high","mood_delta":{"valence":数值,'
-    '"arousal":数值},"relationship_delta":{"familiarity":数值,"trust":数值,'
-    '"warmth":数值},"boundary":null或简短字符串,"reason":"简短原因",'
-    '"evidence":[{"message_id":整数,"role":"user或assistant","quote":"原文连续片段"}]}。'
-    '数值只是建议变化，程序会限幅；不要把关系解释成恋爱，不要让一次事件改写核心人格。'
+    '用户明确表达的称呼、隐私、追问和身体接触边界必须提取为 user_report，'
+    'fact_type 使用 fact，fact_key 使用 user.boundary.称呼、user.boundary.privacy、'
+    'user.boundary.follow_up 或其他稳定英文分类；boundary 必须来自用户本人并保留'
+    '否定词和具体范围。普通偏好不能被误写成 boundary。不要输出情绪、信任、温暖、'
+    '关系阶段或 state_update，这些字段不属于长期事实提取任务。'
 )
+
+
+def _balanced_object_end(raw, start):
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(raw)):
+        char = raw[index]
+        if in_string and escaped:
+            escaped = False
+        elif in_string and char == '\\':
+            escaped = True
+        elif in_string and char == '"':
+            in_string = False
+        elif not in_string and char == '"':
+            in_string = True
+        elif not in_string and char == '{':
+            depth += 1
+        elif not in_string and char == '}':
+            depth -= 1
+            if depth == 0:
+                return index
+    return -1
+
+
+def _recover_json_objects_after_key(raw, key):
+    marker = raw.find(f'"{key}"')
+    if marker < 0:
+        return []
+    array_start = raw.find('[', marker)
+    if array_start < 0:
+        return []
+    recovered = []
+    index = array_start + 1
+    while index < len(raw):
+        if raw[index] == ']':
+            break
+        if raw[index] != '{':
+            index += 1
+            continue
+        end = _balanced_object_end(raw, index)
+        if end < 0:
+            break
+        try:
+            item = json.loads(raw[index:end + 1])
+        except json.JSONDecodeError:
+            index = end + 1
+            continue
+        if isinstance(item, dict):
+            recovered.append(item)
+        index = end + 1
+    return recovered
 
 
 def parse_extraction_result(raw):
     start, end = raw.find('{'), raw.rfind('}')
-    if start < 0 or end <= start:
-        raise ValueError('模型没有返回 JSON 对象')
-    decoded = json.loads(raw[start:end + 1])
-    candidates = decoded.get('candidates')
-    if not isinstance(candidates, list):
-        raise ValueError('candidates 必须是数组')
-    state_update = decoded.get('state_update')
+    decoded = None
+    if start >= 0 and end > start:
+        try:
+            decoded = json.loads(raw[start:end + 1])
+        except json.JSONDecodeError:
+            decoded = None
+    if isinstance(decoded, dict):
+        candidates = decoded.get('candidates')
+        if not isinstance(candidates, list):
+            raise ValueError('candidates 必须是数组')
+    else:
+        candidates = _recover_json_objects_after_key(raw, 'candidates')
+        if not candidates:
+            raise ValueError('模型没有返回可恢复的候选 JSON')
     return {
         'candidates': candidates,
-        'state_update': state_update if isinstance(state_update, dict) else None,
+        # Legacy responses may still contain state_update; the product ignores it.
+        'state_update': None,
     }
 
 
@@ -1477,6 +1532,132 @@ class CandidateStore:
             for item_id, vector in vectors.items()
         }
 
+    def _semantic_candidate_ids(
+        self,
+        character_id,
+        states,
+        query,
+        *,
+        limit=120,
+    ):
+        if self.embedder is None or not states:
+            return {}
+        model_name = str(
+            getattr(self.embedder, 'identity', None)
+            or getattr(self.embedder, 'model_name', None)
+            or getattr(self.embedder, 'provider_name', None)
+            or self.embedder.__class__.__name__
+        )
+        try:
+            query_vector = self._encode_query_vector(query)
+            placeholders = ','.join('?' for _ in states)
+            with self._lock:
+                rows = self.db.execute(
+                    f'''SELECT c.id,e.model,e.dimension,e.vector
+                        FROM candidate_embeddings AS e
+                        JOIN candidates AS c ON c.id=e.candidate_id
+                        WHERE c.character_id=?
+                          AND c.state IN ({placeholders})''',
+                    (character_id, *sorted(states)),
+                ).fetchall()
+            scores = {}
+            for row in rows:
+                if row['model'] != model_name:
+                    continue
+                vector = self._vector_from_blob(row['vector'])
+                if len(vector) != len(query_vector):
+                    continue
+                scores[int(row['id'])] = max(
+                    0.0,
+                    min(
+                        1.0,
+                        sum(
+                            left * right
+                            for left, right in zip(query_vector, vector)
+                        ),
+                    ),
+                )
+            return dict(
+                sorted(
+                    scores.items(),
+                    key=lambda item: item[1],
+                    reverse=True,
+                )[:limit]
+            )
+        except Exception:
+            LOGGER.exception(
+                'semantic memory prefilter failed; using indexed and recent candidates'
+            )
+            return {}
+
+    def _prefilter_candidate_ids(
+        self,
+        character_id,
+        states,
+        query,
+        *,
+        fts_scores,
+    ):
+        ids = set(fts_scores)
+        ids.update(
+            self._semantic_candidate_ids(
+                character_id,
+                states,
+                query,
+            )
+        )
+        terms = sorted(
+            _search_terms(query),
+            key=lambda value: (-len(value), value),
+        )[:8]
+        placeholders = ','.join('?' for _ in states)
+        with self._lock:
+            if terms:
+                like_clauses = ' OR '.join(
+                    'fact_key LIKE ? OR value LIKE ? OR content LIKE ?'
+                    for _ in terms
+                )
+                params = [character_id, *sorted(states)]
+                for term in terms:
+                    pattern = f'%{term}%'
+                    params.extend((pattern, pattern, pattern))
+                rows = self.db.execute(
+                    f'''SELECT id FROM candidates
+                        WHERE character_id=? AND state IN ({placeholders})
+                          AND ({like_clauses})
+                        ORDER BY observed_order DESC,id DESC
+                        LIMIT {PREFILTER_MATCH_LIMIT}''',
+                    tuple(params),
+                ).fetchall()
+                ids.update(int(row['id']) for row in rows)
+            recent = self.db.execute(
+                f'''SELECT id FROM candidates
+                    WHERE character_id=? AND state IN ({placeholders})
+                    ORDER BY observed_order DESC,id DESC
+                    LIMIT {PREFILTER_RECENT_LIMIT}''',
+                (character_id, *sorted(states)),
+            ).fetchall()
+            ids.update(int(row['id']) for row in recent)
+            pinned = self.db.execute(
+                '''SELECT id FROM candidates
+                   WHERE character_id=? AND state='active' AND (
+                     fact_key LIKE '%boundary%'
+                     OR content LIKE '%不要%'
+                     OR content LIKE '%别%'
+                     OR content LIKE '%不希望%'
+                     OR content LIKE '%不喜欢%'
+                     OR (
+                       subject='user' AND kind='user_report'
+                       AND fact_type IN ('fact','preference')
+                     )
+                   )
+                   ORDER BY importance DESC,observed_order DESC,id DESC
+                   LIMIT 24''',
+                (character_id,),
+            ).fetchall()
+            ids.update(int(row['id']) for row in pinned)
+        return ids
+
     def warm_candidate_embeddings(self, character_id):
         """Populate semantic vectors from the background worker."""
         if self.embedder is None:
@@ -1599,13 +1780,47 @@ class CandidateStore:
             cue in query for cue in _HISTORY_CUES
         )
         states = {'active', 'superseded'} if include_superseded else {'active'}
+        placeholders = ','.join('?' for _ in states)
         with self._lock:
-            placeholders = ','.join('?' for _ in states)
-            rows = self.db.execute(
-                f'''SELECT id FROM candidates
-                    WHERE character_id=? AND state IN ({placeholders})''',
-                (character_id, *sorted(states)),
-            ).fetchall()
+            total_count = int(
+                self.db.execute(
+                    f'''SELECT COUNT(*) FROM candidates
+                        WHERE character_id=? AND state IN ({placeholders})''',
+                    (character_id, *sorted(states)),
+                ).fetchone()[0]
+            )
+        fts_scores = self._fts_scores(character_id, query, states)
+        candidate_ids = (
+            self._prefilter_candidate_ids(
+                character_id,
+                states,
+                query,
+                fts_scores=fts_scores,
+            )
+            if total_count > FULL_SCAN_LIMIT
+            else None
+        )
+        with self._lock:
+            if candidate_ids is None:
+                rows = self.db.execute(
+                    f'''SELECT id FROM candidates
+                        WHERE character_id=? AND state IN ({placeholders})''',
+                    (character_id, *sorted(states)),
+                ).fetchall()
+            elif candidate_ids:
+                id_placeholders = ','.join('?' for _ in candidate_ids)
+                rows = self.db.execute(
+                    f'''SELECT id FROM candidates
+                        WHERE character_id=? AND state IN ({placeholders})
+                          AND id IN ({id_placeholders})''',
+                    (
+                        character_id,
+                        *sorted(states),
+                        *sorted(candidate_ids),
+                    ),
+                ).fetchall()
+            else:
+                rows = []
             items = [
                 item
                 for row in rows
@@ -1613,7 +1828,6 @@ class CandidateStore:
             ]
         if not items:
             return []
-        fts_scores = self._fts_scores(character_id, query, states)
         semantic_scores = self._semantic_candidate_scores(query, items)
         query_terms = _search_terms(query)
         normalized_query = self._normalized_text(query)
@@ -2537,7 +2751,7 @@ class CandidateStore:
         with self._lock:
             rows = self.db.execute(
                 '''SELECT * FROM memory_events
-                   WHERE character_id=? AND status='open'
+                   WHERE character_id=?
                    ORDER BY updated_at DESC,id DESC''',
                 (character_id,),
             ).fetchall()
@@ -2545,6 +2759,12 @@ class CandidateStore:
             cue in current
             for cue in ('后来', '然后', '上次', '那件事', '那个事',
                         '怎么样了', '结果', '进展', '约定', '计划')
+        )
+        history_requested = any(
+            cue in current
+            for cue in ('后来', '然后', '上次', '那件事', '那个事',
+                        '怎么样了', '结果', '进展', '完成', '结束',
+                        '取消', '去过', '参加')
         )
         terms = set()
         for match in re.findall(
@@ -2564,6 +2784,8 @@ class CandidateStore:
                 terms.add(match)
         ranked = []
         for row in rows:
+            if row['status'] != 'open' and not history_requested:
+                continue
             body = f"{row['title']} {row['summary']}".lower()
             hits = sum(1 for term in terms if term in body)
             if hits > 0:
@@ -2768,6 +2990,9 @@ _HISTORY_CUES = (
     '曾经', '过去', '改过', '改成', '改为', '换过', '换成',
     '变过', '变化', '变回', '调整', '更正',
 )
+FULL_SCAN_LIMIT = 500
+PREFILTER_RECENT_LIMIT = 80
+PREFILTER_MATCH_LIMIT = 160
 
 
 def build_unified_memory_context(

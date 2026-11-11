@@ -244,20 +244,26 @@ def memory_need(messages, question):
 
 
 def compose_query(messages, current):
+    anaphoric = any(cue in current for cue in ANAPHORA_CUES)
     needs_expansion = (
-        any(cue in current for cue in ANAPHORA_CUES)
+        anaphoric
         or any(cue in current for cue in CORRECTION_CUES)
         or len(current) <= 18
     )
     if not needs_expansion:
         return current, []
-    previous = [
+    history = [
         item
         for item in list(messages or [])
-        if item.get("role") == "user"
+        if item.get("role") in {"user", "assistant"}
         and str(item.get("content") or "").strip()
         and str(item.get("content") or "").strip() != current
-    ][-2:]
+    ]
+    previous = (
+        history[-4:]
+        if anaphoric
+        else [item for item in history if item.get("role") == "user"][-2:]
+    )
     if not previous:
         return current, []
     return (
@@ -418,15 +424,29 @@ def derive_event_update(memory_item):
     if len(parts) < 2:
         return None
     topic_key = ".".join(parts[:-1])
-    status = (
-        "completed"
-        if kind == "shared_event" or fact_type == "event"
-        else "open"
-    )
+    content = str(memory_item.get("content") or "")
+    value = str(memory_item.get("value") or "")
+    event_text = f"{fact_key} {value} {content}"
+    if any(
+        cue in event_text
+        for cue in ("取消", "不去了", "没去", "去不了", "放弃")
+    ):
+        status = "cancelled"
+    elif (
+        kind == "shared_event"
+        or fact_type == "event"
+        or any(
+            cue in event_text
+            for cue in ("已经参加", "完成了", "结束了", "去过了", "回来了")
+        )
+    ):
+        status = "completed"
+    else:
+        status = "open"
     return {
         "topic_key": topic_key,
-        "title": str(memory_item.get("content") or "")[:80],
-        "summary": str(memory_item.get("content") or ""),
+        "title": content[:80],
+        "summary": content,
         "status": status,
         "participants": (
             ["user"]

@@ -313,19 +313,14 @@ fun ShiyuApp(repository: ChatRepository) {
     val snackbar = remember { SnackbarHostState() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val rootScope = rememberCoroutineScope()
 
     fun navigateToTab(tab: RootTab) {
         activeTab = tab
-        homeComposerFocused = false
-        homeHistoryVisible = false
-        focusManager.clearFocus()
-        keyboardController?.hide()
-    }
-
-    LaunchedEffect(activeTab) {
-        val target = activeTab.ordinal
-        if (rootPagerState.currentPage != target) {
-            rootPagerState.scrollToPage(target)
+        if (rootPagerState.currentPage != tab.ordinal) {
+            rootScope.launch {
+                rootPagerState.scrollToPage(tab.ordinal)
+            }
         }
     }
 
@@ -333,8 +328,6 @@ fun ShiyuApp(repository: ChatRepository) {
         val settledTab = rootTabs[rootPagerState.settledPage]
         activeTab = settledTab
         homeComposerFocused = false
-        focusManager.clearFocus()
-        keyboardController?.hide()
     }
 
     LaunchedEffect(state.status) {
@@ -399,7 +392,7 @@ fun ShiyuApp(repository: ChatRepository) {
                 HorizontalPager(
                     state = rootPagerState,
                     modifier = Modifier.fillMaxSize(),
-                    beyondViewportPageCount = 0,
+                    beyondViewportPageCount = rootTabs.lastIndex,
                 ) { page ->
                     when (rootTabs[page]) {
                         RootTab.HOME -> CharacterDiscoveryPager(
@@ -844,12 +837,7 @@ private fun ChatPreviewScreen(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        "${character.tag.ifBlank { "AI 角色" }} · " +
-                            if (character.modelSource == MODEL_SOURCE_LOCAL_MNN) {
-                                "本地 MNN"
-                            } else {
-                                "云端 API"
-                            },
+                        character.tag.ifBlank { "AI 角色" },
                         color = Color.White.copy(alpha = 0.72f),
                         fontSize = 9.sp,
                         maxLines = 1,
@@ -948,7 +936,7 @@ private fun ChatComposerPreview(
             ),
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(54.dp),
             shape = RoundedCornerShape(28.dp),
             color = Color(0xC43E3749),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
@@ -960,15 +948,20 @@ private fun ChatComposerPreview(
                     .padding(horizontal = 6.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    "自由输入…",
+                Box(
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 44.dp)
-                        .padding(horizontal = 12.dp, vertical = 12.dp),
-                    color = Color.White.copy(alpha = 0.58f),
-                    fontSize = 14.sp,
-                )
+                        .fillMaxHeight()
+                        .padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    Text(
+                        "自由输入…",
+                        color = Color.White.copy(alpha = 0.58f),
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                    )
+                }
                 Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
                     Text(
                         "（）",
@@ -2133,9 +2126,7 @@ private fun ChatScreen(
                                 .background(Color(0xFF77D6A0)),
                         )
                         Text(
-                            "${character.tag.ifBlank { "AI 角色" }} · ${
-                                if (character.modelSource == MODEL_SOURCE_LOCAL_MNN) "本地 MNN" else "云端 API"
-                            } · 唯一对话",
+                            character.tag.ifBlank { "AI 角色" },
                             color = Color.White.copy(alpha = 0.72f),
                             fontSize = 9.sp,
                             maxLines = 1,
@@ -2371,7 +2362,7 @@ private fun ChatScreen(
                 !state.busy &&
                 !state.historyBusy
             Surface(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().height(54.dp),
                 shape = RoundedCornerShape(28.dp),
                 color = Color(0xC43E3749),
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
@@ -2397,7 +2388,7 @@ private fun ChatScreen(
                         },
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 44.dp, max = 96.dp)
+                            .height(44.dp)
                             .focusRequester(composerFocusRequester)
                             .onFocusChanged {
                                 if (it.isFocused) onComposerFocusChange()

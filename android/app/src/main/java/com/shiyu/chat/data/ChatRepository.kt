@@ -664,6 +664,31 @@ class ChatRepository(
         }.getOrDefault(emptyMap())
     }
 
+    private suspend fun loadRetrievalCandidateMemories(
+        characterId: String,
+        includeHistory: Boolean,
+        ftsScores: Map<Long, Double>,
+    ): List<StructuredMemoryEntity> {
+        val total = database.structuredMemories().countForCharacter(characterId)
+        if (total <= 500) {
+            return database.structuredMemories().allForCharacter(characterId)
+        }
+        val candidateIds = linkedSetOf<Long>()
+        candidateIds += ftsScores.keys
+        val recent = database.structuredMemories().recentActive(characterId, 80)
+        val boundaries = database.structuredMemories().boundaryCandidates(characterId, 24)
+        val core = database.structuredMemories().coreProfileCandidates(characterId, 6)
+        candidateIds += recent.map { it.id }
+        candidateIds += boundaries.map { it.id }
+        candidateIds += core.map { it.id }
+        if (candidateIds.isEmpty()) {
+            return recent
+        }
+        return database.structuredMemories()
+            .byIds(characterId, candidateIds.toList())
+            .distinctBy { it.id }
+    }
+
     fun avatarModelReady(): Boolean = avatarGenerator.isModelReady()
 
     fun avatarModelBytes(): Long = avatarGenerator.modelBytes()
@@ -987,8 +1012,22 @@ class ChatRepository(
             RoleContextPolicy.parse(character.roleContextJson)
         }.getOrDefault(CharacterRoleContext())
         val memoryNeed = MemoryNeedPolicy.decide(history, text)
+        val includeHistoricalMemory = isHistoricalMemoryQuery(memoryNeed.query)
+        val structuredMemoryFtsScores = if (memoryNeed.retrieve) {
+            loadStructuredMemoryFtsScores(
+                character.id,
+                memoryNeed.query,
+                includeHistory = includeHistoricalMemory,
+            )
+        } else {
+            emptyMap()
+        }
         val allStructuredMemories = if (memoryNeed.retrieve) {
-            database.structuredMemories().allForCharacter(character.id)
+            loadRetrievalCandidateMemories(
+                characterId = character.id,
+                includeHistory = includeHistoricalMemory,
+                ftsScores = structuredMemoryFtsScores,
+            )
         } else {
             emptyList()
         }
@@ -1009,11 +1048,7 @@ class ChatRepository(
                 maxFacts = 8,
                 maxExcerpts = 2,
                 maxCharacters = 1_600,
-                ftsScores = loadStructuredMemoryFtsScores(
-                    character.id,
-                    memoryNeed.query,
-                    includeHistory = isHistoricalMemoryQuery(memoryNeed.query),
-                ),
+                ftsScores = structuredMemoryFtsScores,
             )
         } else {
             UnifiedMemorySelection(
@@ -1052,10 +1087,7 @@ class ChatRepository(
         )
         val limits = limits()
         val maxOutputTokens = if (localMode) LOCAL_MNN_OUTPUT_TOKENS else CLOUD_OUTPUT_TOKENS
-        val estimated = (
-            (text.length / 2 + (if (imageData != null) 1024 else 0) + maxOutputTokens) *
-                1.15
-            ).toInt()
+        val estimated = estimatePromptTokens(bodyMessages, maxOutputTokens)
         if (!localMode) {
             require(estimated <= limits.requestTokens) {
                 "预计 ${estimated} tokens，超过单次上限 ${limits.requestTokens}"
@@ -1174,6 +1206,17 @@ class ChatRepository(
                 unifiedMemory.retrievalMode,
             )
             .put("structured_memory_characters", unifiedMemory.charactersUsed)
+            .put(
+                "memory_related_prompt_characters",
+                if (character.id in TRAINING_SYSTEM_PROMPTS) {
+                    0
+                } else {
+                    memories.sumOf { it.content.length } +
+                        structuredMemories.sumOf { it.content.length } +
+                        memoryEvents.sumOf { it.title.length + it.summary.length } +
+                        internalState.boundaries.sumOf { it.length }
+                },
+            )
             .put("historical_query", unifiedMemory.historicalQuery)
             .put("memory_needed", memoryNeed.retrieve)
             .put("memory_need_reason", memoryNeed.reason)
@@ -1851,7 +1894,6 @@ class ChatRepository(
                 json = true,
             )
         }
-        val decoded = parseCompleteJsonObject(raw)
         val candidatesJson = recoverStructuredMemoryCandidates(raw)
         require(candidatesJson.length() > 0) {
             "记忆提取响应中没有可恢复的完整候选"
@@ -1960,15 +2002,6 @@ class ChatRepository(
                     }
                 }
             }
-            stateApplied = runCatching {
-                applyInternalStateUpdate(
-                    characterId = character.id,
-                    payload = decoded?.optJSONObject("state_update"),
-                    sources = newBatch,
-                    jobId = job.id,
-                    messageEnd = batchThrough,
-                )
-            }.getOrDefault(false)
             if (window.hasMore) {
                 database.structuredMemorySupport().upsertCursor(
                     StructuredMemoryCursorEntity(
@@ -2994,8 +3027,13 @@ class ChatRepository(
             if (memoryEvents.isNotEmpty()) {
                 appendLine("【相关事件进展】")
                 memoryEvents.forEach {
+                    val statusLabel = when (it.status) {
+                        "open" -> "未完成"
+                        "cancelled" -> "已取消"
+                        else -> "已完成"
+                    }
                     appendLine(
-                        "- ${it.title}（${if (it.status == "open") "未完成" else "已完成"}）：${it.summary}",
+                        "- ${it.title}（$statusLabel）：${it.summary}",
                     )
                 }
                 appendLine("只在当前话题自然相关时承接，不要为了表现记忆而反复追问。")
@@ -3355,18 +3393,12 @@ class ChatRepository(
             没有相似事实用 add；同含义且不冲突用 merge 并填 target_item_id；
             更晚的明确更正用 supersede 并指向旧当前事实；冲突但无明确更正用 contested；
             寒暄、推测或没有长期价值的内容用 ignore。
-            同时输出可选 state_update。只有出现有长期关系或当前心情价值的具体事件时才把
-            significant 设为 true；普通寒暄、一次完成任务或没有证据的猜测必须为 false。
-            state_update 格式为 {"significant":布尔值,"event_type":"user_shared_good_news、
-            user_shared_hardship、user_shared_distress、meaningful_self_disclosure、
-            meaningful_support、vulnerability_shared、shared_activity、shared_memory、
-            plan_progress、promise_made、promise_kept、conflict、repair、boundary_set
-            或 casual","importance":"low、medium或high","mood_delta":{"valence":数值,
-            "arousal":数值},"relationship_delta":{"familiarity":数值,"trust":数值,
-            "warmth":数值},"boundary":null或简短字符串,"reason":"简短原因",
-            "evidence":[{"message_id":整数,"role":"user或assistant","quote":"原文连续片段"}]}。
-            数值只是建议变化，程序会限幅；不得直接输出关系阶段，不得把关系解释成恋爱，
-            不能让一次事件改写固定人物档案。
+            用户明确表达的称呼、隐私、追问和身体接触边界必须提取为 user_report，
+            fact_type 使用 fact，fact_key 使用 user.boundary.称呼、
+            user.boundary.privacy、user.boundary.follow_up 或其他稳定英文分类；
+            boundary 必须来自用户本人并保留否定词和具体范围。
+            普通偏好不能被误写成 boundary。不要输出情绪、信任、温暖、关系阶段或
+            state_update，这些字段不属于长期事实提取任务。
         """.trimIndent()
         private val SEMANTIC_MEMORY_PROMPT = """
             你是虚拟角色后台记忆的语义审核器。只根据候选记忆的 evidence 判断，

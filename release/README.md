@@ -5,11 +5,33 @@
 
 ```text
 release/
-├─ apk-0.19.0/       当前完整版 Android APK
-├─ apk-0.19.0-cloud/ 当前云端精简版 APK
+├─ apk-0.19.1/       当前完整版 Android APK 与云端精简版 APK
 ├─ windows/       当前 Windows onedir ZIP
 └─ README.md
 ```
+
+## Android 0.19.1 当前构建
+
+`apk-0.19.1/` 是底部栏切换、首页输入栏高度和聊天上栏修复后的发布包：
+
+- 完整版：`apk-0.19.1/Shiyu-0.19.1-Android-arm64-v8a.apk`
+- 云端版：`apk-0.19.1/Shiyu-0.19.1-cloud-Android-arm64-v8a.apk`
+- 版本：完整版 `0.19.1 / versionCode 60`，云端版 `0.19.1-cloud / versionCode 60`
+- 完整版 SHA-256：`19BCEB8403C190C76FE282AFFE5BEE2003EE6423764439B01A610E9974D62296`
+- 云端版 SHA-256：`545384143440E6260BDECA4EEC09C2F024633921B64C257E3D3B44B7415520AA`
+
+## Android 0.19.4 本机测试构建
+
+`apk-0.19.4-test/` 是长期记忆写入、检索和预算优化后的测试包，尚未替换公开
+Release：
+
+- 完整版：`apk-0.19.4-test/Shiyu-0.19.4-full-test-android-arm64.apk`
+- 云端版：`apk-0.19.4-test/Shiyu-0.19.4-cloud-test-android-arm64.apk`
+- 版本：完整版 `0.19.4 / versionCode 59`，云端版 `0.19.4-cloud / versionCode 59`
+- Python、前端、Android JVM、Lint 和 APK 构建均通过。
+- 本机当时没有连接 ADB 设备，两个包尚未执行覆盖安装验证。
+- 完整版 SHA-256：`F6991FAC7094689C9987FA2DB30B5C1C8C6DDFB2E19BCAA2FD2F127EE6441F76`
+- 云端版 SHA-256：`23B1EFE819AF24055308990D6C6DABB082CD6FF9E7BF988478E90499843A255E`
 
 ## Android 0.19.3 本机测试构建
 

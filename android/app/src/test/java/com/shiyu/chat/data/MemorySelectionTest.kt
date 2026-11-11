@@ -179,7 +179,7 @@ class MemorySelectionTest {
         assertTrue(selection.structuredMemories.size < facts.size)
     }
 
-    @Test fun coreUserFactSurvivesWhenQueryHasNoLiteralOverlap() {
+    @Test fun unrelatedCoreUserFactIsNotForcedIntoEveryPrompt() {
         val stablePreference = structured(
             id = 7,
             text = "用户长期偏好安静的环境",
@@ -194,7 +194,7 @@ class MemorySelectionTest {
             maxExcerpts = 2,
             maxCharacters = 1_600,
         )
-        assertEquals(listOf(7L), selection.structuredMemories.map { it.id })
+        assertTrue(selection.structuredMemories.isEmpty())
     }
 
     @Test fun longExcerptKeepsQueryRelevantWindowAndStaysCompact() {

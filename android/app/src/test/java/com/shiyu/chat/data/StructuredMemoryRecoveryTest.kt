@@ -11,7 +11,7 @@ class StructuredMemoryRecoveryTest {
             {"candidates":[
               {"fact_key":"user.interview.time","content":"面试改到周五"},
               {"fact_key":"user.preference.drink","content":"用户喜欢咖啡"}
-            ],"state_update":{"significant":false}}
+            ]}
         """.trimIndent()
 
         val candidates = recoverJsonObjectTextsAfterKey(raw, "candidates")

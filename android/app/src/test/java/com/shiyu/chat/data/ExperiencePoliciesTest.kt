@@ -89,7 +89,8 @@ class ExperiencePoliciesTest {
         val expanded = MemoryNeedPolicy.decide(history, "那个后来怎么样了？")
         assertTrue(expanded.retrieve)
         assertTrue(expanded.query.contains("软件园面试"))
-        assertEquals(listOf(1L), expanded.expandedSourceIds)
+        assertTrue(expanded.query.contains("我记住了"))
+        assertEquals(listOf(1L, 2L), expanded.expandedSourceIds)
     }
 
     @Test
@@ -160,6 +161,21 @@ class ExperiencePoliciesTest {
         )
         assertEquals("completed", update?.status)
         assertTrue(update?.timelineJson?.contains("用户已经完成面试") == true)
+
+        val cancelled = candidate(
+            id = 3,
+            kind = "plan",
+            factType = "plan",
+            factKey = "user.interview.plan",
+            content = "用户取消了周五的面试",
+        )
+        val cancelledUpdate = MemoryEventPolicy.next(
+            cancelled,
+            existing,
+            "daily",
+            now = 300,
+        )
+        assertEquals("cancelled", cancelledUpdate?.status)
     }
 
     @Test
@@ -184,6 +200,20 @@ class ExperiencePoliciesTest {
         )
         assertTrue(MemoryEventPolicy.selectRelevant(listOf(event), "面试怎么样了").isNotEmpty())
         assertTrue(MemoryEventPolicy.selectRelevant(listOf(event), "今天天气真好").isEmpty())
+        val completed = event.copy(
+            id = 3,
+            title = "面试结果",
+            summary = "用户已经完成软件园面试",
+            status = "completed",
+            updatedAt = 20,
+        )
+        assertEquals(
+            listOf(3L),
+            MemoryEventPolicy.selectRelevant(
+                listOf(completed),
+                "上次面试结果怎么样",
+            ).map { it.id },
+        )
         assertEquals(
             listOf(2L),
             MemoryEventPolicy.selectRelevant(

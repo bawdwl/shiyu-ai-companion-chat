@@ -23,14 +23,17 @@ def compose_memory_retrieval_query(messages, question):
         return current, []
     candidates = []
     for message in list(messages or [])[-8:]:
-        if message.get("role") != "user":
-            continue
         text = str(message.get("content") or "").strip()
         if not text or text == current:
             continue
         message_id = message.get("id")
-        candidates.append((text, int(message_id) if message_id is not None else None))
-    selected = candidates[-2:]
+        candidates.append(
+            (
+                text,
+                int(message_id) if message_id is not None else None,
+            )
+        )
+    selected = candidates[-4:]
     query = "\n".join(
         [text for text, _ in selected] + [current]
     )

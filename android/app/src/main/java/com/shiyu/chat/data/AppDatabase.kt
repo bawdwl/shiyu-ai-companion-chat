@@ -135,6 +135,9 @@ interface MetaDao {
 
 @Dao
 interface StructuredMemoryDao {
+    @Query("SELECT COUNT(*) FROM structured_memories WHERE characterId=:characterId")
+    suspend fun countForCharacter(characterId: String): Int
+
     @Query("SELECT * FROM structured_memories WHERE characterId=:characterId ORDER BY observedOrder DESC,id DESC")
     fun observeForCharacter(characterId: String): Flow<List<StructuredMemoryEntity>>
 
@@ -143,6 +146,54 @@ interface StructuredMemoryDao {
 
     @Query("SELECT * FROM structured_memories WHERE id=:id AND characterId=:characterId")
     suspend fun get(id: Long, characterId: String): StructuredMemoryEntity?
+
+    @Query(
+        """SELECT * FROM structured_memories
+           WHERE characterId=:characterId AND id IN (:ids)"""
+    )
+    suspend fun byIds(
+        characterId: String,
+        ids: List<Long>,
+    ): List<StructuredMemoryEntity>
+
+    @Query(
+        """SELECT * FROM structured_memories
+           WHERE characterId=:characterId AND state='active'
+           ORDER BY observedOrder DESC,id DESC LIMIT :limit"""
+    )
+    suspend fun recentActive(
+        characterId: String,
+        limit: Int,
+    ): List<StructuredMemoryEntity>
+
+    @Query(
+        """SELECT * FROM structured_memories
+           WHERE characterId=:characterId AND state='active' AND (
+             factKey LIKE '%boundary%'
+             OR content LIKE '%不要%'
+             OR content LIKE '%别%'
+             OR content LIKE '%不希望%'
+             OR content LIKE '%不喜欢%'
+           )
+           ORDER BY observedOrder DESC,id DESC LIMIT :limit"""
+    )
+    suspend fun boundaryCandidates(
+        characterId: String,
+        limit: Int,
+    ): List<StructuredMemoryEntity>
+
+    @Query(
+        """SELECT * FROM structured_memories
+           WHERE characterId=:characterId AND state='active'
+             AND subject='user' AND kind='user_report'
+             AND factType IN ('fact','preference')
+           ORDER BY importance DESC,observedOrder DESC,id DESC
+           LIMIT :limit"""
+    )
+    suspend fun coreProfileCandidates(
+        characterId: String,
+        limit: Int,
+    ): List<StructuredMemoryEntity>
 
     @Query(
         """SELECT * FROM structured_memories

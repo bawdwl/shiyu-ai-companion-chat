@@ -39,11 +39,20 @@ internal object MemoryEventPolicy {
     ): Update? {
         val memory = candidate.memory
         val topicKey = topicKey(memory) ?: return null
-        val completed =
+        val eventText = "${memory.factKey.orEmpty()} ${memory.value.orEmpty()} ${memory.content}"
+        val cancelled = listOf("取消", "不去了", "没去", "去不了", "放弃")
+            .any(eventText::contains)
+        val completed = !cancelled && (
             memory.kind == "shared_event" ||
                 memory.factType == "event" ||
-                candidate.operation == "supersede"
-        val status = if (completed) "completed" else "open"
+                listOf("已经参加", "完成了", "结束了", "去过了", "回来了")
+                    .any(eventText::contains)
+            )
+        val status = when {
+            cancelled -> "cancelled"
+            completed -> "completed"
+            else -> "open"
+        }
         val sourceIds = candidate.sourceIds.sorted()
         val mergedSources = (
             existing?.sourceMessageIds
@@ -110,8 +119,25 @@ internal object MemoryEventPolicy {
             "约定",
             "计划",
         ).any(query::contains)
+        val historyRequested = listOf(
+            "后来",
+            "然后",
+            "上次",
+            "那件事",
+            "那个事",
+            "怎么样了",
+            "结果",
+            "进展",
+            "完成",
+            "结束",
+            "取消",
+            "去过",
+            "参加",
+        ).any(query::contains)
         val ranked = events.asSequence()
-            .filter { it.status == "open" }
+            .filter {
+                it.status == "open" || historyRequested
+            }
             .map { event ->
                 val text = normalizedMemoryText("${event.title} ${event.summary}")
                 val topicHits = eventTerms(normalized).count { it in text }

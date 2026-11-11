@@ -164,39 +164,38 @@ class AutomaticFakeDeepSeekProvider:
                            total_tokens=110,model='deepseek-flash')
 
 
-class AutomaticStateProvider:
+class AutomaticBoundaryProvider:
     model_id='deepseek-flash'
 
     def reply(self,messages,max_new_tokens=512,generation_overrides=None):
         request=json.loads(messages[-1]['content'])
+        if 'candidates' in request and 'messages' not in request:
+            return verification_response(request),dict(
+                seconds=0.01,output_tokens=20,prompt_tokens=40,
+                total_tokens=60,model='deepseek-flash',
+            )
         target=next(
             (item for item in request['messages']
-             if '考试通过' in item['content']),
+             if '别叫我娘子' in item['content']),
             None,
         )
         if target is None:
             payload={'candidates':[]}
         else:
             payload={
-                'candidates':[],
-                'state_update':{
-                    'significant':True,
-                    'event_type':'user_shared_good_news',
-                    'importance':'medium',
-                    'mood_delta':{'valence':0.2,'arousal':0.2},
-                    'relationship_delta':{
-                        'familiarity':0.1,
-                        'trust':0.1,
-                        'warmth':0.1,
-                    },
-                    'boundary':None,
-                    'reason':'用户主动分享了考试通过的消息',
+                'candidates':[{
+                    'kind':'user_report',
+                    'subject':'user',
+                    'fact_key':'user.boundary.address',
+                    'value':'别叫我娘子',
+                    'content':'用户明确要求不要被称呼为娘子',
+                    'event_date':None,
                     'evidence':[{
                         'message_id':target['id'],
                         'role':target['role'],
-                        'quote':'考试通过了',
+                        'quote':'以后别叫我娘子',
                     }],
-                },
+                }],
             }
         return json.dumps(payload,ensure_ascii=False),dict(
             seconds=0.01,output_tokens=35,prompt_tokens=90,
@@ -733,10 +732,10 @@ class StructuredMemoryBackendTests(unittest.TestCase):
                 self.assertEqual([item['value'] for item in superseded],['周三'])
                 self.assertEqual(active[0]['supersedes'],superseded[0]['id'])
 
-    def test_background_worker_persists_state_without_prompt_injection(self):
+    def test_background_worker_persists_boundary_without_state_update(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp)
-            provider=AutomaticStateProvider()
+            provider=AutomaticBoundaryProvider()
             engine=FakeEngine()
             with TestClient(create_app(
                 root/'chat.sqlite3',
@@ -758,39 +757,46 @@ class StructuredMemoryBackendTests(unittest.TestCase):
                 self.assertEqual(
                     client.post('/chat',json={
                         'session_id':current['id'],
-                        'message':'我考试通过了，终于松了口气。',
+                        'message':'以后别叫我娘子，这个称呼让我不舒服。',
                     }).status_code,
                     200,
                 )
                 store=client.app.state.structured_memory
                 deadline=time.monotonic()+5
-                transitions=[]
+                boundaries=[]
                 while time.monotonic()<deadline:
-                    transitions=store.db.execute(
-                        'SELECT * FROM state_transitions WHERE character_id=?',
-                        ('companion',),
-                    ).fetchall()
-                    if transitions:
+                    boundaries=store.internal_state.snapshot(
+                        'companion'
+                    )['boundaries']
+                    if boundaries:
                         break
                     time.sleep(0.05)
-                self.assertEqual(len(transitions),1)
-                snapshot=store.internal_state.snapshot('companion')
-                self.assertGreater(snapshot['mood']['valence'],0)
-                self.assertGreater(snapshot['relationship']['familiarity'],0.15)
+                items=store.list_items('companion',include_inactive=True)
+                self.assertTrue(
+                    any('娘子' in item for item in boundaries),
+                    items,
+                )
+                self.assertEqual(
+                    0,
+                    store.db.execute(
+                        'SELECT COUNT(*) FROM state_transitions '
+                        'WHERE character_id=?',
+                        ('companion',),
+                    ).fetchone()[0],
+                )
 
                 self.assertEqual(
                     client.post('/chat',json={
                         'session_id':current['id'],
-                        'message':'你还记得刚才发生了什么吗？',
+                        'message':'那你现在应该怎么称呼我？',
                     }).status_code,
                     200,
                 )
                 system_prompt=engine.calls[-1][0]['content']
+                self.assertIn('【用户边界】',system_prompt)
+                self.assertIn('娘子',system_prompt)
                 self.assertNotIn('角色内部状态',system_prompt)
                 self.assertNotIn('你此刻的心情',system_prompt)
-                self.assertNotIn('不要展示内部数值',system_prompt)
-                self.assertNotIn('0.398',system_prompt)
-                self.assertNotIn('user_shared_good_news',system_prompt)
 
     def test_background_model_call_does_not_block_chat(self):
         with tempfile.TemporaryDirectory() as temp:

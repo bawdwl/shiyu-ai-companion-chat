@@ -52,7 +52,8 @@ class ExperiencePolicyTests(unittest.TestCase):
         expanded = memory_need(history, '那个后来怎么样了？')
         self.assertTrue(expanded['retrieve'])
         self.assertIn('软件园面试', expanded['query'])
-        self.assertEqual([1], expanded['expanded_source_ids'])
+        self.assertIn('我记住了', expanded['query'])
+        self.assertEqual([1, 2], expanded['expanded_source_ids'])
 
     def test_affect_is_temporary_and_does_not_claim_relationship_change(self):
         affect = current_turn_affect('我考上研究生了')
@@ -92,6 +93,11 @@ class ExperiencePolicyTests(unittest.TestCase):
             'content': '用户已经完成面试',
         }
         self.assertEqual('completed', derive_event_update(completed)['status'])
+        cancelled = {
+            **plan,
+            'content': '用户取消了周五的面试',
+        }
+        self.assertEqual('cancelled', derive_event_update(cancelled)['status'])
 
     def test_memory_store_keeps_event_chain_and_clears_it_with_scope(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -176,6 +182,12 @@ class ExperiencePolicyTests(unittest.TestCase):
                 self.assertEqual(1, len(rows))
                 self.assertEqual('completed', rows[0]['status'])
                 self.assertIn('用户已经完成面试', rows[0]['timeline_json'])
+                history = store.relevant_memory_events(
+                    'custom-test',
+                    '上次面试的结果怎么样',
+                )
+                self.assertEqual('interview', history[0]['topic_key'])
+                self.assertEqual('completed', history[0]['status'])
 
                 store.clear_scope('custom-test')
                 self.assertEqual(

@@ -148,7 +148,7 @@ internal fun selectUnifiedMemoryContext(
         includeSuperseded = historical,
         ftsScores = ftsScores,
         semanticProvider = semanticProvider,
-        includeCoreProfile = true,
+        includeCoreProfile = false,
     )
     val rankedExcerpts = rankExcerpts(
         excerpts = scopedExcerpts,

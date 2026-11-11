@@ -124,16 +124,21 @@ internal object MemoryNeedPolicy {
         history: List<MessageEntity>,
         current: String,
     ): ExpandedQuery {
+        val anaphoric = anaphoraCues.any(current::contains)
         val needsExpansion =
-            anaphoraCues.any(current::contains) ||
+            anaphoric ||
                 correctionCues.any(current::contains) ||
                 current.length <= 18
         if (!needsExpansion) return ExpandedQuery(current, emptyList())
-        val previous = history.asSequence()
-            .filter { it.role == "user" }
+        val eligible = history.asSequence()
+            .filter { it.role == "user" || it.role == "assistant" }
             .filter { it.content.isNotBlank() && it.content != current }
             .toList()
-            .takeLast(2)
+        val previous = if (anaphoric) {
+            eligible.takeLast(4)
+        } else {
+            eligible.filter { it.role == "user" }.takeLast(2)
+        }
         if (previous.isEmpty()) return ExpandedQuery(current, emptyList())
         return ExpandedQuery(
             query = previous.joinToString("\n") { it.content } + "\n" + current,

@@ -23,6 +23,42 @@ def fact(index, content):
     }
 
 
+def cleaned_fact(
+    index,
+    content,
+    *,
+    fact_key=None,
+    value=None,
+    observed_order=None,
+):
+    return {
+        "subject": "user",
+        "fact_key": fact_key or f"user.test.item_{index}",
+        "value": value,
+        "content": content,
+        "kind": "user_report",
+        "evidence": [{
+            "message_id": index,
+            "role": "user",
+            "quote": content,
+        }],
+        "event_date": None,
+        "observed_order": observed_order or index,
+        "semantic_verified": True,
+        "semantic_reason": "test",
+        "importance": 0.5,
+        "confidence": 0.8,
+        "operation": "add",
+        "target_item_id": None,
+        "fact_type": "fact",
+        "epistemic_status": "explicit",
+        "source_authority": "user_explicit",
+        "knowledge_source": "user_told",
+        "known_at": None,
+        "visibility": "character_private",
+    }
+
+
 class MemoryRetrievalBudgetTests(unittest.TestCase):
     def test_short_reference_expands_with_previous_user_turns(self):
         messages = [
@@ -33,7 +69,8 @@ class MemoryRetrievalBudgetTests(unittest.TestCase):
         query, ids = compose_memory_retrieval_query(messages, "那个事怎么样了？")
         self.assertIn("软件园面试", query)
         self.assertIn("有点紧张", query)
-        self.assertEqual(ids, [1, 3])
+        self.assertIn("记住了", query)
+        self.assertEqual(ids, [1, 2, 3])
 
     def test_direct_question_is_not_expanded(self):
         messages = [{"id": 1, "role": "user", "content": "我住在杭州。"}]
@@ -222,6 +259,46 @@ class MemoryRetrievalBudgetTests(unittest.TestCase):
                     max_excerpts=0,
                 )
                 self.assertIn("旧胶片相机", thing)
+            finally:
+                store.close()
+
+    def test_large_memory_scope_prefilters_without_losing_exact_match(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            store = CandidateStore(
+                root / "memory.sqlite3",
+                allowed_root=root,
+            )
+            try:
+                with store.db:
+                    for index in range(1, 521):
+                        store._insert_clean(
+                            "custom-test",
+                            cleaned_fact(
+                                index,
+                                f"无关测试记忆{index}",
+                                observed_order=100 + index,
+                            ),
+                            state="active",
+                        )
+                    store._insert_clean(
+                        "custom-test",
+                        cleaned_fact(
+                            800,
+                            "用户喜欢在海边散步",
+                            fact_key="user.preference.place",
+                            value="海边",
+                            observed_order=1,
+                        ),
+                        state="active",
+                    )
+                ranked = store.search_hybrid(
+                    "custom-test",
+                    "海边",
+                    limit=3,
+                )
+                self.assertTrue(ranked)
+                self.assertEqual("海边", ranked[0]["value"])
             finally:
                 store.close()
 

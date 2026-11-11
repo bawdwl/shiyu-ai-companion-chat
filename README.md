@@ -6,9 +6,9 @@
 `deepseek-chat`。API Key 由使用者在本机填写，不会写入源码、数据库快照或
 Git 仓库。
 
-当前 Android 发布版：`0.19.0`
+当前 Android 发布版：`0.19.1`
 
-最新发布：[GitHub Release `v0.19.0`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.19.0)
+最新发布：[GitHub Release `v0.19.1`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.19.1)
 
 ## 项目展示
 
@@ -179,8 +179,8 @@ PC 语音优先调用本机 CosyVoice 2 FastAPI；服务或角色参考音频不
 ## 安装 Android 端
 
 从 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/latest)
-下载 `Shiyu-0.19.0-Android-arm64-v8a.apk`，或云端精简版
-`Shiyu-0.19.0-cloud-Android-arm64-v8a.apk`。
+下载 `Shiyu-0.19.1-Android-arm64-v8a.apk`，或云端精简版
+`Shiyu-0.19.1-cloud-Android-arm64-v8a.apk`。
 
 本机构建调试包：
 
@@ -188,23 +188,23 @@ PC 语音优先调用本机 CosyVoice 2 FastAPI；服务或角色参考音频不
 android/app/build/outputs/apk/full/debug/app-full-debug.apk
 ```
 
-- 当前源码：`0.19.0 / versionCode 55`
-- 当前开发源码：`0.19.3 / versionCode 58`，该版本尚未替换本页所列的公开 Release。
+- 当前源码：`0.19.1 / versionCode 60`
+- 当前公开 Release：`0.19.1 / versionCode 60`
 - Room schema：13
-- 完整版 APK：`299,207,736` 字节，约 285.35 MiB
-- 完整版 SHA-256：`D06A7C1A85298B77CDEA9227E679FD9388625C7F3B79706DAA791D87F43EA2B1`
+- 完整版 APK：`299,222,100` 字节，约 285.36 MiB
+- 完整版 SHA-256：`19BCEB8403C190C76FE282AFFE5BEE2003EE6423764439B01A610E9974D62296`
 - 安装后请在设置中填写自己的 OpenCode Go 或 DeepSeek Key。
 
 APK 包含本地语音运行库、VITS 中文语音模型、Qwen MNN 运行库和 Dream SD1.5/QNN 后端。本地 Qwen 与 MeinaMix V12 等模型权重不随 APK 分发，需要用户按应用设置中的说明导入。
 
 ### 云端精简版
 
-发布包：`release/apk-0.19.0-cloud/Shiyu-0.19.0-cloud-Android-arm64-v8a.apk`
+发布包：`release/apk-0.19.1/Shiyu-0.19.1-cloud-Android-arm64-v8a.apk`
 
 - 包名：`com.shiyu.chat.cloud`，可与完整版同时安装，数据独立。
-- 版本：`0.19.0-cloud / versionCode 55`
-- 大小：`22,310,896` 字节，约 21.28 MiB。
-- SHA-256：`D922F63B110C5F5BC6801D684ED639926CF9F2612A38494D0D9CC3D47285B41D`
+- 版本：`0.19.1-cloud / versionCode 60`
+- 大小：`22,324,588` 字节，约 21.29 MiB。
+- SHA-256：`545384143440E6260BDECA4EEC09C2F024633921B64C257E3D3B44B7415520AA`
 - 保留云端角色生成、聊天、长期记忆、事件、场景、图片输入和千问云端生图。
 - 不包含 MNN、Local Dream/QNN、本地 ASR、角色朗读模型和相关原生运行库。
 
