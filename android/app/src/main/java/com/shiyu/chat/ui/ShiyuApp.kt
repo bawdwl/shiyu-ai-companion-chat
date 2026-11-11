@@ -153,7 +153,6 @@ import com.shiyu.chat.data.MemoryEntity
 import com.shiyu.chat.data.MessageEntity
 import com.shiyu.chat.data.MODEL_SOURCE_API
 import com.shiyu.chat.data.MODEL_SOURCE_LOCAL_MNN
-import com.shiyu.chat.data.RoleContextPolicy
 import com.shiyu.chat.data.StructuredMemoryEntity
 import com.shiyu.chat.data.TurnTraceEntity
 import com.shiyu.chat.data.LocalVoice
@@ -4000,13 +3999,6 @@ private fun EditCharacterDialog(
     var roleContextJson by remember(character.id) {
         mutableStateOf(character.roleContextJson)
     }
-    var internalStateMode by remember(character.id, character.roleContextJson) {
-        mutableStateOf(
-            runCatching { RoleContextPolicy.parse(character.roleContextJson) }
-                .getOrDefault(RoleContextPolicy.parse("{}"))
-                .internalStateMode,
-        )
-    }
     var modelSource by remember(character.id, fullFeatures) {
         mutableStateOf(
             if (fullFeatures) character.modelSource else MODEL_SOURCE_API,
@@ -4062,13 +4054,6 @@ private fun EditCharacterDialog(
             .putFloat("${character.id}:y", frame.centerY)
             .putFloat("${character.id}:diameter", frame.diameterRatio)
             .apply()
-    }
-    fun setInternalStateMode(mode: String) {
-        val context = runCatching { RoleContextPolicy.parse(roleContextJson) }
-            .getOrDefault(RoleContextPolicy.parse("{}"))
-            .copy(internalStateMode = mode)
-        internalStateMode = mode
-        roleContextJson = RoleContextPolicy.toJson(context)
     }
     fun editedCharacter() = character.copy(
         name = name.trim().ifBlank { character.name },
@@ -4218,64 +4203,6 @@ private fun EditCharacterDialog(
                     }
                 }
             }
-            }
-            item {
-                Surface(
-                    color = LilacMist.copy(alpha = 0.7f),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Column(
-                        Modifier.fillMaxWidth().padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text("内部状态", fontWeight = FontWeight.SemiBold)
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            listOf(
-                                "off" to "关闭",
-                                "lightweight" to "轻量",
-                                "legacy" to "完整",
-                            ).forEach { (mode, label) ->
-                                if (internalStateMode == mode) {
-                                    FilledTonalButton(
-                                        onClick = { setInternalStateMode(mode) },
-                                        modifier = Modifier.weight(1f),
-                                        contentPadding = PaddingValues(horizontal = 4.dp),
-                                    ) {
-                                        Text(label, fontSize = 10.sp)
-                                    }
-                                } else {
-                                    OutlinedButton(
-                                        onClick = { setInternalStateMode(mode) },
-                                        modifier = Modifier.weight(1f),
-                                        contentPadding = PaddingValues(horizontal = 4.dp),
-                                    ) {
-                                        Text(label, fontSize = 10.sp)
-                                    }
-                                }
-                            }
-                        }
-                        Text(
-                            when (internalStateMode) {
-                                "legacy" ->
-                                    "注入完整心情和关系数值，仅用于对照实验。"
-                                "lightweight" ->
-                                    "只在话题相关时提供冲突、和解、约定和共同经历，不显示数值。"
-                                else ->
-                                    "普通聊天不注入持久心情或关系数值；本轮即时反应、用户边界和长期记忆仍保留。"
-                            },
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            "旧状态数据不会删除，切换模式不会清空聊天、记忆或关系记录。",
-                            fontSize = 9.sp,
-                            color = Forest,
-                        )
-                    }
-                }
             }
             }
             if (editSection == 0) {

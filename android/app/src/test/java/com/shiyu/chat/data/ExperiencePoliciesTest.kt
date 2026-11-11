@@ -12,7 +12,6 @@ class ExperiencePoliciesTest {
     fun roleContextNormalizesLegacyAndGeneratedCards() {
         val legacy = CharacterRoleContext()
         assertEquals("daily", legacy.interactionMode)
-        assertEquals("off", legacy.internalStateMode)
         assertEquals(emptyList<RoleFixedFact>(), legacy.fixedFacts)
 
         val context = CharacterRoleContext(
@@ -27,13 +26,11 @@ class ExperiencePoliciesTest {
                 ),
             ),
             useExamples = true,
-            internalStateMode = "legacy",
             goals = listOf("完成自己的插画集"),
         )
         assertEquals("独立书店店员", context.fixedFacts.single().value)
         assertEquals(1, context.examples.size)
         assertTrue(context.useExamples)
-        assertEquals("legacy", context.internalStateMode)
         assertEquals(1, context.goals.size)
         assertTrue(
             RoleContextPolicy.promptSections(context).any {

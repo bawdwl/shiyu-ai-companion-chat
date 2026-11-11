@@ -1,6 +1,6 @@
 # 拾语 Android
 
-当前源码版本：`0.19.2 / versionCode 57`，Room schema 13，提供两个安装版本：
+当前源码版本：`0.19.3 / versionCode 58`，Room schema 13，提供两个安装版本：
 
 - `com.shiyu.chat`：完整版，内置本地语音识别、角色朗读、MNN 和 Local Dream。
 - `com.shiyu.chat.cloud`：云端精简版，移除 MNN、QNN、Local Dream、ASR 和 TTS。
@@ -19,7 +19,7 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 - 一个角色只有一个持续对话，支持主动剧情开场和本地历史。
 - 云端结构化长期记忆与持久后台任务。
 - 本地 MNN 模式使用最近 24 条原话，并对更早消息做滚动摘要。
-- 内部心情、熟悉、信任、温暖、关系阶段与用户边界。
+- 用户明确边界、本轮即时情绪和长期记忆；历史心情与关系数值不再进入产品 Prompt。
 - sherpa-onnx 本地 ASR、VITS zh-ll 本地 TTS；模型含 5 个 speaker，
   去重后提供女声 1、男声 1、女声 2、男声 2 四个选项，支持试听和按角色保存。
 - 千问图片 API 与内置 Local Dream SD1.5/QNN 生图。
@@ -82,9 +82,8 @@ android/app/build/outputs/apk/cloud/debug/app-cloud-debug.apk
 
 ## 当前验证
 
-- 每个角色支持 `off / lightweight / legacy` 三种内部状态模式，默认 `off`；
-  `legacy` 仅用于对照实验，用户边界不受模式开关影响。
-- `0.19.2` 源码通过完整版与云端版各 105 项 JVM 测试、Debug Lint 和 APK 构建。
+- 普通角色默认关闭持久心情和关系数值注入；用户边界、本轮即时情绪和长期记忆仍保留。
+- `0.19.3` 源码通过完整版与云端版各 105 项 JVM 测试、Debug Lint 和 APK 构建。
 - 完整版与云端版均执行覆盖安装验证，不清理已有用户数据。
 - 覆盖安装后两个包均确认只保留上述 8 个默认角色，头像与背景路径有效。
 - 预编译 APK 仅作为 GitHub Release 附件分发，不提交到 Git：

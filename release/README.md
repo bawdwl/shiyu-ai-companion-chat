@@ -11,6 +11,17 @@ release/
 └─ README.md
 ```
 
+## Android 0.19.3 本机测试构建
+
+`apk-0.19.3-test/` 是内部状态策略收敛为 `off` 后的覆盖测试包，尚未替换公开
+Release：
+
+- 完整版：`apk-0.19.3-test/Shiyu-0.19.3-full-test-android-arm64.apk`
+- 云端版：`apk-0.19.3-test/Shiyu-0.19.3-cloud-test-android-arm64.apk`
+- 版本：完整版 `0.19.3 / versionCode 58`，云端版 `0.19.3-cloud / versionCode 58`
+- Python、前端、Android JVM、Lint 和 APK 构建均通过。
+- 本机当时没有连接 ADB 设备，两个包尚未执行覆盖安装验证。
+
 ## Android 0.19.0 已发布
 
 两个安装包共用同一套 8 个初始角色和 16 张头像/背景图片：

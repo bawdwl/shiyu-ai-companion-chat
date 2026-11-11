@@ -234,7 +234,6 @@ function blankCharacterCard(): CharacterCard {
     greeting: "你好。",
     scenario: "",
     motivation: "",
-    internal_state_mode: "off",
     model_settings: {
       source: "api",
       local_mode: "base",
@@ -263,7 +262,6 @@ function blankCharacterCard(): CharacterCard {
 function withDefaultModelSettings(card: CharacterCard): CharacterCard {
   return {
     ...card,
-    internal_state_mode: card.internal_state_mode ?? "off",
     model_settings: card.model_settings ?? {
       source: "api",
       local_mode: "base",
@@ -2822,24 +2820,6 @@ function CreateCharacterModal({
           </label>
         )}
       </section>
-      <h3 className="form-section-title">内部状态</h3>
-      <label className="field">
-        <span>普通聊天如何使用心情和关系状态</span>
-        <select
-          value={card.internal_state_mode ?? "off"}
-          onChange={(event) => patch(
-            "internal_state_mode",
-            event.target.value as CharacterCard["internal_state_mode"],
-          )}
-        >
-          <option value="off">关闭持久状态（推荐）</option>
-          <option value="lightweight">轻量事件上下文</option>
-          <option value="legacy">完整数值状态（实验）</option>
-        </select>
-        <small className="field-hint">
-          关闭和轻量模式都不会隐藏用户边界或本轮即时情绪。完整数值状态只用于对照实验。
-        </small>
-      </label>
       <h3 className="form-section-title">认知边界</h3>
       <div className="form-grid">
         <label className="field">

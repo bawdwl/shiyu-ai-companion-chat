@@ -27,7 +27,6 @@ export type CharacterLocalMode =
   | "wukong"
   | "xucheng"
   | "haruhi";
-export type CharacterInternalStateMode = "off" | "lightweight" | "legacy";
 
 export interface CharacterModelSettings {
   source: CharacterModelSource;
@@ -333,7 +332,6 @@ export interface CharacterCard {
   greeting: string;
   scenario: string;
   motivation: string;
-  internal_state_mode?: CharacterInternalStateMode;
   model_settings: CharacterModelSettings;
   boundaries: string;
   source_notes: string;

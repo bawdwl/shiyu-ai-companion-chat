@@ -733,7 +733,7 @@ class StructuredMemoryBackendTests(unittest.TestCase):
                 self.assertEqual([item['value'] for item in superseded],['周三'])
                 self.assertEqual(active[0]['supersedes'],superseded[0]['id'])
 
-    def test_background_worker_updates_internal_state_and_renders_natural_prompt(self):
+    def test_background_worker_persists_state_without_prompt_injection(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp)
             provider=AutomaticStateProvider()
@@ -786,9 +786,9 @@ class StructuredMemoryBackendTests(unittest.TestCase):
                     200,
                 )
                 system_prompt=engine.calls[-1][0]['content']
-                self.assertIn('角色内部状态',system_prompt)
-                self.assertIn('你此刻的心情',system_prompt)
-                self.assertIn('不要展示内部数值',system_prompt)
+                self.assertNotIn('角色内部状态',system_prompt)
+                self.assertNotIn('你此刻的心情',system_prompt)
+                self.assertNotIn('不要展示内部数值',system_prompt)
                 self.assertNotIn('0.398',system_prompt)
                 self.assertNotIn('user_shared_good_news',system_prompt)
 

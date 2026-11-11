@@ -246,7 +246,6 @@ class ExperiencePolicyTests(unittest.TestCase):
         self.assertTrue(card['use_examples'])
         self.assertEqual('immersive', card['interaction_mode'])
         self.assertEqual(['完成插画集'], card['goals'])
-        self.assertEqual('off', card['internal_state_mode'])
 
 
 if __name__ == '__main__':

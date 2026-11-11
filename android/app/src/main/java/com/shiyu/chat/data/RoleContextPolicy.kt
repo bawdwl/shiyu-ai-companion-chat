@@ -24,7 +24,6 @@ internal data class CharacterRoleContext(
     val examples: List<RoleExampleDialogue> = emptyList(),
     val useExamples: Boolean = false,
     val interactionMode: String = "daily",
-    val internalStateMode: String = "off",
     val goals: List<String> = emptyList(),
 )
 
@@ -53,10 +52,6 @@ internal object RoleContextPolicy {
                 "interaction_mode",
                 "daily",
             ).takeIf { it in setOf("daily", "immersive") } ?: "daily",
-            internalStateMode = root.optString(
-                "internal_state_mode",
-                "off",
-            ).takeIf { it in setOf("off", "lightweight", "legacy") } ?: "off",
             goals = goals,
         )
     }
@@ -97,7 +92,6 @@ internal object RoleContextPolicy {
             )
             .put("use_examples", context.useExamples)
             .put("interaction_mode", context.interactionMode)
-            .put("internal_state_mode", context.internalStateMode)
             .put("goals", JSONArray(context.goals))
             .toString()
 
@@ -115,10 +109,6 @@ internal object RoleContextPolicy {
             .ifBlank { root.optString("interactionMode", "daily") }
             .takeIf { it in setOf("daily", "immersive") }
             ?: "daily"
-        val internalStateMode = root.optString("internal_state_mode")
-            .ifBlank { root.optString("internalStateMode", "off") }
-            .takeIf { it in setOf("off", "lightweight", "legacy") }
-            ?: "off"
         return CharacterRoleContext(
             scenario = root.optString("scenario").trim().take(600),
             motivation = root.optString("motivation").trim().take(400),
@@ -131,7 +121,6 @@ internal object RoleContextPolicy {
                 root.optBoolean("useExamples", false),
             ),
             interactionMode = interactionMode,
-            internalStateMode = internalStateMode,
             goals = root.optJSONArray("goals").toStringList(limit = 8, maxLength = 160),
         )
     }

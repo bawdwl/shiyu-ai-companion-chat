@@ -1141,14 +1141,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             return
         if store is None or not messages or messages[0].get('role')!='system':
             return
-        card=role_card(current,registry or runtime_characters())
-        state_mode=(
-            card.get('internal_state_mode', 'off')
-            if card else 'legacy'
-        )
-        if state_mode not in ('off','lightweight','legacy'):
-            state_mode='off'
-        trace['internal_state_mode']=state_mode
+        trace['internal_state_mode']='off'
         trace['internal_state_injected']=False
         trace['user_boundary_injected']=False
         memory=memory or {}
@@ -1230,34 +1223,17 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
         trace['memory_retrieval_scores']=memory_trace.get('scores',[])
         trace['internal_state_snapshot']=state
         boundary_text=render_boundaries(state)
-        if state_mode=='legacy':
-            state_text=memory.get('_internal_state_text') or store.internal_state.render_prompt(
-                character_id,
-                now=float(
-                    state.get('mood',{}).get('mood_updated_at')
-                    or datetime.now().timestamp()
-                ),
-            )[0]
-            trace['internal_state_description']=state_text
-            trace['internal_state_injected']=True
+        trace['internal_state_description']='不注入持久心情或关系数值'
+        if boundary_text:
+            trace['user_boundary_injected']=True
             messages[0]['content']+=(
-                '\n\n【角色内部状态】\n'+state_text
+                '\n\n【用户边界】\n'+boundary_text+
+                '\n用户边界不是情绪状态，必须在所有回复中持续遵守。'
             )
-        else:
-            trace['internal_state_description']='不注入持久心情或关系数值'
-            if boundary_text:
-                trace['user_boundary_injected']=True
-                messages[0]['content']+=(
-                    '\n\n【用户边界】\n'+boundary_text+
-                    '\n用户边界不是情绪状态，必须在所有回复中持续遵守。'
-                )
-        events=(
-            store.relevant_memory_events(
-                character_id,
-                retrieval_query,
-                limit=3,
-            )
-            if state_mode!='off' else []
+        events=store.relevant_memory_events(
+            character_id,
+            retrieval_query,
+            limit=3,
         )
         trace['memory_event_ids']=[event['id'] for event in events]
         if events:
