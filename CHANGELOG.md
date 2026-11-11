@@ -9,6 +9,9 @@
   diagram and linked the detailed guide from the main and documentation indexes.
 - Updated the guide to the Android `0.19.0` source baseline and the eight-role
   initial library.
+- Replaced the architecture section with an explicit 11-stage chat lifecycle
+  covering input, context assembly, generation, persistence and background
+  memory updates.
 
 ## 2026-11-10 — Android `0.19.0`
 
