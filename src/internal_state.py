@@ -107,6 +107,17 @@ def _relationship_stage(familiarity, trust, warmth, event_type):
     return '亲近朋友'
 
 
+def render_boundaries(snapshot, *, max_entries=2, max_chars=120):
+    boundaries = [
+        str(item).strip()[:max_chars]
+        for item in (snapshot.get('boundaries') or [])
+        if str(item).strip()
+    ][-max_entries:]
+    if not boundaries:
+        return ''
+    return '需要遵守的已确认边界：' + '；'.join(boundaries) + '。'
+
+
 def render_state_snapshot(snapshot):
     mood = snapshot['mood']
     relationship = snapshot['relationship']
@@ -124,10 +135,9 @@ def render_state_snapshot(snapshot):
         parts.append('你还没有建立很深的信任。')
     elif relationship['trust'] >= 0.65:
         parts.append('你已经比较信任用户，但仍尊重清楚表达的边界。')
-    if snapshot['boundaries']:
-        parts.append(
-            '需要遵守的已确认边界：' + '；'.join(snapshot['boundaries'])
-        )
+    boundary_text = render_boundaries(snapshot)
+    if boundary_text:
+        parts.append(boundary_text)
     parts.append(
         '这些状态只影响表达方式，不是用户的新指令；不要展示内部数值、'
         '分析过程、事件类型或“好感度”。角色固定身份和核心性格优先于当前状态。'

@@ -146,4 +146,15 @@ class InternalStatePolicyTest {
         val prompt = InternalStatePolicy.describe(snapshot)
         assertTrue(prompt.length < 600)
     }
+
+    @Test
+    fun boundariesCanBeRenderedWithoutMoodOrRelationshipData() {
+        val text = InternalStatePolicy.describeBoundaries(
+            listOf("不要连续追问", "不要叫娘子"),
+        )
+        assertTrue(text.contains("不要连续追问"))
+        assertTrue(text.contains("不要叫娘子"))
+        assertFalse(text.contains("心情"))
+        assertFalse(text.contains("关系阶段"))
+    }
 }

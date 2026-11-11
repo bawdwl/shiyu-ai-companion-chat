@@ -7,6 +7,7 @@ from uuid import uuid4
 
 MAX_WORLD_ENTRIES = 30
 LOCAL_MODEL_MODES = ('base', 'half', 'full', 'wukong', 'xucheng', 'haruhi')
+INTERNAL_STATE_MODES = ('off', 'lightweight', 'legacy')
 _CJK_TEXT = re.compile(r'[\u3400-\u9fff]')
 
 
@@ -172,6 +173,14 @@ def normalize_card(data, *, generating=False):
     )
     if interaction_mode not in ('daily', 'immersive'):
         raise ValueError('互动模式只能是 daily 或 immersive')
+    internal_state_mode = _text(
+        data.get('internal_state_mode', 'off'),
+        20,
+        '内部状态模式',
+        required=True,
+    )
+    if internal_state_mode not in INTERNAL_STATE_MODES:
+        raise ValueError('内部状态模式只能是 off、lightweight 或 legacy')
     character_id = _text(data.get('id') or ('custom-' + uuid4().hex[:12]), 80, '角色编号', required=True)
     if not re.fullmatch(r'custom-[A-Za-z0-9_-]{3,72}', character_id):
         raise ValueError('自定义角色编号格式无效')
@@ -190,6 +199,7 @@ def normalize_card(data, *, generating=False):
         'boundaries': boundaries, 'fixed_facts': facts, 'worldbook': worldbook,
         'example_dialogue': examples, 'use_examples': use_examples,
         'goals': goals, 'interaction_mode': interaction_mode,
+        'internal_state_mode': internal_state_mode,
         'draft_notice': (_text(data.get('draft_notice') or '由本地模型生成的内容需由作者检查；proposal 项未确认前不作为固定事实。',
                                500, '草稿说明') if generating else ''),
     }
@@ -254,6 +264,7 @@ def card_to_runtime(card):
         'id': card['id'], 'name': card['name'], 'tag': '自定义角色', 'color': 'peach',
         'description': card['description'], 'greeting': card['greeting'], 'starters': [],
         'model_settings': card['model_settings'],
+        'internal_state_mode': card.get('internal_state_mode', 'off'),
         'prompt': '\n\n'.join(prompt_parts), 'identity': None, 'custom_card': card,
         'profile_policy': 'on_request',
         'profile': {'line': card['tagline'], 'tags': [], 'scene': '', 'about': card['description']},

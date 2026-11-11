@@ -14,9 +14,21 @@ from prompt_pipeline import assemble_prompt
 from character_cards import card_to_runtime, normalize_card, parse_generated_card
 from characters import CHARACTERS
 from structured_memory import CandidateStore
+from internal_state import render_boundaries
 
 
 class ExperiencePolicyTests(unittest.TestCase):
+    def test_boundary_rendering_is_independent_from_mood_state(self):
+        text = render_boundaries({
+            'mood': {'label': '平静'},
+            'relationship': {'stage': '亲近朋友'},
+            'boundaries': ['不要叫娘子', '不要连续追问'],
+        })
+        self.assertIn('不要叫娘子', text)
+        self.assertIn('不要连续追问', text)
+        self.assertNotIn('平静', text)
+        self.assertNotIn('亲近朋友', text)
+
     def test_dialogue_policy_defaults_to_none(self):
         self.assertEqual(
             'NONE',
@@ -234,6 +246,7 @@ class ExperiencePolicyTests(unittest.TestCase):
         self.assertTrue(card['use_examples'])
         self.assertEqual('immersive', card['interaction_mode'])
         self.assertEqual(['完成插画集'], card['goals'])
+        self.assertEqual('off', card['internal_state_mode'])
 
 
 if __name__ == '__main__':

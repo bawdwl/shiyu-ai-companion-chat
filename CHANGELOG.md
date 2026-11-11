@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-11-11 — Android `0.19.2`
+
+- Added per-character internal-state modes: `off`, `lightweight` and `legacy`.
+  New and existing cards default to `off`.
+- In `off` mode, persistent mood, familiarity, trust, warmth and relationship
+  stage are no longer injected. Current-turn affect, long-term memory and user
+  boundaries remain active.
+- In `lightweight` mode, relevant conflict, repair, commitment and shared-event
+  context can still be injected without exposing relationship numbers.
+- In `legacy` mode, the previous 0.19.1 numeric state prompt remains available
+  for controlled comparison only.
+- User boundaries are now rendered independently from mood and relationship
+  state and remain active in every mode.
+- Fixed-training Prompt characters continue to ignore dynamic state.
+- Added PC and Android UI controls, trace fields and regression tests for the
+  three modes.
+- Verification: 310 Python tests, 40 frontend state tests, 105 Android JVM
+  tests per flavor, React production build, Android lint and APK builds passed.
+
 ## 2026-11-11 — Android `0.19.1`
 
 - Made structured-memory extraction recover complete candidate objects from

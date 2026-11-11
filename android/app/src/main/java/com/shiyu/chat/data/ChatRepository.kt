@@ -1039,10 +1039,14 @@ class ChatRepository(
             characterId = character.id,
             mode = roleContext.interactionMode,
         )
-        val memoryEvents = MemoryEventPolicy.selectRelevant(
-            database.memoryEvents().forCharacter(character.id),
-            memoryNeed.query,
-        )
+        val memoryEvents = if (roleContext.internalStateMode == "off") {
+            emptyList()
+        } else {
+            MemoryEventPolicy.selectRelevant(
+                database.memoryEvents().forCharacter(character.id),
+                memoryNeed.query,
+            )
+        }
         val imageData = if (localMode) null else imageUri?.let(::imageDataUrl)
         val currentContent = userContent(text, imageData)
         val bodyMessages = buildMessages(
@@ -1187,6 +1191,22 @@ class ChatRepository(
             .put("current_turn_affect", currentAffect?.reason)
             .put("scene_mode", sceneForPrompt.mode)
             .put("scene_update_reason", sceneDecision.reason)
+            .put("internal_state_mode", roleContext.internalStateMode)
+            .put(
+                "internal_state_injected",
+                roleContext.internalStateMode == "legacy" &&
+                    character.id !in TRAINING_SYSTEM_PROMPTS,
+            )
+            .put(
+                "user_boundary_injected",
+                character.id !in TRAINING_SYSTEM_PROMPTS &&
+                    internalState.boundaries.isNotEmpty(),
+            )
+            .put(
+                "relationship_events_injected",
+                character.id !in TRAINING_SYSTEM_PROMPTS &&
+                    memoryEvents.isNotEmpty(),
+            )
             .put("memory_event_ids", JSONArray().apply {
                 memoryEvents.forEach { put(it.id) }
             })
@@ -2972,8 +2992,18 @@ class ChatRepository(
             appendLine(
                 "直接输出这一次真正发给用户的一条聊天消息。动作、神态和语气可用简短中文括号自然嵌入，例如“（别过脸，轻轻点头）”，不要加“角色说出口”“内心独白”“动作与神态”等标题。不要输出 JSON、XML、好感度、关系值或系统字段。"
             )
-            appendLine("【角色当前内部状态】")
-            appendLine(InternalStatePolicy.describe(internalState))
+            if (roleContext.internalStateMode == "legacy") {
+                appendLine("【角色当前内部状态】")
+                appendLine(InternalStatePolicy.describe(internalState))
+            } else {
+                val boundaryText =
+                    InternalStatePolicy.describeBoundaries(internalState.boundaries)
+                if (boundaryText.isNotBlank()) {
+                    appendLine("【用户边界】")
+                    appendLine(boundaryText)
+                    appendLine("用户边界不是情绪状态，必须在所有回复中持续遵守。")
+                }
+            }
             if (memoryEvents.isNotEmpty()) {
                 appendLine("【相关事件进展】")
                 memoryEvents.forEach {

@@ -402,12 +402,7 @@ internal object InternalStatePolicy {
                 "你对用户的信任仍在建立"
             else -> "你开始愿意相信用户"
         }
-        val boundaryText = if (snapshot.boundaries.isEmpty()) "" else {
-            "需要遵守的已确认边界：" +
-                snapshot.boundaries.takeLast(2)
-                    .map { it.take(80) }
-                    .joinToString("；") + "。"
-        }
+        val boundaryText = describeBoundaries(snapshot.boundaries)
         return buildString {
             appendLine("你此刻的心情：${snapshot.mood.label}。")
             appendLine("你与用户的关系阶段：${snapshot.relationship.stage}。")
@@ -418,5 +413,15 @@ internal object InternalStatePolicy {
                     "分析过程、事件类型或“好感度”。角色固定身份和核心性格优先于当前状态。",
             )
         }
+    }
+
+    fun describeBoundaries(boundaries: List<String>): String {
+        val selected = boundaries
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .takeLast(2)
+            .map { it.take(80) }
+        if (selected.isEmpty()) return ""
+        return "需要遵守的已确认边界：" + selected.joinToString("；") + "。"
     }
 }

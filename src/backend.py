@@ -51,6 +51,7 @@ from product_characters import (
     seed_product_characters,
 )
 from prompt_pipeline import assemble_prompt
+from internal_state import render_boundaries
 from chat_trace import make_turn_trace
 from roleplay_response import tts_text_from_content
 from session_memory import refresh_memory,retrieve_covered_history
@@ -1120,16 +1121,36 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
         return answer,({'knowledge_guard':'fallback','forbidden_mentions':violations}
                         if violations else {})
 
-    def apply_structured_memory(messages,current,question,trace,memory=None):
+    def apply_structured_memory(
+        messages,
+        current,
+        question,
+        trace,
+        memory=None,
+        registry=None,
+    ):
         store=app.state.structured_memory
         trace['structured_memory_ids']=[]
         trace['structured_memory_chars']=0
         if trace.get('prompt_mode')=='fixed_training':
             trace['memory_retrieval_mode']='fixed_prompt'
             trace['internal_state_description']='不注入（固定训练提示词）'
+            trace['internal_state_mode']='fixed_prompt'
+            trace['internal_state_injected']=False
+            trace['user_boundary_injected']=False
             return
         if store is None or not messages or messages[0].get('role')!='system':
             return
+        card=role_card(current,registry or runtime_characters())
+        state_mode=(
+            card.get('internal_state_mode', 'off')
+            if card else 'legacy'
+        )
+        if state_mode not in ('off','lightweight','legacy'):
+            state_mode='off'
+        trace['internal_state_mode']=state_mode
+        trace['internal_state_injected']=False
+        trace['user_boundary_injected']=False
         memory=memory or {}
         character_id=current.get('character_id','assistant')
         need=memory_need(current.get('messages',[]),question)
@@ -1207,22 +1228,36 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
         )
         trace['memory_retrieval_mode']=memory_trace.get('retrieval_mode','lexical')
         trace['memory_retrieval_scores']=memory_trace.get('scores',[])
-        state_text=memory.get('_internal_state_text') or store.internal_state.render_prompt(
-            character_id,
-            now=float(
-                state.get('mood',{}).get('mood_updated_at')
-                or datetime.now().timestamp()
-            ),
-        )[0]
-        trace['internal_state_description']=state_text
         trace['internal_state_snapshot']=state
-        messages[0]['content']+=(
-            '\n\n【角色内部状态】\n'+state_text
-        )
-        events=store.relevant_memory_events(
-            character_id,
-            retrieval_query,
-            limit=3,
+        boundary_text=render_boundaries(state)
+        if state_mode=='legacy':
+            state_text=memory.get('_internal_state_text') or store.internal_state.render_prompt(
+                character_id,
+                now=float(
+                    state.get('mood',{}).get('mood_updated_at')
+                    or datetime.now().timestamp()
+                ),
+            )[0]
+            trace['internal_state_description']=state_text
+            trace['internal_state_injected']=True
+            messages[0]['content']+=(
+                '\n\n【角色内部状态】\n'+state_text
+            )
+        else:
+            trace['internal_state_description']='不注入持久心情或关系数值'
+            if boundary_text:
+                trace['user_boundary_injected']=True
+                messages[0]['content']+=(
+                    '\n\n【用户边界】\n'+boundary_text+
+                    '\n用户边界不是情绪状态，必须在所有回复中持续遵守。'
+                )
+        events=(
+            store.relevant_memory_events(
+                character_id,
+                retrieval_query,
+                limit=3,
+            )
+            if state_mode!='off' else []
         )
         trace['memory_event_ids']=[event['id'] for event in events]
         if events:
@@ -1654,7 +1689,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
                     provider_switch_from=provider_switch_from,
                 )
                 apply_structured_memory(
-                    draft,current,question,draft_trace,memory
+                    draft,current,question,draft_trace,memory,registry
                 )
                 attach_image_to_messages(draft,current,image_id)
                 tokenizer=getattr(engine,'tokenizer',None)
@@ -1685,7 +1720,9 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             prompt_mode=prompt_mode_for_provider(selected_provider),
         )
         if not prompt_test:
-            apply_structured_memory(messages,current,question,trace,memory)
+            apply_structured_memory(
+                messages,current,question,trace,memory,registry
+            )
         else:
             # Prompt conditions use identical generation settings and no
             # memory, worldbook, policy, or card-specific decoding overrides.
@@ -3069,7 +3106,9 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
             prompt_mode=prompt_mode_for_provider(selected),
         )
         if not prompt_test:
-            apply_structured_memory(messages,current,message,trace,memory)
+            apply_structured_memory(
+                messages,current,message,trace,memory,runtime_characters()
+            )
         else:
             trace['generation_preset']={}
         tokenizer=getattr(engine,'tokenizer',None)

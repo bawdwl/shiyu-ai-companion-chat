@@ -103,6 +103,17 @@ def make_turn_trace(
             "memory_retrieval_source_message_ids", []
         ),
         "internal_state": prompt_trace.get("internal_state_snapshot"),
+        "internal_state_mode": prompt_trace.get("internal_state_mode"),
+        "internal_state_injected": bool(
+            prompt_trace.get("internal_state_injected")
+        ),
+        "user_boundary_injected": bool(
+            prompt_trace.get("user_boundary_injected")
+        ),
+        "relationship_events_injected": bool(
+            prompt_trace.get("relationship_events_injected")
+        ),
+        "memory_event_ids": prompt_trace.get("memory_event_ids", []),
         "repeat_sentences_removed": prompt_trace.get(
             "repeated_history_sentences_removed", 0
         ),

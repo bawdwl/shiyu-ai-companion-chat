@@ -37,6 +37,22 @@ class CharacterCardTests(unittest.TestCase):
                 'model_settings': {'source': 'local', 'local_mode': 'lora'},
             })
 
+    def test_internal_state_mode_defaults_off_and_is_runtime_visible(self):
+        card = normalize_card({'name': '林晚'})
+        self.assertEqual('off', card['internal_state_mode'])
+        self.assertEqual('off', card_to_runtime(card)['internal_state_mode'])
+
+        legacy = normalize_card({
+            'name': '林晚',
+            'internal_state_mode': 'legacy',
+        })
+        self.assertEqual('legacy', legacy['internal_state_mode'])
+        with self.assertRaisesRegex(ValueError, 'off、lightweight 或 legacy'):
+            normalize_card({
+                'name': '林晚',
+                'internal_state_mode': 'always',
+            })
+
     def test_persisted_opening_does_not_hide_first_turn_scenario(self):
         card = normalize_card({
             'id': 'custom-scenario-test',

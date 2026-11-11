@@ -1,6 +1,6 @@
 # 拾语 Android
 
-当前源码版本：`0.19.1 / versionCode 56`，Room schema 13，提供两个安装版本：
+当前源码版本：`0.19.2 / versionCode 57`，Room schema 13，提供两个安装版本：
 
 - `com.shiyu.chat`：完整版，内置本地语音识别、角色朗读、MNN 和 Local Dream。
 - `com.shiyu.chat.cloud`：云端精简版，移除 MNN、QNN、Local Dream、ASR 和 TTS。
@@ -82,7 +82,9 @@ android/app/build/outputs/apk/cloud/debug/app-cloud-debug.apk
 
 ## 当前验证
 
-- `0.19.1` 源码通过完整版与云端版各 104 项 JVM 测试、Debug Lint 和 APK 构建。
+- 每个角色支持 `off / lightweight / legacy` 三种内部状态模式，默认 `off`；
+  `legacy` 仅用于对照实验，用户边界不受模式开关影响。
+- `0.19.2` 源码通过完整版与云端版各 105 项 JVM 测试、Debug Lint 和 APK 构建。
 - 完整版与云端版均执行覆盖安装验证，不清理已有用户数据。
 - 覆盖安装后两个包均确认只保留上述 8 个默认角色，头像与背景路径有效。
 - 预编译 APK 仅作为 GitHub Release 附件分发，不提交到 Git：
