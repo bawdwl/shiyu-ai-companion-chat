@@ -30,6 +30,20 @@ private val internalStateImportance = mapOf(
     "high" to 1.0,
 )
 
+private val relationshipRecoveryEvents = setOf(
+    "repair",
+    "meaningful_self_disclosure",
+    "meaningful_support",
+    "shared_activity",
+    "shared_memory",
+    "vulnerability_shared",
+    "plan_progress",
+    "promise_kept",
+    "user_shared_good_news",
+)
+
+private const val RELATIONSHIP_TENSION_RELAX_AFTER_HOURS = 24.0
+
 private val coerciveRelationshipCues = listOf(
     "好感度",
     "你必须永远信任我",
@@ -170,6 +184,20 @@ internal object InternalStatePolicy {
             0.0,
             1.0,
         )
+        val storedStage = relationshipBase.stage.ifBlank { "初次交谈" }
+        val stage = if (
+            storedStage in setOf("关系紧张", "关系修复中") &&
+            relationshipAgeHours >= RELATIONSHIP_TENSION_RELAX_AFTER_HOURS
+        ) {
+            relationshipStage(
+                relationshipBase.familiarity.coerceIn(0.0, 1.0),
+                relationshipBase.trust.coerceIn(0.0, 1.0),
+                warmth,
+                eventType = "",
+            )
+        } else {
+            storedStage
+        }
         return InternalStateSnapshot(
             mood = MoodSnapshot(
                 valence = valence,
@@ -180,7 +208,7 @@ internal object InternalStatePolicy {
                 familiarity = relationshipBase.familiarity.coerceIn(0.0, 1.0),
                 trust = relationshipBase.trust.coerceIn(0.0, 1.0),
                 warmth = warmth,
-                stage = relationshipBase.stage.ifBlank { "初次交谈" },
+                stage = stage,
             ),
             boundaries = boundaries.distinct().takeLast(8),
         )
@@ -301,17 +329,21 @@ internal object InternalStatePolicy {
             0.0,
             1.0,
         )
-        var stage = relationshipStage(
+        val closenessStage = relationshipStage(
             familiarity,
             trust,
             warmth,
             update.eventType,
         )
-        if (
-            current.relationship.stage in setOf("关系紧张", "关系修复中") &&
-            update.eventType !in setOf("conflict", "repair")
-        ) {
-            stage = current.relationship.stage
+        val stage = when {
+            update.eventType == "conflict" -> "关系紧张"
+            current.relationship.stage == "关系紧张" &&
+                update.eventType in relationshipRecoveryEvents -> "关系修复中"
+            current.relationship.stage == "关系修复中" &&
+                update.eventType in relationshipRecoveryEvents -> closenessStage
+            current.relationship.stage in setOf("关系紧张", "关系修复中") ->
+                current.relationship.stage
+            else -> closenessStage
         }
         val after = current.copy(
             mood = MoodSnapshot(
@@ -360,19 +392,21 @@ internal object InternalStatePolicy {
             snapshot.relationship.familiarity >= 0.55 ->
                 "你已经比较熟悉用户的表达方式"
             snapshot.relationship.familiarity >= 0.30 ->
-                "你对用户正在逐渐熟悉"
-            else -> "你与用户仍处在初步了解的阶段"
+                "你正在逐渐熟悉用户的表达方式"
+            else -> "你对用户表达方式的熟悉度仍在建立"
         }
         val trustText = when {
             snapshot.relationship.trust >= 0.65 ->
                 "你已经比较信任用户"
             snapshot.relationship.trust < 0.30 ->
-                "你还没有建立很深的信任"
+                "你对用户的信任仍在建立"
             else -> "你开始愿意相信用户"
         }
         val boundaryText = if (snapshot.boundaries.isEmpty()) "" else {
             "需要遵守的已确认边界：" +
-                snapshot.boundaries.takeLast(3).joinToString("；") + "。"
+                snapshot.boundaries.takeLast(2)
+                    .map { it.take(80) }
+                    .joinToString("；") + "。"
         }
         return buildString {
             appendLine("你此刻的心情：${snapshot.mood.label}。")

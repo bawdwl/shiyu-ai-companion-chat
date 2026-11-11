@@ -87,4 +87,63 @@ class InternalStatePolicyTest {
             snapshot.relationship.affectionScore,
         )
     }
+
+    @Test
+    fun staleTensionRelaxesWithoutAnotherBackgroundUpdate() {
+        val now = 100_000_000L
+        val snapshot = InternalStatePolicy.snapshot(
+            character = null,
+            relationship = RelationshipStateEntity(
+                characterId = "jiang",
+                familiarity = 0.30,
+                trust = 0.30,
+                warmth = 0.60,
+                stage = "关系紧张",
+                updatedAt = now - 25L * 3_600_000L,
+            ),
+            boundaries = emptyList(),
+            now = now,
+        )
+        assertEquals("逐渐熟悉", snapshot.relationship.stage)
+    }
+
+    @Test
+    fun positiveEvidenceMovesTensionThroughRepairThenBackToCloseness() {
+        val tense = InternalStatePolicy.snapshot(
+            character = null,
+            relationship = RelationshipStateEntity(
+                characterId = "jiang",
+                familiarity = 0.30,
+                trust = 0.30,
+                warmth = 0.60,
+                stage = "关系紧张",
+                updatedAt = 1_000_000L,
+            ),
+            boundaries = emptyList(),
+            now = 1_000_000L,
+        )
+        val repair = InternalStatePolicy.apply(
+            tense,
+            update(eventType = "shared_activity"),
+        ).after
+        assertEquals("关系修复中", repair.relationship.stage)
+
+        val recovered = InternalStatePolicy.apply(
+            repair,
+            update(eventType = "meaningful_support"),
+        ).after
+        assertEquals("逐渐熟悉", recovered.relationship.stage)
+    }
+
+    @Test
+    fun longBoundariesAreCompactedInPrompt() {
+        val snapshot = InternalStatePolicy.snapshot(
+            character = null,
+            relationship = null,
+            boundaries = listOf("不要连续追问".repeat(80)),
+            now = 1_000_000L,
+        )
+        val prompt = InternalStatePolicy.describe(snapshot)
+        assertTrue(prompt.length < 600)
+    }
 }

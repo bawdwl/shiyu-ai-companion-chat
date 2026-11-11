@@ -342,6 +342,28 @@ interface StructuredMemoryJobDao {
     )
     suspend fun recoverRunningJobs(now: Long)
 
+    @Query(
+        """SELECT DISTINCT characterId FROM structured_memory_jobs
+           WHERE status='failed' AND (
+               lastError LIKE 'Unterminated%' OR
+               lastError LIKE '%JSONException%' OR
+               lastError LIKE '%End of input%'
+           )"""
+    )
+    suspend fun recoverableFailureCharacterIds(): List<String>
+
+    @Query(
+        """UPDATE structured_memory_jobs
+           SET status='queued',attempts=0,readyAt=:now,leaseUntil=NULL,
+               lastError='requeued after memory parser recovery',updatedAt=:now
+           WHERE status='failed' AND (
+               lastError LIKE 'Unterminated%' OR
+               lastError LIKE '%JSONException%' OR
+               lastError LIKE '%End of input%'
+           )"""
+    )
+    suspend fun requeueRecoverableFailures(now: Long): Int
+
     @Query("DELETE FROM structured_memory_jobs WHERE characterId=:characterId")
     suspend fun clear(characterId: String)
 

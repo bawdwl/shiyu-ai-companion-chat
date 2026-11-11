@@ -178,4 +178,45 @@ class MemorySelectionTest {
         assertTrue(selection.charactersUsed <= 300)
         assertTrue(selection.structuredMemories.size < facts.size)
     }
+
+    @Test fun coreUserFactSurvivesWhenQueryHasNoLiteralOverlap() {
+        val stablePreference = structured(
+            id = 7,
+            text = "用户长期偏好安静的环境",
+            factKey = "user.preference.noise",
+        )
+        val selection = selectUnifiedMemoryContext(
+            characterId = "a",
+            structuredMemories = listOf(stablePreference),
+            excerpts = emptyList(),
+            query = "今天天气不错",
+            maxFacts = 8,
+            maxExcerpts = 2,
+            maxCharacters = 1_600,
+        )
+        assertEquals(listOf(7L), selection.structuredMemories.map { it.id })
+    }
+
+    @Test fun longExcerptKeepsQueryRelevantWindowAndStaysCompact() {
+        val content = "前文".repeat(200) + "那柄剑是谁留下的" + "后文".repeat(200)
+        val compact = compactMemoryExcerptForPrompt(content, "那柄剑是谁留下的")
+        assertTrue(compact.contains("那柄剑是谁留下的"))
+        assertTrue(compact.length <= 262)
+    }
+
+    @Test fun unifiedContextHonorsTwoExcerptLimit() {
+        val excerpts = (1L..4L).map { id ->
+            memory(id, "第${id}条历史：用户提到剑与宗门")
+        }
+        val selection = selectUnifiedMemoryContext(
+            characterId = "a",
+            structuredMemories = emptyList(),
+            excerpts = excerpts,
+            query = "剑和宗门",
+            maxFacts = 8,
+            maxExcerpts = 2,
+            maxCharacters = 1_600,
+        )
+        assertEquals(2, selection.excerpts.size)
+    }
 }

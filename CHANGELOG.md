@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-11-11 — Android `0.19.1`
+
+- Made structured-memory extraction recover complete candidate objects from
+  truncated model JSON instead of failing the whole batch.
+- Limited extraction to six concise candidates, raised the extraction output
+  allowance, and requeued previously failed malformed-JSON jobs once.
+- Reduced prompt excerpts from four to two and compacted each around the
+  query-relevant window, preventing long intimate scenes from consuming nearly
+  all remembered context.
+- Added a small guaranteed core profile of active user facts and preferences,
+  plus an explicit instruction to use relevant prior commitments, events and
+  relationship facts without waiting for the user to point out a gap.
+- Reworked persistent relationship tension so it relaxes after 24 hours and can
+  progress through repair back to a closeness-derived stage.
+- Compressed internal-state boundaries and removed overly absolute “initial
+  relationship / no deep trust” wording.
+- Added preparation, first-token and generation timing fields to Android turn
+  traces.
+- Verification: 104 Android JVM tests passed for each flavor; full and cloud
+  builds and lint passed; the full build was coverage-installed on the phone
+  with user data preserved.
+
 ## 2026-11-11 — Documentation
 
 - Added a complete project architecture and runtime guide covering character

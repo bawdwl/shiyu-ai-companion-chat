@@ -57,12 +57,57 @@ private val structuredHistoryCues =
 internal fun isHistoricalMemoryQuery(query: String): Boolean =
     structuredHistoryCues.any { it in query }
 
+internal fun compactMemoryExcerptForPrompt(
+    content: String,
+    query: String,
+    maxChars: Int = 260,
+): String {
+    require(maxChars >= 80)
+    val compact = content.replace(Regex("\\s+"), " ").trim()
+    if (compact.length <= maxChars) return compact
+    val anchors = Regex("[\\p{IsHan}]{2,}|[a-z0-9]+")
+        .findAll(query.lowercase())
+        .flatMap { match ->
+            val part = match.value
+            if (part.first().code in 0x3400..0x9fff) {
+                part.windowed(2).asSequence()
+            } else {
+                sequenceOf(part)
+            }
+        }
+        .filter { it.length >= 2 }
+        .distinct()
+        .take(16)
+        .toList()
+    val lower = compact.lowercase()
+    val anchorIndex = anchors
+        .map(lower::indexOf)
+        .filter { it >= 0 }
+        .minOrNull()
+    if (anchorIndex == null) {
+        val headSize = maxChars * 2 / 3
+        val tailSize = maxChars - headSize - 1
+        return compact.take(headSize).trimEnd() +
+            "…" +
+            compact.takeLast(tailSize).trimStart()
+    }
+    val start = (anchorIndex - maxChars / 3)
+        .coerceIn(0, compact.length - maxChars)
+    val end = (start + maxChars).coerceAtMost(compact.length)
+    return buildString {
+        if (start > 0) append('…')
+        append(compact.substring(start, end).trim())
+        if (end < compact.length) append('…')
+    }
+}
+
 internal fun selectStructuredMemories(
     memories: List<StructuredMemoryEntity>,
     query: String,
     limit: Int,
     ftsScores: Map<Long, Double> = emptyMap(),
     semanticProvider: MemorySemanticProvider? = null,
+    includeCoreProfile: Boolean = false,
 ): List<StructuredMemoryEntity> = rankStructuredMemories(
     memories = memories,
     query = query,
@@ -70,6 +115,7 @@ internal fun selectStructuredMemories(
     includeSuperseded = isHistoricalMemoryQuery(query),
     ftsScores = ftsScores,
     semanticProvider = semanticProvider,
+    includeCoreProfile = includeCoreProfile,
 ).map { it.memory }
 
 /**
@@ -102,6 +148,7 @@ internal fun selectUnifiedMemoryContext(
         includeSuperseded = historical,
         ftsScores = ftsScores,
         semanticProvider = semanticProvider,
+        includeCoreProfile = true,
     )
     val rankedExcerpts = rankExcerpts(
         excerpts = scopedExcerpts,
@@ -133,11 +180,15 @@ internal fun selectUnifiedMemoryContext(
             )
         }
         rankedExcerpts.forEach {
+            val promptText = compactMemoryExcerptForPrompt(
+                content = it.memory.content,
+                query = query,
+            )
             add(
                 Candidate(
                     type = "excerpt",
                     excerpt = it.memory,
-                    text = it.memory.content,
+                    text = promptText,
                     score = it.score,
                     order = it.memory.id,
                 ),
@@ -195,6 +246,7 @@ private fun rankStructuredMemories(
     includeSuperseded: Boolean,
     ftsScores: Map<Long, Double>,
     semanticProvider: MemorySemanticProvider?,
+    includeCoreProfile: Boolean = false,
 ): List<RankedFact> {
     if (limit <= 0) return emptyList()
     val allowed = if (includeSuperseded) {
@@ -257,6 +309,31 @@ private fun rankStructuredMemories(
         if (finalScore > 0.0) {
             scored[memory.id] = RankedFact(memory, finalScore)
         }
+    }
+
+    if (includeCoreProfile) {
+        eligible.asSequence()
+            .filter {
+                it.state == "active" &&
+                    it.subject == "user" &&
+                    it.kind == "user_report" &&
+                    it.factType in setOf("fact", "preference")
+            }
+            .sortedWith(
+                compareByDescending<StructuredMemoryEntity> { it.importance }
+                    .thenByDescending { it.observedOrder },
+            )
+            .take(3)
+            .forEach { memory ->
+                if (memory.id !in scored) {
+                    val recency = memory.observedOrder.toDouble() / max(1L, maxOrder)
+                    scored[memory.id] = RankedFact(
+                        memory,
+                        0.16 + 0.06 * memory.importance.coerceIn(0.0, 1.0) +
+                            0.03 * recency,
+                    )
+                }
+            }
     }
 
     if (includeSuperseded) {
