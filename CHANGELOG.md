@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-12 — Android `0.19.2`
+
+- Restored multiline auto-growth for the home and chat composer. Empty drafts
+  remain at the stable 54dp minimum height; longer text expands up to the
+  existing 106dp ceiling and remains scrollable beyond it.
+- The `自由输入…` placeholder remains vertically centered at the collapsed
+  height.
+- Verification: 106 Android JVM tests per flavor, Android lint and APK builds.
+
 ## 2026-11-12 — Android `0.19.1`
 
 - Root bottom-bar tabs are now composed ahead of navigation and switch directly

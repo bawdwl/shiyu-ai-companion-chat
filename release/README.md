@@ -10,61 +10,15 @@ release/
 └─ README.md
 ```
 
-## Android 0.19.1 当前构建
+## Android 0.19.2 当前构建
 
-`apk-0.19.1/` 是底部栏切换、首页输入栏高度和聊天上栏修复后的发布包：
+`apk-0.19.2/` 是多行输入框自动增高和多行内容可见性修复后的发布包：
 
-- 完整版：`apk-0.19.1/Shiyu-0.19.1-Android-arm64-v8a.apk`
-- 云端版：`apk-0.19.1/Shiyu-0.19.1-cloud-Android-arm64-v8a.apk`
-- 版本：完整版 `0.19.1 / versionCode 60`，云端版 `0.19.1-cloud / versionCode 60`
-- 完整版 SHA-256：`19BCEB8403C190C76FE282AFFE5BEE2003EE6423764439B01A610E9974D62296`
-- 云端版 SHA-256：`545384143440E6260BDECA4EEC09C2F024633921B64C257E3D3B44B7415520AA`
-
-## Android 0.19.4 本机测试构建
-
-`apk-0.19.4-test/` 是长期记忆写入、检索和预算优化后的测试包，尚未替换公开
-Release：
-
-- 完整版：`apk-0.19.4-test/Shiyu-0.19.4-full-test-android-arm64.apk`
-- 云端版：`apk-0.19.4-test/Shiyu-0.19.4-cloud-test-android-arm64.apk`
-- 版本：完整版 `0.19.4 / versionCode 59`，云端版 `0.19.4-cloud / versionCode 59`
-- Python、前端、Android JVM、Lint 和 APK 构建均通过。
-- 本机当时没有连接 ADB 设备，两个包尚未执行覆盖安装验证。
-- 完整版 SHA-256：`F6991FAC7094689C9987FA2DB30B5C1C8C6DDFB2E19BCAA2FD2F127EE6441F76`
-- 云端版 SHA-256：`23B1EFE819AF24055308990D6C6DABB082CD6FF9E7BF988478E90499843A255E`
-
-## Android 0.19.3 本机测试构建
-
-`apk-0.19.3-test/` 是内部状态策略收敛为 `off` 后的覆盖测试包，尚未替换公开
-Release：
-
-- 完整版：`apk-0.19.3-test/Shiyu-0.19.3-full-test-android-arm64.apk`
-- 云端版：`apk-0.19.3-test/Shiyu-0.19.3-cloud-test-android-arm64.apk`
-- 版本：完整版 `0.19.3 / versionCode 58`，云端版 `0.19.3-cloud / versionCode 58`
-- Python、前端、Android JVM、Lint 和 APK 构建均通过。
-- 本机当时没有连接 ADB 设备，两个包尚未执行覆盖安装验证。
-
-## Android 0.19.0 已发布
-
-两个安装包共用同一套 8 个初始角色和 16 张头像/背景图片：
-宋知意、裴既明、李白、萧承渊、姜拂衣、空条承太郎、凌清鸢和沈砚辞。
-本次同时降低角色管理与消息页头像的解码和绘制成本，改善快速滑动。
-
-完整版：
-
-- 包名：`com.shiyu.chat`
-- 文件：`apk-0.19.0/Shiyu-0.19.0-Android-arm64-v8a.apk`
-- 大小：`299,207,736` 字节
-- SHA-256：`D06A7C1A85298B77CDEA9227E679FD9388625C7F3B79706DAA791D87F43EA2B1`
-
-云端精简版：
-
-- 包名：`com.shiyu.chat.cloud`
-- 文件：`apk-0.19.0-cloud/Shiyu-0.19.0-cloud-Android-arm64-v8a.apk`
-- 大小：`22,310,896` 字节
-- SHA-256：`D922F63B110C5F5BC6801D684ED639926CF9F2612A38494D0D9CC3D47285B41D`
-- 保留：云端聊天、角色、记忆、状态、场景、图片输入和千问云端生图。
-- 移除：MNN、QNN、Local Dream、ASR、TTS 和相关原生运行库。
+- 完整版：`apk-0.19.2/Shiyu-0.19.2-Android-arm64-v8a.apk`
+- 云端版：`apk-0.19.2/Shiyu-0.19.2-cloud-Android-arm64-v8a.apk`
+- 版本：完整版 `0.19.2 / versionCode 61`，云端版 `0.19.2-cloud / versionCode 61`
+- 完整版 SHA-256：`60D2334D6555B6CB00EE35655BAD7574316C4A6F7C760E0F7E4BB9C3C5677B4F`
+- 云端版 SHA-256：`37702DBAF3F95FD69C621A1D1DC466C20E61E256C9D751B4C984A0C31FD75588`
 
 两个包要求 Android 8.0+、ARM64，可以同时安装且数据独立。API Key 由用户在
 应用内填写。聊天、记忆、API Key 和个人图片不进入发布包。

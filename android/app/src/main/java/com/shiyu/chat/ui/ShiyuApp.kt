@@ -2362,7 +2362,10 @@ private fun ChatScreen(
                 !state.busy &&
                 !state.historyBusy
             Surface(
-                modifier = Modifier.fillMaxWidth().height(54.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(
+                    min = 54.dp,
+                    max = 106.dp,
+                ),
                 shape = RoundedCornerShape(28.dp),
                 color = Color(0xC43E3749),
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
@@ -2388,7 +2391,7 @@ private fun ChatScreen(
                         },
                         modifier = Modifier
                             .weight(1f)
-                            .height(44.dp)
+                            .heightIn(min = 44.dp, max = 96.dp)
                             .focusRequester(composerFocusRequester)
                             .onFocusChanged {
                                 if (it.isFocused) onComposerFocusChange()
