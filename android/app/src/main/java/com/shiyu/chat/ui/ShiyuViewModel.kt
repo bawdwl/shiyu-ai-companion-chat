@@ -80,6 +80,7 @@ data class ShiyuUiState(
     val messageSearchQuery: String = "",
     val messageSearchResults: List<MessageEntity> = emptyList(),
     val messageSearchBusy: Boolean = false,
+    val bookmarkedMessageIds: Set<Long> = emptySet(),
 )
 
 class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
@@ -411,6 +412,26 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
         }
     }
 
+    fun toggleMessageBookmark(messageId: Long) {
+        val character = _state.value.selected ?: return
+        _state.value = _state.value.copy(
+            bookmarkedMessageIds = repository.toggleMessageBookmark(character.id, messageId),
+        )
+    }
+
+    fun editMessage(messageId: Long, content: String) {
+        val character = _state.value.selected ?: return
+        viewModelScope.launch {
+            runCatching { repository.editMessage(character.id, messageId, content) }
+                .onSuccess { _state.value = _state.value.copy(status = "消息已编辑") }
+                .onFailure {
+                    _state.value = _state.value.copy(
+                        status = it.message ?: "消息编辑失败",
+                    )
+                }
+        }
+    }
+
     fun select(character: CharacterEntity, ensureOpening: Boolean = true) {
         observeJob?.cancel()
         variantJob?.cancel()
@@ -423,6 +444,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
             branches = emptyList(), branchSheetVisible = false, branchBusy = false,
             messageSearchVisible = false, messageSearchQuery = "",
             messageSearchResults = emptyList(), messageSearchBusy = false,
+            bookmarkedMessageIds = repository.bookmarkedMessageIds(character.id),
         )
         observeJob = viewModelScope.launch {
             if (ensureOpening) repository.ensureOpening(character)
@@ -480,6 +502,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
             branches = emptyList(), branchSheetVisible = false, branchBusy = false,
             messageSearchVisible = false, messageSearchQuery = "",
             messageSearchResults = emptyList(), messageSearchBusy = false,
+            bookmarkedMessageIds = emptySet(),
         )
     }
 

@@ -418,6 +418,8 @@ fun ShiyuApp(repository: ChatRepository) {
                     onOpenSearch = vm::openMessageSearch,
                     onCloseSearch = vm::closeMessageSearch,
                     onSearchQuery = vm::searchMessages,
+                    onToggleBookmark = vm::toggleMessageBookmark,
+                    onEditMessage = vm::editMessage,
                     onLoadOlderMessages = vm::loadOlderMessages,
                     onReset = vm::reset,
                     onDelete = {
@@ -537,6 +539,8 @@ fun ShiyuApp(repository: ChatRepository) {
                                         onOpenSearch = vm::openMessageSearch,
                                         onCloseSearch = vm::closeMessageSearch,
                                         onSearchQuery = vm::searchMessages,
+                                        onToggleBookmark = vm::toggleMessageBookmark,
+                                        onEditMessage = vm::editMessage,
                                         onLoadOlderMessages = vm::loadOlderMessages,
                                         onReset = vm::reset,
                                         onDelete = vm::deleteCharacter,
@@ -1976,6 +1980,8 @@ private fun ChatScreen(
     onOpenSearch: () -> Unit,
     onCloseSearch: () -> Unit,
     onSearchQuery: (String) -> Unit,
+    onToggleBookmark: (Long) -> Unit,
+    onEditMessage: (Long, String) -> Unit,
     onLoadOlderMessages: () -> Unit,
     onReset: () -> Unit,
     onDelete: () -> Unit,
@@ -1998,6 +2004,8 @@ private fun ChatScreen(
     var confirmReset by remember(character.id) { mutableStateOf(false) }
     var showRollback by remember(character.id) { mutableStateOf(false) }
     var pendingRollback by remember(character.id) { mutableStateOf<MessageEntity?>(null) }
+    var editingMessage by remember(character.id) { mutableStateOf<MessageEntity?>(null) }
+    var editedMessageText by remember(character.id) { mutableStateOf("") }
     var draft by remember(character.id) { mutableStateOf(TextFieldValue("")) }
     val composerFocusRequester = remember { FocusRequester() }
     var historyVisible by remember(character.id) { mutableStateOf(false) }
@@ -2420,6 +2428,16 @@ private fun ChatScreen(
                             onRegenerate = { onRegenerate(message.id) },
                             onShowVariants = { onShowVariants(message.id) },
                             onCreateBranch = { onCreateBranch(message.id) },
+                            bookmarked = message.id in state.bookmarkedMessageIds,
+                            onToggleBookmark = { onToggleBookmark(message.id) },
+                            onEdit = if (message.role == "user") {
+                                {
+                                    editingMessage = message
+                                    editedMessageText = message.content
+                                }
+                            } else {
+                                null
+                            },
                         )
                     }
                     if (state.busy) {
@@ -2834,6 +2852,32 @@ private fun ChatScreen(
             },
             dismissButton = {
                 TextButton(onClick = { pendingRollback = null }) { Text("取消") }
+            },
+        )
+    }
+    editingMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { editingMessage = null },
+            title = { Text("编辑用户消息") },
+            text = {
+                OutlinedTextField(
+                    value = editedMessageText,
+                    onValueChange = { editedMessageText = it.take(4_096) },
+                    minLines = 3,
+                    label = { Text("消息内容") },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = editedMessageText.isNotBlank() && !state.busy,
+                    onClick = {
+                        onEditMessage(message.id, editedMessageText)
+                        editingMessage = null
+                    },
+                ) { Text("保存编辑") }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingMessage = null }) { Text("取消") }
             },
         )
     }
@@ -3465,6 +3509,9 @@ private fun MessageBubble(
     onRegenerate: (() -> Unit)? = null,
     onShowVariants: (() -> Unit)? = null,
     onCreateBranch: (() -> Unit)? = null,
+    bookmarked: Boolean = false,
+    onToggleBookmark: (() -> Unit)? = null,
+    onEdit: (() -> Unit)? = null,
 ) {
     val fullFeatures = LocalContext.current.resources.getBoolean(R.bool.feature_full)
     val user = message.role == "user"
@@ -3545,6 +3592,16 @@ private fun MessageBubble(
                     if (message.id > 0 && onCreateBranch != null) {
                         TextButton(onClick = onCreateBranch) {
                             Text("分支", fontSize = 10.sp)
+                        }
+                    }
+                    if (user && message.id > 0 && onEdit != null) {
+                        TextButton(onClick = onEdit) {
+                            Text("编辑", fontSize = 10.sp)
+                        }
+                    }
+                    if (message.id > 0 && onToggleBookmark != null) {
+                        TextButton(onClick = onToggleBookmark) {
+                            Text(if (bookmarked) "已收藏" else "收藏", fontSize = 10.sp)
                         }
                     }
                     Text(

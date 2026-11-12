@@ -9,7 +9,7 @@
 - 保留式重答与回复版本切换；只有当前版本进入后续上下文和记忆提取。
 - 从任意消息创建分支检查点，并恢复对应聊天、事件、场景和记忆。
 - Prompt Inspector 分区估算、世界书 AND/OR/NOT、Inclusion Group、Sticky/Cooldown 和命中测试。
-- 当前对话消息搜索和 `alternate_greetings` 备用开场白。
+- 当前对话消息搜索、用户消息编辑、消息收藏和 `alternate_greetings` 备用开场白。
 - 用户 Persona 设置。
 
 Android 版本：`0.20.0 / versionCode 62`
@@ -21,6 +21,6 @@ Room schema：20
 本机构建：
 
 - 完整版：`release/apk-0.20.0/Shiyu-0.20.0-Android-arm64-v8a.apk`
-  SHA-256：`23E06943FC6E2A0AA646270CF994F1A0E5B614ADCF864119DA1978525D3FDF1B`
+  SHA-256：`65ABB152E6B3A194DB413FF2F5A68CB9BC17D664A950FB514C8E449ABF8DF1AC`
 - 云端版：`release/apk-0.20.0-cloud/Shiyu-0.20.0-cloud-Android-arm64-v8a.apk`
-  SHA-256：`8C18FF1010AE62C998A887060CE31657AC18E9664DE309525F4CEA035A837388`
+  SHA-256：`9E865071180B09EBA238BD50C8BA8F226B68D4843A09F73A6711388F174B836A`

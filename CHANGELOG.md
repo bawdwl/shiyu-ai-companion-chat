@@ -26,6 +26,7 @@
   inclusion-group, sticky/cooldown and one-line hit testing.
 - Added current-conversation message search and alternate greetings supplied
   through `roleContextJson`.
+- Added user-message editing and local message bookmarks.
 - Added user Persona support. Fixed training prompts for Song Zhiyi and Pei Jiming
   remain unchanged.
 

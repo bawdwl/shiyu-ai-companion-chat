@@ -607,6 +607,34 @@ class ChatRepository(
         prefs.edit().putString(KEY_PERSONA, value.trim().take(600)).apply()
     }
 
+    fun bookmarkedMessageIds(characterId: String): Set<Long> =
+        prefs.getStringSet(bookmarkKey(characterId), emptySet())
+            .orEmpty()
+            .mapNotNull(String::toLongOrNull)
+            .toSet()
+
+    fun toggleMessageBookmark(characterId: String, messageId: Long): Set<Long> {
+        val current = bookmarkedMessageIds(characterId).toMutableSet()
+        if (!current.add(messageId)) current.remove(messageId)
+        prefs.edit()
+            .putStringSet(bookmarkKey(characterId), current.map(Long::toString).toSet())
+            .apply()
+        return current
+    }
+
+    suspend fun editMessage(characterId: String, messageId: Long, content: String) {
+        val clean = content.trim()
+        require(clean.isNotEmpty() && clean.length <= 4_096) {
+            "消息内容需要在 1 到 4096 字之间"
+        }
+        val message = database.messages().get(characterId, messageId)
+            ?: error("消息不存在")
+        require(message.role == "user") { "只能编辑用户消息" }
+        check(database.messages().updateContent(messageId, clean, null) == 1) {
+            "消息编辑失败"
+        }
+    }
+
     fun todayUsage(): Int {
         val today = java.time.LocalDate.now().toString()
         return if (prefs.getString(KEY_USAGE_DAY, null) == today) {
@@ -3474,6 +3502,9 @@ class ChatRepository(
 
     private fun worldbookStateKey(characterId: String, title: String): String =
         "worldbook-state:${characterId.length}:$characterId:${title.hashCode()}"
+
+    private fun bookmarkKey(characterId: String): String =
+        "bookmarked-messages:${characterId.length}:$characterId"
 
     private suspend fun maybeExtractMemory(character: CharacterEntity, history: List<MessageEntity>) {
         if (history.size < 36) return
