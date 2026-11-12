@@ -117,7 +117,7 @@ ARM64 真机验证。
 - 完整版与云端版均执行覆盖安装验证，不清理已有用户数据。
 - 覆盖安装后两个包均确认只保留上述 8 个默认角色，头像与背景路径有效。
 - 预编译 APK 仅作为 GitHub Release 附件分发，不提交到 Git：
-  <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.19.2>
+  <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.20.1>
 
 ## 已知限制
 

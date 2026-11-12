@@ -8,11 +8,10 @@ Android Keystore 实现。云端模式直接调用所选大模型 API，不要�
 
 从
 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases)
-下载最新 APK。当前公开版为 `0.19.2`。
+下载最新 APK。当前公开版为 `0.20.1`。
 
-本机开发构建可使用 `0.20.1 / versionCode 63`，包含备份恢复、聊天分页、记忆控制、
-回复版本、分支检查点、Prompt Inspector 和增强世界书；在正式发布前请以本地 APK
-的版本号为准。
+当前版本为 `0.20.1 / versionCode 63`，包含备份恢复、聊天分页、记忆控制、
+回复版本、分支检查点、Prompt Inspector 和增强世界书。
 
 Android 现在有两个构建版本：
 
