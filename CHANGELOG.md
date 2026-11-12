@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-11-13 — Android `0.20.1`
+
+- Branch switching now auto-saves the current live conversation before restoring
+  another branch and marks the active branch in the UI.
+- Added conversation epochs so in-flight memory workers discard results after a
+  branch switch, rollback, message edit, reply-version change or regeneration.
+- Editing older messages and switching older reply versions now require creating
+  a branch first. Derived facts, excerpts and events tied to the changed message
+  are invalidated before the new version is accepted.
+- Chat images selected from the gallery are copied into app-managed storage;
+  legacy external image messages are migrated best-effort on startup and the
+  managed media directory is included in backups.
+- Database export prefers SQLite `VACUUM INTO` and keeps the WAL/checkpoint copy
+  as a compatibility fallback.
+- Worldbook Sticky no longer renews itself without a fresh keyword hit;
+  explicit NOT keywords override active Sticky state, and branch/reset clears
+  transient activation state.
+- Manual memory corrections now retain their previous value and correction
+  reason. Ignoring a memory for one turn also filters excerpts and events sharing
+  its source IDs.
+- Proposal fixed facts no longer enter runtime prompts, and character generation
+  asks for observable behavior instead of adjective-heavy personality copy.
+- Prompt Inspector labels estimates explicitly and shows why selected memories
+  entered the context.
+
 ## 2026-11-12 — Android `0.20.0`
 
 - Added verified user-data ZIP backup and restore. Archives contain the database,

@@ -21,6 +21,7 @@ internal data class PromptInspectorSnapshot(
     val memorySelected: Int,
     val memoryTruncated: Boolean,
     val ignoredMemoryIds: List<Long>,
+    val memoryReasons: List<String>,
 )
 
 internal fun approximatePromptTokens(characters: Int): Int =
@@ -52,6 +53,15 @@ internal fun parsePromptInspectorSnapshot(traceJson: String): PromptInspectorSna
                 val ids = root.optJSONArray("ignored_memory_ids") ?: return@buildList
                 for (index in 0 until ids.length()) {
                     ids.optLong(index).takeIf { it > 0 }?.let(::add)
+                }
+            },
+            memoryReasons = buildList {
+                val reasons = root.optJSONArray("memory_selection_reasons") ?: return@buildList
+                for (index in 0 until reasons.length()) {
+                    val item = reasons.optJSONObject(index) ?: continue
+                    val id = item.optLong("id")
+                    val reason = item.optString("reason").trim()
+                    if (id > 0 && reason.isNotBlank()) add("#$id $reason")
                 }
             },
         )

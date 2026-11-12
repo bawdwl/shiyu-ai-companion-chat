@@ -156,14 +156,6 @@ internal object RoleContextPolicy {
                     },
                 )
             }
-            val proposals = context.fixedFacts.filter { it.status == "proposal" }
-            if (proposals.isNotEmpty()) {
-                add(
-                    "待确认草稿，不是固定事实" to proposals.joinToString("\n") {
-                        "- ${it.key}：${it.value}"
-                    },
-                )
-            }
             if (context.goals.isNotEmpty()) {
                 add(
                     "角色自己的稳定关注与目标" to context.goals.joinToString("\n") {

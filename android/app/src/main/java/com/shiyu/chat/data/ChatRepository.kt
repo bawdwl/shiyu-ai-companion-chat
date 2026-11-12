@@ -55,11 +55,12 @@ class ChatRepository(
     private val prefs = context.getSharedPreferences("shiyu_settings", Context.MODE_PRIVATE)
     private val avatarGenerator = DreamAvatarGenerator(context)
     private val cloudAvatarGenerator = CloudAvatarGenerator(context)
+    private val managedChatMedia = ManagedChatMedia(context)
     private val mnnModelManager = MnnModelManager(context)
     private val localMnnClient = LocalMnnChatClient(mnnModelManager)
     private val managedModelDownloader = ManagedModelDownloader(context)
     private val backupManager = BackupManager(context, database)
-    private val branchStore = ConversationBranchStore(database)
+    private val branchStore = ConversationBranchStore(database, prefs)
     private val memoryJob = SupervisorJob()
     private val memoryScope = CoroutineScope(memoryJob + Dispatchers.IO)
     private val memoryMutex = Mutex()
@@ -74,6 +75,7 @@ class ChatRepository(
     init {
         memoryScope.launch {
             cleanupLegacyMediaPipeModel()
+            migrateExternalChatMedia()
             runCatching {
                 File(context.filesDir, "speech/kokoro").deleteRecursively()
             }
@@ -101,6 +103,19 @@ class ChatRepository(
         }
     }
 
+    private suspend fun migrateExternalChatMedia() {
+        database.messages().externalImageMessages().forEach { message ->
+            runCatching {
+                val source = message.imageUri ?: return@forEach
+                val stored = managedChatMedia.persist(
+                    message.characterId,
+                    Uri.parse(source),
+                )
+                database.messages().updateImageUri(message.id, stored.toString())
+            }
+        }
+    }
+
     /** Removes retired test characters and their complete local scope on upgrade. */
     suspend fun ensureDefaults() {
         val retired = RETIRED_CHARACTER_IDS.mapNotNull { id ->
@@ -117,6 +132,7 @@ class ChatRepository(
                 avatarGenerator.deleteAvatar(character.avatarPath)
                     avatarGenerator.deleteAvatar(character.backgroundPath)
                 avatarGenerator.deleteCharacterAvatars(character.id)
+                managedChatMedia.deleteForCharacter(character.id)
                 prefs.edit().remove("summarized:${character.id}").apply()
             }
         }
@@ -630,8 +646,18 @@ class ChatRepository(
         val message = database.messages().get(characterId, messageId)
             ?: error("消息不存在")
         require(message.role == "user") { "只能编辑用户消息" }
-        check(database.messages().updateContent(messageId, clean, null) == 1) {
-            "消息编辑失败"
+        val latestUser = database.messages()
+            .recent(characterId, 40)
+            .firstOrNull { it.role == "user" }
+        require(latestUser?.id == messageId) {
+            "较早的用户消息请从原消息创建分支后再编辑"
+        }
+        database.withTransaction {
+            bumpConversationEpoch(database, characterId)
+            invalidateDerivedMemoryForMessage(characterId, messageId)
+            check(database.messages().updateContent(messageId, clean, null) == 1) {
+                "消息编辑失败"
+            }
         }
     }
 
@@ -702,6 +728,9 @@ class ChatRepository(
         title: String = "消息 #$sourceMessageId 的检查点",
     ): ConversationBranchEntity =
         branchStore.create(characterId, sourceMessageId, title)
+
+    suspend fun activeBranchId(characterId: String): Long? =
+        database.meta().get(activeBranchMetaKey(characterId))?.toLongOrNull()
 
     suspend fun switchBranch(characterId: String, branchId: Long) {
         branchStore.switchTo(characterId, branchId)
@@ -1107,6 +1136,9 @@ class ChatRepository(
         }
         val effectiveText = regenerationUser?.content ?: text
         val effectiveImageUri = regenerationUser?.imageUri?.let(Uri::parse) ?: imageUri
+        val storedImageUri = effectiveImageUri?.let {
+            managedChatMedia.persist(character.id, it)
+        }
         val localMode = fullFeatures && character.modelSource == MODEL_SOURCE_LOCAL_MNN
         val provider = if (localMode) PROVIDER_LOCAL_MNN else cloudProvider()
         val key = if (localMode) {
@@ -1114,7 +1146,7 @@ class ChatRepository(
         } else {
             activeApiKey() ?: error("请先在设置中填写聊天 API Key")
         }
-        if (localMode && effectiveImageUri != null) {
+        if (localMode && storedImageUri != null) {
             error("本地 MNN 模型目前只支持文字聊天，请切换到云端模式发送图片")
         }
         val recentHistory = if (regenerationUser != null) {
@@ -1156,11 +1188,26 @@ class ChatRepository(
         val allStructuredMemories = candidateStructuredMemories.filterNot {
             it.id in ignoredMemoryIds
         }
+        val ignoredMemories = if (ignoredMemoryIds.isEmpty()) {
+            emptyList()
+        } else {
+            database.structuredMemories().byIds(
+                character.id,
+                ignoredMemoryIds.toList(),
+            )
+        }
+        val ignoredSourceIds = ignoredMemories
+            .flatMap { evidenceSourceIds(it.evidenceJson) }
+            .toSet()
         val availableExcerpts = if (memoryNeed.retrieve) {
             suppressCoveredExcerpts(
                 database.memories().recent(character.id, 300),
                 allStructuredMemories,
-            )
+            ).filterNot { memory ->
+                messageSourceIds(memory.sourceMessageIds).any {
+                    it in ignoredSourceIds
+                }
+            }
         } else {
             emptyList()
         }
@@ -1202,8 +1249,12 @@ class ChatRepository(
         val memoryEvents = MemoryEventPolicy.selectRelevant(
             database.memoryEvents().forCharacter(character.id),
             memoryNeed.query,
-        )
-        val imageData = if (localMode) null else effectiveImageUri?.let(::imageDataUrl)
+        ).filterNot { event ->
+            messageSourceIds(event.sourceMessageIds).any {
+                it in ignoredSourceIds
+            }
+        }
+        val imageData = if (localMode) null else storedImageUri?.let(::imageDataUrl)
         val currentContent = userContent(effectiveText, imageData)
         val bodyMessages = buildMessages(
             character, history, memories, structuredMemories, internalState,
@@ -1230,7 +1281,7 @@ class ChatRepository(
                 characterId = character.id,
                 role = "user",
                 content = effectiveText,
-                imageUri = effectiveImageUri?.toString(),
+                imageUri = storedImageUri?.toString(),
             ),
         )
 
@@ -1378,6 +1429,25 @@ class ChatRepository(
             .put("memory_candidates", candidateStructuredMemories.size)
             .put("memory_selected", structuredMemories.size)
             .put(
+                "memory_selection_reasons",
+                JSONArray().apply {
+                    structuredMemories.forEach { memory ->
+                        val reason = when {
+                            memory.pinned -> "人工钉住"
+                            structuredMemoryFtsScores.containsKey(memory.id) -> "关键词命中"
+                            memory.kind == "shared_event" -> "当前事件相关"
+                            memory.importance >= 0.8 -> "高重要度"
+                            else -> "近期相关"
+                        }
+                        put(
+                            JSONObject()
+                                .put("id", memory.id)
+                                .put("reason", reason),
+                        )
+                    }
+                },
+            )
+            .put(
                 "memory_budget_truncated",
                 candidateStructuredMemories.size > structuredMemories.size,
             )
@@ -1511,15 +1581,27 @@ class ChatRepository(
         ignoredMemoryIds: Set<Long> = emptySet(),
         isCancelled: () -> Boolean = { false },
         onDelta: (String) -> Unit,
-    ): MessageEntity = send(
-        character = character,
-        text = "",
-        imageUri = null,
-        ignoredMemoryIds = ignoredMemoryIds,
-        regenerateAssistantId = assistantMessageId,
-        isCancelled = isCancelled,
-        onDelta = onDelta,
-    )
+    ): MessageEntity {
+        val latestAssistant = database.messages()
+            .recent(character.id, 40)
+            .firstOrNull { it.role == "assistant" }
+        require(latestAssistant?.id == assistantMessageId) {
+            "只能重答最新角色回复；较早回复请先创建分支"
+        }
+        database.withTransaction {
+            bumpConversationEpoch(database, character.id)
+            invalidateDerivedMemoryForMessage(character.id, assistantMessageId)
+        }
+        return send(
+            character = character,
+            text = "",
+            imageUri = null,
+            ignoredMemoryIds = ignoredMemoryIds,
+            regenerateAssistantId = assistantMessageId,
+            isCancelled = isCancelled,
+            onDelta = onDelta,
+        )
+    }
 
     fun observeMessageVariants(messageId: Long): Flow<List<MessageVariantEntity>> =
         database.messageVariants().observeForMessage(messageId)
@@ -1533,8 +1615,16 @@ class ChatRepository(
             val message = database.messages().get(characterId, messageId)
                 ?: error("回复不存在")
             require(message.role == "assistant") { "只有角色回复可以切换版本" }
+            val latestAssistant = database.messages()
+                .recent(characterId, 40)
+                .firstOrNull { it.role == "assistant" }
+            require(latestAssistant?.id == messageId) {
+                "较早的角色回复请先创建分支，再切换版本"
+            }
             val variant = database.messageVariants().get(messageId, variantId)
                 ?: error("回复版本不存在")
+            bumpConversationEpoch(database, characterId)
+            invalidateDerivedMemoryForMessage(characterId, messageId)
             database.messageVariants().clearCurrent(messageId)
             check(database.messageVariants().markCurrent(messageId, variantId) == 1) {
                 "无法切换回复版本"
@@ -1574,7 +1664,10 @@ class ChatRepository(
         database.withTransaction {
             clearCharacterScope(characterId)
         }
+        managedChatMedia.deleteForCharacter(characterId)
         ensureOpening(character)
+        bumpConversationEpoch(database, characterId)
+        branchStore.clearWorldbookState(characterId)
         prefs.edit().remove("summarized:$characterId").apply()
     }
 
@@ -1668,7 +1761,12 @@ class ChatRepository(
                     updatedAt = now,
                 ),
             )
+            bumpConversationEpoch(database, characterId)
         }
+        managedChatMedia.deleteForMessages(
+            messages.filter { it.id >= messageId },
+        )
+        branchStore.clearWorldbookState(characterId)
         localSummaryMutex.withLock {
             prefs.edit()
                 .remove(localSummaryKey(characterId))
@@ -1745,6 +1843,7 @@ class ChatRepository(
                 characterId = characterId,
                 content = clean,
                 value = item.value?.let { clean },
+                reason = "人工纠正于 ${System.currentTimeMillis()}；修改前：${item.content.take(240)}",
                 updatedAt = now,
             ) == 1,
         ) { "记忆当前状态不可修正" }
@@ -1755,6 +1854,45 @@ class ChatRepository(
             content = clean,
         ).ifBlank { " " }
         database.structuredMemories().updateSearchTokens(itemId, tokens)
+    }
+
+    private suspend fun invalidateDerivedMemoryForMessage(
+        characterId: String,
+        messageId: Long,
+    ) {
+        val structured = database.structuredMemories()
+            .allForCharacter(characterId)
+            .filter { messageId in evidenceSourceIds(it.evidenceJson) }
+        structured.forEach { memory ->
+            if (memory.state == "active" || memory.state == "contested") {
+                database.structuredMemories().supersedeAutomatic(
+                    id = memory.id,
+                    characterId = characterId,
+                    reason = "来源消息 #$messageId 已编辑或切换版本",
+                    updatedAt = System.currentTimeMillis(),
+                )
+            }
+        }
+        database.memories()
+            .allForCharacter(characterId)
+            .filter {
+                Regex("\\d+")
+                    .findAll(it.sourceMessageIds)
+                    .any { match -> match.value.toLongOrNull() == messageId }
+            }
+            .forEach { memory ->
+                database.memories().deleteById(memory.id, characterId)
+            }
+        database.memoryEvents()
+            .forCharacter(characterId)
+            .filter {
+                Regex("\\d+")
+                    .findAll(it.sourceMessageIds)
+                    .any { match -> match.value.toLongOrNull() == messageId }
+            }
+            .forEach { event ->
+                database.memoryEvents().delete(event.id, characterId)
+            }
     }
 
     suspend fun setStructuredMemoryPinned(
@@ -2053,6 +2191,7 @@ class ChatRepository(
             )
             return 0
         }
+        val epochAtStart = conversationEpoch(database, character.id)
         val cursor = database.structuredMemorySupport().cursor(character.id)
             ?.lastMessageId ?: 0L
         val pendingMessages = database.messages().afterIdThrough(
@@ -2198,6 +2337,14 @@ class ChatRepository(
         require(candidatesJson.length() > 0) {
             "记忆提取响应中没有可恢复的完整候选"
         }
+        if (conversationEpoch(database, character.id) != epochAtStart) {
+            database.structuredMemoryJobs().complete(
+                job.id,
+                "conversation epoch changed; stale memory response discarded",
+                System.currentTimeMillis(),
+            )
+            return 0
+        }
         val messagesById = sources.associateBy { it.id }
         val candidatesBeforeReview = buildList {
             for (index in 0 until candidatesJson.length()) {
@@ -2255,7 +2402,12 @@ class ChatRepository(
         var applied = 0
         var stateApplied = false
         var eventsApplied = 0
+        var staleCommit = false
         database.withTransaction {
+            if (conversationEpoch(database, character.id) != epochAtStart) {
+                staleCommit = true
+                return@withTransaction
+            }
             for (candidate in candidates) {
                 if ((candidate.sourceIds.maxOrNull() ?: 0L) <= cursor) continue
                 val action = autoIngest(character.id, candidate, job.id)
@@ -2332,6 +2484,14 @@ class ChatRepository(
                     )
                 }
             }
+        }
+        if (staleCommit) {
+            database.structuredMemoryJobs().complete(
+                job.id,
+                "conversation epoch changed before commit",
+                System.currentTimeMillis(),
+            )
+            return 0
         }
         runCatching {
             database.turnTraces().attachMemoryResult(
@@ -2876,6 +3036,7 @@ class ChatRepository(
         avatarGenerator.deleteAvatar(character.avatarPath)
         avatarGenerator.deleteAvatar(character.backgroundPath)
         avatarGenerator.deleteCharacterAvatars(characterId)
+        managedChatMedia.deleteForCharacter(characterId)
         prefs.edit()
             .remove("summarized:$characterId")
             .also { editor ->
@@ -2930,6 +3091,8 @@ class ChatRepository(
 
     private suspend fun clearCharacterScope(characterId: String) {
         database.conversationBranches().clear(characterId)
+        database.meta().deletePrefix(activeBranchMetaKey(characterId))
+        branchStore.clearWorldbookState(characterId)
         database.messageVariants().clearForCharacter(characterId)
         database.messages().clear(characterId)
         database.memories().clear(characterId)
@@ -3429,10 +3592,23 @@ class ChatRepository(
     }
 
     private fun imageDataUrl(uri: Uri): String {
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: error("无法读取图片")
+        val bytes = if (uri.scheme == "file") {
+            File(requireNotNull(uri.path)).readBytes()
+        } else {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: error("无法读取图片")
+        }
         require(bytes.size <= 20 * 1024 * 1024) { "图片不能超过 20 MiB" }
-        val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
+        val mime = if (uri.scheme == "file") {
+            when (uri.path?.substringAfterLast('.', "").orEmpty().lowercase()) {
+                "png" -> "image/png"
+                "gif" -> "image/gif"
+                "webp" -> "image/webp"
+                else -> "image/jpeg"
+            }
+        } else {
+            context.contentResolver.getType(uri) ?: "image/jpeg"
+        }
         require(mime in setOf("image/jpeg", "image/png", "image/gif", "image/webp")) {
             "仅支持 JPEG、PNG、GIF 或 WebP"
         }
@@ -3469,22 +3645,33 @@ class ChatRepository(
                 val stateKey = worldbookStateKey(character.id, entry.title)
                 val lastHit = prefs.getLong("$stateKey:last", 0L)
                 val stickyUntil = prefs.getLong("$stateKey:until", 0L)
-                val cooldownBlocked = entry.cooldownSeconds > 0 &&
-                    now < lastHit + entry.cooldownSeconds * 1_000L
                 val regularHit = worldbookEntryMatches(entry, scan)
-                val stickyHit = stickyUntil > now
-                if (!cooldownBlocked && (regularHit || stickyHit)) {
-                    prefs.edit()
-                        .putLong("$stateKey:last", now)
-                        .also { editor ->
-                            if (entry.sticky) {
-                                editor.putLong(
-                                    "$stateKey:until",
-                                    now + WORLDBOOK_STICKY_WINDOW_MS,
-                                )
+                val explicitlyExcluded = entry.excludedKeywords.any {
+                    scan.contains(it.lowercase())
+                }
+                val activation = decideWorldbookActivation(
+                    entry = entry,
+                    regularHit = regularHit,
+                    explicitlyExcluded = explicitlyExcluded,
+                    lastHit = lastHit,
+                    stickyUntil = stickyUntil,
+                    now = now,
+                    stickyWindowMs = WORLDBOOK_STICKY_WINDOW_MS,
+                )
+                if (activation.inject) {
+                    if (activation.updateLastHit) {
+                        prefs.edit()
+                            .putLong("$stateKey:last", now)
+                            .also { editor ->
+                                if (activation.renewStickyUntil != null) {
+                                    editor.putLong(
+                                        "$stateKey:until",
+                                        activation.renewStickyUntil,
+                                    )
+                                }
                             }
-                        }
-                        .apply()
+                            .apply()
+                    }
                     add(entry)
                 }
             }
@@ -3502,6 +3689,12 @@ class ChatRepository(
 
     private fun worldbookStateKey(characterId: String, title: String): String =
         "worldbook-state:${characterId.length}:$characterId:${title.hashCode()}"
+
+    private fun messageSourceIds(raw: String): Set<Long> =
+        Regex("\\d+")
+            .findAll(raw)
+            .mapNotNull { it.value.toLongOrNull() }
+            .toSet()
 
     private fun bookmarkKey(characterId: String): String =
         "bookmarked-messages:${characterId.length}:$characterId"

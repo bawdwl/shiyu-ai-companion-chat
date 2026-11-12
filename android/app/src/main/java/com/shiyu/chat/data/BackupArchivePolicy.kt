@@ -11,6 +11,7 @@ internal const val BACKUP_DATABASE_PATH = "database/shiyu.db"
 internal const val BACKUP_DATABASE_WAL_PATH = "database/shiyu.db-wal"
 internal const val BACKUP_DATABASE_SHM_PATH = "database/shiyu.db-shm"
 internal const val BACKUP_AVATAR_PREFIX = "files/character-avatars/"
+internal const val BACKUP_CHAT_MEDIA_PREFIX = "files/chat-media/"
 internal const val BACKUP_SETTINGS_PATH = "settings/shiyu_settings.xml"
 internal const val MAX_BACKUP_ENTRIES = 4_096
 internal const val MAX_BACKUP_UNCOMPRESSED_BYTES = 512L * 1024L * 1024L
@@ -141,8 +142,12 @@ internal object BackupPathPolicy {
         ) {
             return true
         }
-        if (!path.startsWith(BACKUP_AVATAR_PREFIX)) return false
-        val relative = path.removePrefix(BACKUP_AVATAR_PREFIX)
+        val mediaPrefix = when {
+            path.startsWith(BACKUP_AVATAR_PREFIX) -> BACKUP_AVATAR_PREFIX
+            path.startsWith(BACKUP_CHAT_MEDIA_PREFIX) -> BACKUP_CHAT_MEDIA_PREFIX
+            else -> return false
+        }
+        val relative = path.removePrefix(mediaPrefix)
         return simpleName.matches(relative) && !relative.endsWith(".tmp")
     }
 }

@@ -10,7 +10,7 @@ Git 仓库。
 
 最新发布：[GitHub Release `v0.19.2`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.19.2)
 
-本机开发构建：Android `0.20.0 / versionCode 62`，尚未作为 GitHub Release 发布；
+本机开发构建：Android `0.20.1 / versionCode 63`，尚未作为 GitHub Release 发布；
 本地 APK 包含备份恢复、聊天分页、记忆控制、回复版本、分支检查点、Prompt
 Inspector 和增强世界书。
 
@@ -193,7 +193,7 @@ PC 语音优先调用本机 CosyVoice 2 FastAPI；服务或角色参考音频不
 android/app/build/outputs/apk/full/debug/app-full-debug.apk
 ```
 
-- 当前源码：`0.20.0 / versionCode 62`
+- 当前源码：`0.20.1 / versionCode 63`
 - 当前公开 Release：`0.19.2 / versionCode 61`
 - Room schema：20
 - 完整版 APK：`299,221,972` 字节，约 285.36 MiB
@@ -281,7 +281,7 @@ cd android
 - PC 全量 Python 回归：313 项通过。
 - PC 前端状态测试：40 项通过。
 - React 生产构建通过。
-- Android JVM：完整版、云端版和模拟器版各 116 项通过。
+- Android JVM：完整版、云端版和模拟器版各 118 项通过。
 - Android APK 构建和 Lint 通过；完整版与云端版均会执行真机覆盖安装验证。本地 Dream 生图仍取决于设备 NPU 与导入模型。
 
 这些结果证明主要工程流程可运行，不等同于大规模真实聊天质量评估。

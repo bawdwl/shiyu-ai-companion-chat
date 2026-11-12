@@ -3,6 +3,8 @@ package com.shiyu.chat.data
 import org.json.JSONArray
 
 internal fun memoryOriginLabel(memory: StructuredMemoryEntity): String = when {
+    memory.autoAction == "manual_correct" ->
+        "人工纠正 · 已核实"
     memory.kind == "role_claim" ||
         memory.factType == "role_claim" ||
         memory.sourceAuthority == "character_self_report" ->

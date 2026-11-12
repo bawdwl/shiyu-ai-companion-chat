@@ -14,6 +14,37 @@ internal data class WorldbookEntry(
     val cooldownSeconds: Long,
 )
 
+internal data class WorldbookActivation(
+    val inject: Boolean,
+    val updateLastHit: Boolean,
+    val renewStickyUntil: Long?,
+)
+
+internal fun decideWorldbookActivation(
+    entry: WorldbookEntry,
+    regularHit: Boolean,
+    explicitlyExcluded: Boolean,
+    lastHit: Long,
+    stickyUntil: Long,
+    now: Long,
+    stickyWindowMs: Long,
+): WorldbookActivation {
+    val cooldownBlocked = regularHit &&
+        entry.cooldownSeconds > 0 &&
+        now < lastHit + entry.cooldownSeconds * 1_000L
+    val stickyHit = entry.sticky && stickyUntil > now && !explicitlyExcluded
+    val inject = !cooldownBlocked && (regularHit || stickyHit)
+    return WorldbookActivation(
+        inject = inject,
+        updateLastHit = inject && regularHit,
+        renewStickyUntil = if (inject && regularHit && entry.sticky) {
+            now + stickyWindowMs
+        } else {
+            null
+        },
+    )
+}
+
 internal fun parseWorldbookEntries(raw: String): List<WorldbookEntry> =
     runCatching {
         val entries = JSONArray(raw)

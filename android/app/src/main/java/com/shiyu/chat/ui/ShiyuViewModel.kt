@@ -76,6 +76,7 @@ data class ShiyuUiState(
     val branches: List<ConversationBranchEntity> = emptyList(),
     val branchSheetVisible: Boolean = false,
     val branchBusy: Boolean = false,
+    val activeBranchId: Long? = null,
     val messageSearchVisible: Boolean = false,
     val messageSearchQuery: String = "",
     val messageSearchResults: List<MessageEntity> = emptyList(),
@@ -333,6 +334,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                     _state.value = _state.value.copy(
                         branchBusy = false,
                         branchSheetVisible = false,
+                        activeBranchId = branchId,
                         status = "已切换到所选分支",
                     )
                 }
@@ -354,6 +356,11 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 .onSuccess {
                     _state.value = _state.value.copy(
                         branchBusy = false,
+                        activeBranchId = if (_state.value.activeBranchId == branchId) {
+                            null
+                        } else {
+                            _state.value.activeBranchId
+                        },
                         status = "分支已删除",
                     )
                 }
@@ -442,12 +449,16 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
             ignoredMemoryIds = emptySet(),
             messageVariants = emptyList(), variantMessageId = null,
             branches = emptyList(), branchSheetVisible = false, branchBusy = false,
+            activeBranchId = null,
             messageSearchVisible = false, messageSearchQuery = "",
             messageSearchResults = emptyList(), messageSearchBusy = false,
             bookmarkedMessageIds = repository.bookmarkedMessageIds(character.id),
         )
         observeJob = viewModelScope.launch {
             if (ensureOpening) repository.ensureOpening(character)
+            _state.value = _state.value.copy(
+                activeBranchId = repository.activeBranchId(character.id),
+            )
             launch {
                 repository.observeRecentMessages(character.id).collect { recent ->
                     val current = _state.value.messages
@@ -500,6 +511,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
             ignoredMemoryIds = emptySet(),
             messageVariants = emptyList(), variantMessageId = null,
             branches = emptyList(), branchSheetVisible = false, branchBusy = false,
+            activeBranchId = null,
             messageSearchVisible = false, messageSearchQuery = "",
             messageSearchResults = emptyList(), messageSearchBusy = false,
             bookmarkedMessageIds = emptySet(),

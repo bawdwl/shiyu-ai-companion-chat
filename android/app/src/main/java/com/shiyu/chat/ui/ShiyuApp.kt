@@ -2013,6 +2013,10 @@ private fun ChatScreen(
     val userMessages = remember(state.messages) {
         state.messages.filter { it.role == "user" }
     }
+    val latestUserMessageId = userMessages.lastOrNull()?.id
+    val latestAssistantMessageId = state.messages.lastOrNull {
+        it.role == "assistant"
+    }?.id
     val latestRoleMessage = remember(
         state.messages,
         state.streamingText,
@@ -2425,12 +2429,23 @@ private fun ChatScreen(
                             message,
                             onPlay = { playMessage(message) },
                             playing = { playingId == message.id },
-                            onRegenerate = { onRegenerate(message.id) },
-                            onShowVariants = { onShowVariants(message.id) },
+                            onRegenerate = if (message.id == latestAssistantMessageId) {
+                                { onRegenerate(message.id) }
+                            } else {
+                                null
+                            },
+                            onShowVariants = if (message.id == latestAssistantMessageId) {
+                                { onShowVariants(message.id) }
+                            } else {
+                                null
+                            },
                             onCreateBranch = { onCreateBranch(message.id) },
                             bookmarked = message.id in state.bookmarkedMessageIds,
                             onToggleBookmark = { onToggleBookmark(message.id) },
-                            onEdit = if (message.role == "user") {
+                            onEdit = if (
+                                message.role == "user" &&
+                                message.id == latestUserMessageId
+                            ) {
                                 {
                                     editingMessage = message
                                     editedMessageText = message.content
@@ -2741,6 +2756,7 @@ private fun ChatScreen(
     if (state.branchSheetVisible) {
         ConversationBranchSheet(
             branches = state.branches,
+            activeBranchId = state.activeBranchId,
             busy = state.branchBusy,
             canCreateCheckpoint = state.messages.isNotEmpty(),
             onDismiss = onDismissBranches,
@@ -3339,6 +3355,7 @@ private fun MessageSearchSheet(
 @Composable
 private fun ConversationBranchSheet(
     branches: List<ConversationBranchEntity>,
+    activeBranchId: Long?,
     busy: Boolean,
     canCreateCheckpoint: Boolean,
     onDismiss: () -> Unit,
@@ -3391,6 +3408,14 @@ private fun ConversationBranchSheet(
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 13.sp,
                                 )
+                                if (branch.id == activeBranchId) {
+                                    Text(
+                                        "当前活动分支",
+                                        color = Forest,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
                                 Text(
                                     "消息 #${branch.sourceMessageId} · " +
                                         SimpleDateFormat("M月d日 HH:mm", Locale.CHINA)
@@ -4377,7 +4402,7 @@ private fun SettingsDialog(
                 if (settingsPage == 2) {
                     Text("备份与恢复", fontWeight = FontWeight.SemiBold)
                     Text(
-                        "完整备份包含角色、聊天、长期记忆、事件、场景、Trace 和角色图片。" +
+                        "完整备份包含角色、聊天、长期记忆、事件、场景、Trace、角色图片和聊天中使用的托管图片。" +
                             "默认不包含 API Key、加密密钥、MNN/Dream/语音模型或临时缓存。",
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -5563,8 +5588,8 @@ private fun TraceSheet(
                                 inspector?.let { snapshot ->
                                     Spacer(Modifier.height(7.dp))
                                     Text(
-                                        "预算 ${snapshot.inputTokens + snapshot.outputTokens} / " +
-                                            "${snapshot.requestLimit} tokens · " +
+                                        "估算预算 ${snapshot.inputTokens + snapshot.outputTokens} / " +
+                                            "${snapshot.requestLimit} tokens（字符换算估算，不是精确计费值）· " +
                                             "近期 ${snapshot.historyMessages} 条消息",
                                         fontSize = 9.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -5608,6 +5633,13 @@ private fun TraceSheet(
                                         fontSize = 9.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
+                                    if (snapshot.memoryReasons.isNotEmpty()) {
+                                        Text(
+                                            "选择原因：" + snapshot.memoryReasons.joinToString("；"),
+                                            fontSize = 9.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                 }
                                 Spacer(Modifier.height(6.dp))
                                 Text(
@@ -5698,6 +5730,9 @@ private fun MemorySheet(
                     }
                 }
                 items(structuredMemories, key = { "structured-${it.id}" }) { memory ->
+                    var showAdvancedActions by remember(memory.id) {
+                        mutableStateOf(false)
+                    }
                     Surface(
                         color = when (memory.state) {
                             "active" -> Sage
@@ -5739,6 +5774,13 @@ private fun MemorySheet(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 9.sp,
                             )
+                            memory.autoReason?.takeIf { it.startsWith("人工纠正") }?.let {
+                                Text(
+                                    it,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 9.sp,
+                                )
+                            }
                             Text(
                                 "证据",
                                 color = InkMuted,
@@ -5765,34 +5807,42 @@ private fun MemorySheet(
                                         },
                                     ) { Text("纠正") }
                                     TextButton(
-                                        enabled = !memoryBusy && memory.state == "active",
-                                        onClick = { onPinStructured(memory.id, !memory.pinned) },
-                                    ) { Text(if (memory.pinned) "取消钉住" else "钉住") }
-                                    if (memory.state == "active") {
-                                        TextButton(
-                                            enabled = !memoryBusy,
-                                            onClick = { onMarkOutdated(memory.id) },
-                                        ) { Text("标为过时") }
-                                    }
-                                }
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                    TextButton(
-                                        enabled = !memoryBusy && memory.state == "active",
-                                        onClick = { onToggleIgnored(memory.id) },
+                                        enabled = !memoryBusy,
+                                        onClick = { showAdvancedActions = !showAdvancedActions },
                                     ) {
-                                        Text(
-                                            if (memory.id in ignoredMemoryIds) {
-                                                "恢复本轮"
-                                            } else {
-                                                "本轮忽略"
-                                            },
-                                        )
+                                        Text(if (showAdvancedActions) "收起" else "更多")
                                     }
                                     TextButton(
                                         enabled = !memoryBusy,
                                         onClick = { onDeleteStructured(memory.id) },
                                     ) {
                                         Text("删除", color = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                                if (showAdvancedActions) {
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                        TextButton(
+                                            enabled = !memoryBusy && memory.state == "active",
+                                            onClick = { onPinStructured(memory.id, !memory.pinned) },
+                                        ) { Text(if (memory.pinned) "取消钉住" else "钉住") }
+                                        if (memory.state == "active") {
+                                            TextButton(
+                                                enabled = !memoryBusy,
+                                                onClick = { onMarkOutdated(memory.id) },
+                                            ) { Text("标为过时") }
+                                        }
+                                        TextButton(
+                                            enabled = !memoryBusy && memory.state == "active",
+                                            onClick = { onToggleIgnored(memory.id) },
+                                        ) {
+                                            Text(
+                                                if (memory.id in ignoredMemoryIds) {
+                                                    "恢复本轮"
+                                                } else {
+                                                    "本轮忽略"
+                                                },
+                                            )
+                                        }
                                     }
                                 }
                             }

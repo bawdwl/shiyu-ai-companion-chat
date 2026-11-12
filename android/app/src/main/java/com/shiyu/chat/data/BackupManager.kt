@@ -47,17 +47,7 @@ internal class BackupManager(
         val work = createWorkDirectory("backup-export")
         try {
             val snapshot = File(work, "snapshot").apply { mkdirs() }
-            database.openHelper.writableDatabase
-                .query("PRAGMA wal_checkpoint(FULL)")
-                .use { it.moveToFirst() }
-            database.withTransaction {
-                copyDatabaseFiles(
-                    requireNotNull(
-                        context.getDatabasePath(DATA_NOTES_DATABASE_NAME).parentFile,
-                    ),
-                    File(snapshot, "database"),
-                )
-            }
+            createDatabaseSnapshot(snapshot)
             validateDatabase(
                 File(snapshot, BACKUP_DATABASE_PATH),
                 maximumVersion = APP_DATABASE_VERSION,
@@ -66,6 +56,11 @@ internal class BackupManager(
             copyDirectory(
                 source = File(context.filesDir, "character-avatars"),
                 target = File(snapshot, "files/character-avatars"),
+                skipTemporary = true,
+            )
+            copyDirectory(
+                source = File(context.filesDir, "chat-media"),
+                target = File(snapshot, "files/chat-media"),
                 skipTemporary = true,
             )
             copyPreferencesForExport(File(snapshot, BACKUP_SETTINGS_PATH))
@@ -93,6 +88,7 @@ internal class BackupManager(
                 included = listOf(
                     "角色、消息、长期记忆、事件、场景和 Trace",
                     "角色头像与聊天背景",
+                    "聊天中使用的托管图片",
                     "非敏感应用设置",
                 ),
                 excluded = listOf(
@@ -337,6 +333,33 @@ internal class BackupManager(
         }
     }
 
+    private suspend fun createDatabaseSnapshot(snapshot: File) {
+        val target = File(snapshot, BACKUP_DATABASE_PATH)
+        target.parentFile?.mkdirs()
+        target.delete()
+        val vacuumed = runCatching {
+            database.openHelper.writableDatabase.execSQL(
+                "VACUUM INTO ?",
+                arrayOf(target.absolutePath),
+            )
+            target.isFile && target.length() > 0
+        }.getOrDefault(false)
+        if (vacuumed) return
+
+        target.delete()
+        database.openHelper.writableDatabase
+            .query("PRAGMA wal_checkpoint(FULL)")
+            .use { it.moveToFirst() }
+        database.withTransaction {
+            copyDatabaseFiles(
+                requireNotNull(
+                    context.getDatabasePath(DATA_NOTES_DATABASE_NAME).parentFile,
+                ),
+                File(snapshot, "database"),
+            )
+        }
+    }
+
     private fun copyPreferencesForExport(target: File) {
         val source = plainSettingsFile()
         if (!source.isFile) return
@@ -480,6 +503,11 @@ internal object PendingRestoreManager {
             File(root, "files/character-avatars"),
             skipTemporary = false,
         )
+        copyDirectory(
+            File(context.filesDir, "chat-media"),
+            File(root, "files/chat-media"),
+            skipTemporary = false,
+        )
         val settings = File(context.applicationInfo.dataDir, "shared_prefs/shiyu_settings.xml")
         if (settings.isFile) {
             File(root, "settings").mkdirs()
@@ -505,6 +533,13 @@ internal object PendingRestoreManager {
         copyDirectory(
             File(pending, "files/character-avatars"),
             avatarTarget,
+            skipTemporary = false,
+        )
+        val mediaTarget = File(context.filesDir, "chat-media")
+        if (mediaTarget.exists()) mediaTarget.deleteRecursively()
+        copyDirectory(
+            File(pending, "files/chat-media"),
+            mediaTarget,
             skipTemporary = false,
         )
         val settingsSource = File(pending, BACKUP_SETTINGS_PATH)
@@ -534,6 +569,13 @@ internal object PendingRestoreManager {
         copyDirectory(
             File(root, "files/character-avatars"),
             avatarTarget,
+            skipTemporary = false,
+        )
+        val mediaTarget = File(context.filesDir, "chat-media")
+        if (mediaTarget.exists()) mediaTarget.deleteRecursively()
+        copyDirectory(
+            File(root, "files/chat-media"),
+            mediaTarget,
             skipTemporary = false,
         )
         val settingsSource = File(root, BACKUP_SETTINGS_PATH)

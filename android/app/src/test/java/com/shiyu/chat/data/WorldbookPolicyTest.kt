@@ -23,6 +23,35 @@ class WorldbookPolicyTest {
         assertEquals(listOf("夜晚"), selectWorldbookEntries(entries, "夜").map { it.title })
     }
 
+    @Test
+    fun stickyDoesNotRenewItselfAndExclusionWins() {
+        val sticky = entry("港口", any = listOf("港口")).copy(sticky = true)
+        val now = 10_000L
+        val active = decideWorldbookActivation(
+            entry = sticky,
+            regularHit = false,
+            explicitlyExcluded = false,
+            lastHit = 1_000L,
+            stickyUntil = 20_000L,
+            now = now,
+            stickyWindowMs = 60_000L,
+        )
+        val excluded = decideWorldbookActivation(
+            entry = sticky,
+            regularHit = false,
+            explicitlyExcluded = true,
+            lastHit = 1_000L,
+            stickyUntil = 20_000L,
+            now = now,
+            stickyWindowMs = 60_000L,
+        )
+
+        assertEquals(true, active.inject)
+        assertEquals(false, active.updateLastHit)
+        assertEquals(null, active.renewStickyUntil)
+        assertEquals(false, excluded.inject)
+    }
+
     private fun entry(
         title: String,
         any: List<String> = emptyList(),

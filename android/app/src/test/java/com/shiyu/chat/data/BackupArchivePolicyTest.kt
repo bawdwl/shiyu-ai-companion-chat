@@ -11,6 +11,7 @@ class BackupArchivePolicyTest {
     fun pathPolicyRejectsAbsoluteTraversalAndSensitiveLocations() {
         assertTrue(BackupPathPolicy.isAllowed("database/shiyu.db"))
         assertTrue(BackupPathPolicy.isAllowed("files/character-avatars/peijiming.webp"))
+        assertTrue(BackupPathPolicy.isAllowed("files/chat-media/com.shiyu-1.jpg"))
         assertTrue(BackupPathPolicy.isAllowed("settings/shiyu_settings.xml"))
         assertFalse(BackupPathPolicy.isAllowed("../shiyu.db"))
         assertFalse(BackupPathPolicy.isAllowed("files/character-avatars/../shiyu.db"))

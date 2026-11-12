@@ -1,5 +1,6 @@
 package com.shiyu.chat.data
 
+import android.content.SharedPreferences
 import android.database.Cursor
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
@@ -9,6 +10,7 @@ import java.util.Base64
 
 internal class ConversationBranchStore(
     private val database: AppDatabase,
+    private val prefs: SharedPreferences,
 ) {
     fun observe(characterId: String): Flow<List<ConversationBranchEntity>> =
         database.conversationBranches().observeForCharacter(characterId)
@@ -37,13 +39,51 @@ internal class ConversationBranchStore(
         database.withTransaction {
             val branch = database.conversationBranches().get(characterId, branchId)
                 ?: error("分支不存在")
+            val activeKey = activeBranchMetaKey(characterId)
+            val activeId = database.meta().get(activeKey)?.toLongOrNull()
+            if (activeId == branchId) return@withTransaction
+            val latestMessageId = database.messages()
+                .recent(characterId, 1)
+                .firstOrNull()
+                ?.id
+            if (latestMessageId != null && latestMessageId > 0) {
+                val snapshot = capture(characterId, latestMessageId).toString()
+                val activeBranch = activeId?.let {
+                    database.conversationBranches().get(characterId, it)
+                }
+                if (activeBranch != null) {
+                    database.conversationBranches().updateSnapshot(
+                        characterId,
+                        activeBranch.id,
+                        snapshot,
+                    )
+                } else {
+                    val saved = database.conversationBranches().insert(
+                        ConversationBranchEntity(
+                            characterId = characterId,
+                            sourceMessageId = latestMessageId,
+                            title = "切换前自动保存",
+                            snapshotJson = snapshot,
+                        ),
+                    )
+                    database.meta().put(
+                        AppMetaEntity(activeKey, saved.toString()),
+                    )
+                }
+            }
             restore(characterId, branch)
+            database.meta().put(AppMetaEntity(activeKey, branchId.toString()))
+            bumpConversationEpoch(database, characterId)
+            clearWorldbookState(characterId)
         }
     }
 
     suspend fun delete(characterId: String, branchId: Long) {
         check(database.conversationBranches().delete(characterId, branchId) == 1) {
             "分支不存在"
+        }
+        if (database.meta().get(activeBranchMetaKey(characterId)) == branchId.toString()) {
+            database.meta().deletePrefix(activeBranchMetaKey(characterId))
         }
     }
 
@@ -135,6 +175,15 @@ internal class ConversationBranchStore(
         database.turnTraces().clear(characterId)
     }
 
+    fun clearWorldbookState(characterId: String) {
+        val prefix = worldbookStatePrefix(characterId)
+        val editor = prefs.edit()
+        prefs.all.keys
+            .filter { it.startsWith(prefix) }
+            .forEach(editor::remove)
+        editor.apply()
+    }
+
     private fun readRows(
         db: androidx.sqlite.db.SupportSQLiteDatabase,
         table: String,
@@ -222,3 +271,6 @@ internal class ConversationBranchStore(
         )
     }
 }
+
+private fun worldbookStatePrefix(characterId: String): String =
+    "worldbook-state:${characterId.length}:$characterId:"

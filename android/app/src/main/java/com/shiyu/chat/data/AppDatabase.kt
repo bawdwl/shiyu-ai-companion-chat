@@ -163,6 +163,16 @@ interface MessageDao {
         displayJson: String?,
     ): Int
 
+    @Query(
+        """SELECT * FROM messages
+           WHERE imageUri IS NOT NULL AND imageUri NOT LIKE 'file://%'
+           ORDER BY id LIMIT :limit""",
+    )
+    suspend fun externalImageMessages(limit: Int = 80): List<MessageEntity>
+
+    @Query("UPDATE messages SET imageUri=:imageUri WHERE id=:id")
+    suspend fun updateImageUri(id: Long, imageUri: String): Int
+
     @Query("DELETE FROM messages WHERE characterId=:characterId AND id>=:messageId")
     suspend fun deleteFrom(characterId: String, messageId: Long): Int
 
@@ -241,6 +251,16 @@ interface ConversationBranchDao {
 
     @Insert
     suspend fun insert(branch: ConversationBranchEntity): Long
+
+    @Query(
+        """UPDATE conversation_branches SET snapshotJson=:snapshotJson
+           WHERE id=:id AND characterId=:characterId""",
+    )
+    suspend fun updateSnapshot(
+        characterId: String,
+        id: Long,
+        snapshotJson: String,
+    ): Int
 
     @Query("DELETE FROM conversation_branches WHERE id=:id AND characterId=:characterId")
     suspend fun delete(characterId: String, id: Long): Int
@@ -444,7 +464,8 @@ interface StructuredMemoryDao {
     @Query(
         """UPDATE structured_memories
            SET state='active',content=:content,value=:value,
-               semanticVerified=1,updatedAt=:updatedAt
+               semanticVerified=1,autoAction='manual_correct',
+               autoReason=:reason,semanticReason=:reason,updatedAt=:updatedAt
            WHERE id=:id AND characterId=:characterId
              AND state IN ('active','candidate','contested','superseded')"""
     )
@@ -453,6 +474,7 @@ interface StructuredMemoryDao {
         characterId: String,
         content: String,
         value: String?,
+        reason: String,
         updatedAt: Long,
     ): Int
 

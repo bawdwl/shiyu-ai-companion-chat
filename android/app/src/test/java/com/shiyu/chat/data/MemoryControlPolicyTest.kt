@@ -17,9 +17,11 @@ class MemoryControlPolicyTest {
             factType = "event",
             sourceAuthority = "shared_event",
         )
+        val corrected = roleClaim.copy(autoAction = "manual_correct")
 
         assertEquals("角色自述 · 非正式设定", memoryOriginLabel(roleClaim))
         assertEquals("共同经历 · 当前剧情", memoryOriginLabel(sharedEvent))
+        assertEquals("人工纠正 · 已核实", memoryOriginLabel(corrected))
     }
 
     @Test
