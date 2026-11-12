@@ -607,6 +607,8 @@ interface SceneStateDao {
     suspend fun clear(characterId: String): Int
 }
 
+const val APP_DATABASE_VERSION = 17
+
 @Database(
     entities = [
         CharacterEntity::class,
@@ -626,8 +628,8 @@ interface SceneStateDao {
         TurnTraceEntity::class,
         AppMetaEntity::class,
     ],
-    version = 17,
-    exportSchema = false,
+    version = APP_DATABASE_VERSION,
+    exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun characters(): CharacterDao
@@ -1048,6 +1050,24 @@ abstract class AppDatabase : RoomDatabase() {
                 )
             }
         }
+
+        val ALL_MIGRATIONS: Array<Migration> = arrayOf(
+            MIGRATION_2_3,
+            MIGRATION_3_4,
+            MIGRATION_4_5,
+            MIGRATION_5_6,
+            MIGRATION_6_7,
+            MIGRATION_7_8,
+            MIGRATION_8_9,
+            MIGRATION_9_10,
+            MIGRATION_10_11,
+            MIGRATION_11_12,
+            MIGRATION_12_13,
+            MIGRATION_13_14,
+            MIGRATION_14_15,
+            MIGRATION_15_16,
+            MIGRATION_16_17,
+        )
 
         val CREATE_SEARCH_INDEX_CALLBACK = object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {

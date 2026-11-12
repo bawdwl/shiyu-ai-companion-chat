@@ -1,0 +1,1522 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 17,
+    "identityHash": "99e6153ae71e8b36efa695c0f7021cfd",
+    "entities": [
+      {
+        "tableName": "characters",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `tag` TEXT NOT NULL, `description` TEXT NOT NULL, `publicIntro` TEXT NOT NULL DEFAULT '', `personality` TEXT NOT NULL, `speechStyle` TEXT NOT NULL, `relationship` TEXT NOT NULL, `appearance` TEXT NOT NULL, `appearancePrompt` TEXT NOT NULL, `greeting` TEXT NOT NULL, `characterKind` TEXT NOT NULL, `era` TEXT NOT NULL, `knowledgeCutoff` TEXT NOT NULL, `forbiddenKnowledge` TEXT NOT NULL, `forbiddenTerms` TEXT NOT NULL, `worldbookJson` TEXT NOT NULL, `roleContextJson` TEXT NOT NULL DEFAULT '{}', `canLearnFromUser` INTEGER NOT NULL, `allowEverydayInvention` INTEGER NOT NULL, `custom` INTEGER NOT NULL, `avatarPath` TEXT, `backgroundPath` TEXT, `modelSource` TEXT NOT NULL DEFAULT 'api', `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tag",
+            "columnName": "tag",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "publicIntro",
+            "columnName": "publicIntro",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "personality",
+            "columnName": "personality",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "speechStyle",
+            "columnName": "speechStyle",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "relationship",
+            "columnName": "relationship",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "appearance",
+            "columnName": "appearance",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "appearancePrompt",
+            "columnName": "appearancePrompt",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "greeting",
+            "columnName": "greeting",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "characterKind",
+            "columnName": "characterKind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "era",
+            "columnName": "era",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "knowledgeCutoff",
+            "columnName": "knowledgeCutoff",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "forbiddenKnowledge",
+            "columnName": "forbiddenKnowledge",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "forbiddenTerms",
+            "columnName": "forbiddenTerms",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "worldbookJson",
+            "columnName": "worldbookJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "roleContextJson",
+            "columnName": "roleContextJson",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'{}'"
+          },
+          {
+            "fieldPath": "canLearnFromUser",
+            "columnName": "canLearnFromUser",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "allowEverydayInvention",
+            "columnName": "allowEverydayInvention",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "custom",
+            "columnName": "custom",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "avatarPath",
+            "columnName": "avatarPath",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "backgroundPath",
+            "columnName": "backgroundPath",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "modelSource",
+            "columnName": "modelSource",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'api'"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `characterId` TEXT NOT NULL, `role` TEXT NOT NULL, `content` TEXT NOT NULL, `imageUri` TEXT, `createdAt` INTEGER NOT NULL, `displayJson` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "characterId",
+            "columnName": "characterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "role",
+            "columnName": "role",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "imageUri",
+            "columnName": "imageUri",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayJson",
+            "columnName": "displayJson",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_messages_characterId",
+            "unique": false,
+            "columnNames": [
+              "characterId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_messages_characterId` ON `${TABLE_NAME}` (`characterId`)"
+          },
+          {
+            "name": "index_messages_createdAt",
+            "unique": false,
+            "columnNames": [
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_messages_createdAt` ON `${TABLE_NAME}` (`createdAt`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "memories",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `characterId` TEXT NOT NULL, `memoryType` TEXT NOT NULL, `content` TEXT NOT NULL, `sourceMessageIds` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "characterId",
+            "columnName": "characterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "memoryType",
+            "columnName": "memoryType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceMessageIds",
+            "columnName": "sourceMessageIds",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_memories_characterId",
+            "unique": false,
+            "columnNames": [
+              "characterId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memories_characterId` ON `${TABLE_NAME}` (`characterId`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "structured_memories",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `characterId` TEXT NOT NULL, `subject` TEXT NOT NULL, `factKey` TEXT, `value` TEXT, `content` TEXT NOT NULL, `kind` TEXT NOT NULL, `evidenceJson` TEXT NOT NULL, `eventDate` TEXT, `observedOrder` INTEGER NOT NULL, `factType` TEXT NOT NULL DEFAULT 'fact', `epistemicStatus` TEXT NOT NULL DEFAULT 'explicit', `sourceAuthority` TEXT NOT NULL DEFAULT 'user_explicit', `knowledgeSource` TEXT NOT NULL DEFAULT 'user_told', `knownAt` INTEGER, `visibility` TEXT NOT NULL DEFAULT 'character_private', `semanticReason` TEXT NOT NULL DEFAULT '', `semanticVerified` INTEGER NOT NULL, `importance` REAL NOT NULL DEFAULT 0.5, `confidence` REAL NOT NULL DEFAULT 0.55, `state` TEXT NOT NULL, `supersedes` INTEGER, `contestedWith` INTEGER, `validFrom` INTEGER, `validTo` INTEGER, `autoAction` TEXT, `autoReason` TEXT, `originJobId` INTEGER, `searchTokens` TEXT NOT NULL DEFAULT '', `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL DEFAULT 0)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "characterId",
+            "columnName": "characterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "subject",
+            "columnName": "subject",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "factKey",
+            "columnName": "factKey",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "evidenceJson",
+            "columnName": "evidenceJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eventDate",
+            "columnName": "eventDate",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "observedOrder",
+            "columnName": "observedOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "factType",
+            "columnName": "factType",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'fact'"
+          },
+          {
+            "fieldPath": "epistemicStatus",
+            "columnName": "epistemicStatus",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'explicit'"
+          },
+          {
+            "fieldPath": "sourceAuthority",
+            "columnName": "sourceAuthority",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'user_explicit'"
+          },
+          {
+            "fieldPath": "knowledgeSource",
+            "columnName": "knowledgeSource",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'user_told'"
+          },
+          {
+            "fieldPath": "knownAt",
+            "columnName": "knownAt",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "visibility",
+            "columnName": "visibility",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'character_private'"
+          },
+          {
+            "fieldPath": "semanticReason",
+            "columnName": "semanticReason",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "semanticVerified",
+            "columnName": "semanticVerified",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "importance",
+            "columnName": "importance",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "0.5"
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "0.55"
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "supersedes",
+            "columnName": "supersedes",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "contestedWith",
+            "columnName": "contestedWith",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "validFrom",
+            "columnName": "validFrom",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "validTo",
+            "columnName": "validTo",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "autoAction",
+            "columnName": "autoAction",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "autoReason",
+            "columnName": "autoReason",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "originJobId",
+            "columnName": "originJobId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "searchTokens",
+            "columnName": "searchTokens",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_structured_memories_characterId",
+            "unique": false,
+            "columnNames": [
+              "characterId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_structured_memories_characterId` ON `${TABLE_NAME}` (`characterId`)"
+          },
+          {
+            "name": "index_structured_memories_characterId_state",
+            "unique": false,
+            "columnNames": [
+              "characterId",
+              "state"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_structured_memories_characterId_state` ON `${TABLE_NAME}` (`characterId`, `state`)"
+          },
+          {
+            "name": "index_structured_memories_characterId_factKey_state",
+            "unique": false,
+            "columnNames": [
+              "characterId",
+              "factKey",
+              "state"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_structured_memories_characterId_factKey_state` ON `${TABLE_NAME}` (`characterId`, `factKey`, `state`)"
+          },
+          {
+            "name": "index_structured_memories_characterId_state_validFrom_validTo",
+            "unique": false,
+            "columnNames": [
+              "characterId",
+              "state",
+              "validFrom",
+              "validTo"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_structured_memories_characterId_state_validFrom_validTo` ON `${TABLE_NAME}` (`characterId`, `state`, `validFrom`, `validTo`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "structured_memory_jobs",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `characterId` TEXT NOT NULL, `status` TEXT NOT NULL, `messageEnd` INTEGER NOT NULL, `attempts` INTEGER NOT NULL, `readyAt` INTEGER NOT NULL, `leaseUntil` INTEGER, `lastError` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "characterId",
+            "columnName": "characterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageEnd",
+            "columnName": "messageEnd",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attempts",
+            "columnName": "attempts",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "readyAt",
+            "columnName": "readyAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "leaseUntil",
+            "columnName": "leaseUntil",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "lastError",
+            "columnName": "lastError",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_structured_memory_jobs_characterId_status",
+            "unique": false,
+            "columnNames": [
+              "characterId",
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_structured_memory_jobs_characterId_status` ON `${TABLE_NAME}` (`characterId`, `status`)"
+          },
+          {
+            "name": "index_structured_memory_jobs_status_readyAt",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "readyAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_structured_memory_jobs_status_readyAt` ON `${TABLE_NAME}` (`status`, `readyAt`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "structured_memory_tombstones",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `characterId` TEXT NOT NULL, `evidenceHash` TEXT NOT NULL, `subject` TEXT NOT NULL, `kind` TEXT NOT NULL, `factKey` TEXT, `value` TEXT, `content` TEXT NOT NULL, `sourceMessageIds` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "characterId",
+            "columnName": "characterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "evidenceHash",
+            "columnName": "evidenceHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "subject",
+            "columnName": "subject",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "factKey",
+            "columnName": "factKey",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceMessageIds",
+            "columnName": "sourceMessageIds",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_structured_memory_tombstones_characterId",
+            "unique": false,
+            "columnNames": [
+              "characterId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_structured_memory_tombstones_characterId` ON `${TABLE_NAME}` (`characterId`)"
+          },
+          {
+            "name": "index_structured_memory_tombstones_characterId_evidenceHash",
+            "unique": true,
+            "columnNames": [
+              "characterId",
+              "evidenceHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_structured_memory_tombstones_characterId_evidenceHash` ON `${TABLE_NAME}` (`characterId`, `evidenceHash`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "structured_memory_aliases",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`characterId` TEXT NOT NULL, `aliasKey` TEXT NOT NULL, `canonicalKey` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`characterId`, `aliasKey`))",
+        "fields": [
+          {
+            "fieldPath": "characterId",
+            "columnName": "characterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aliasKey",
+            "columnName": "aliasKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "canonicalKey",
+            "columnName": "canonicalKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "characterId",
+            "aliasKey"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_structured_memory_aliases_characterId",
+            "unique": false,
+            "columnNames": [
+              "characterId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_structured_memory_aliases_characterId` ON `${TABLE_NAME}` (`characterId`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "structured_memory_usage",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `characterId` TEXT NOT NULL, `jobId` INTEGER NOT NULL, `provider` TEXT NOT NULL, `model` TEXT NOT NULL, `usageDay` TEXT NOT NULL, `promptTokens` INTEGER NOT NULL, `completionTokens` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "characterId",
+            "columnName": "characterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "jobId",
+            "columnName": "jobId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "model",
+            "columnName": "model",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "usageDay",
+            "columnName": "usageDay",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "promptTokens",
+            "columnName": "promptTokens",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completionTokens",
+            "columnName": "completionTokens",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_structured_memory_usage_characterId",
+            "unique": false,
+            "columnNames": [
+              "characterId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_structured_memory_usage_characterId` ON `${TABLE_NAME}` (`characterId`)"
+          },
+          {
+            "name": "index_structured_memory_usage_characterId_usageDay",
+            "unique": false,
+            "columnNames": [
+              "characterId",
+              "usageDay"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_structured_memory_usage_characterId_usageDay` ON `${TABLE_NAME}` (`characterId`, `usageDay`)"
+          },
+          {
+            "name": "index_structured_memory_usage_jobId",
+            "unique": true,
+            "columnNames": [
+              "jobId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_structured_memory_usage_jobId` ON `${TABLE_NAME}` (`jobId`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "structured_memory_cursors",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`characterId` TEXT NOT NULL, `lastMessageId` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`characterId`))",
+        "fields": [
+          {
+            "fieldPath": "characterId",
+            "columnName": "characterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastMessageId",
+            "columnName": "lastMessageId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "characterId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "character_states",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`characterId` TEXT NOT NULL, `moodValence` REAL NOT NULL, `moodArousal` REAL NOT NULL, `moodLabel` TEXT NOT NULL, `moodUpdatedAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`characterId`))",
+        "fields": [
+          {
+            "fieldPath": "characterId",
+            "columnName": "characterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "moodValence",
+            "columnName": "moodValence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "moodArousal",
+            "columnName": "moodArousal",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "moodLabel",
+            "columnName": "moodLabel",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "moodUpdatedAt",
+            "columnName": "moodUpdatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "characterId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "relationship_states",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`characterId` TEXT NOT NULL, `familiarity` REAL NOT NULL, `trust` REAL NOT NULL, `warmth` REAL NOT NULL, `stage` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`characterId`))",
+        "fields": [
+          {
+            "fieldPath": "characterId",
+            "columnName": "characterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "familiarity",
+            "columnName": "familiarity",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "trust",
+            "columnName": "trust",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "warmth",
+            "columnName": "warmth",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stage",
+            "columnName": "stage",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "characterId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "state_transitions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `dedupeKey` TEXT NOT NULL, `characterId` TEXT NOT NULL, `originJobId` INTEGER NOT NULL, `messageEnd` INTEGER NOT NULL, `eventType` TEXT NOT NULL, `importance` TEXT NOT NULL, `evidenceJson` TEXT NOT NULL, `moodBeforeJson` TEXT NOT NULL, `moodDeltaJson` TEXT NOT NULL, `moodAfterJson` TEXT NOT NULL, `relationshipBeforeJson` TEXT NOT NULL, `relationshipDeltaJson` TEXT NOT NULL, `relationshipAfterJson` TEXT NOT NULL, `reason` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dedupeKey",
+            "columnName": "dedupeKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "characterId",
+            "columnName": "characterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "originJobId",
+            "columnName": "originJobId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageEnd",
+            "columnName": "messageEnd",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eventType",
+            "columnName": "eventType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "importance",
+            "columnName": "importance",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "evidenceJson",
+            "columnName": "evidenceJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "moodBeforeJson",
+            "columnName": "moodBeforeJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "moodDeltaJson",
+            "columnName": "moodDeltaJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "moodAfterJson",
+            "columnName": "moodAfterJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "relationshipBeforeJson",
+            "columnName": "relationshipBeforeJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "relationshipDeltaJson",
+            "columnName": "relationshipDeltaJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "relationshipAfterJson",
+            "columnName": "relationshipAfterJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reason",
+            "columnName": "reason",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_state_transitions_dedupeKey",
+            "unique": true,
+            "columnNames": [
+              "dedupeKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_state_transitions_dedupeKey` ON `${TABLE_NAME}` (`dedupeKey`)"
+          },
+          {
+            "name": "index_state_transitions_characterId_createdAt",
+            "unique": false,
+            "columnNames": [
+              "characterId",
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_state_transitions_characterId_createdAt` ON `${TABLE_NAME}` (`characterId`, `createdAt`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "memory_events",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `characterId` TEXT NOT NULL, `topicKey` TEXT NOT NULL, `title` TEXT NOT NULL, `summary` TEXT NOT NULL, `status` TEXT NOT NULL, `realityMode` TEXT NOT NULL, `participantsJson` TEXT NOT NULL, `sourceMessageIds` TEXT NOT NULL, `timelineJson` TEXT NOT NULL, `lastMentionedAt` INTEGER, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "characterId",
+            "columnName": "characterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "topicKey",
+            "columnName": "topicKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "summary",
+            "columnName": "summary",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "realityMode",
+            "columnName": "realityMode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "participantsJson",
+            "columnName": "participantsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceMessageIds",
+            "columnName": "sourceMessageIds",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timelineJson",
+            "columnName": "timelineJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastMentionedAt",
+            "columnName": "lastMentionedAt",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_memory_events_characterId",
+            "unique": false,
+            "columnNames": [
+              "characterId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memory_events_characterId` ON `${TABLE_NAME}` (`characterId`)"
+          },
+          {
+            "name": "index_memory_events_characterId_status",
+            "unique": false,
+            "columnNames": [
+              "characterId",
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memory_events_characterId_status` ON `${TABLE_NAME}` (`characterId`, `status`)"
+          },
+          {
+            "name": "index_memory_events_characterId_topicKey",
+            "unique": true,
+            "columnNames": [
+              "characterId",
+              "topicKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_memory_events_characterId_topicKey` ON `${TABLE_NAME}` (`characterId`, `topicKey`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "scene_states",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`characterId` TEXT NOT NULL, `mode` TEXT NOT NULL, `location` TEXT NOT NULL, `participantsJson` TEXT NOT NULL, `activity` TEXT NOT NULL, `sourceMessageIds` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`characterId`))",
+        "fields": [
+          {
+            "fieldPath": "characterId",
+            "columnName": "characterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mode",
+            "columnName": "mode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "location",
+            "columnName": "location",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "participantsJson",
+            "columnName": "participantsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "activity",
+            "columnName": "activity",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceMessageIds",
+            "columnName": "sourceMessageIds",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "characterId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "turn_traces",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `runId` TEXT NOT NULL, `characterId` TEXT NOT NULL, `userMessageId` INTEGER, `assistantMessageId` INTEGER, `provider` TEXT NOT NULL, `model` TEXT NOT NULL, `promptVersion` TEXT NOT NULL, `promptHash` TEXT NOT NULL, `roleVersion` TEXT NOT NULL, `generationParamsJson` TEXT NOT NULL, `traceJson` TEXT NOT NULL, `memoryResultJson` TEXT NOT NULL DEFAULT '{}', `inputTokens` INTEGER NOT NULL, `outputTokens` INTEGER NOT NULL, `latencyMs` INTEGER, `status` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "runId",
+            "columnName": "runId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "characterId",
+            "columnName": "characterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userMessageId",
+            "columnName": "userMessageId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "assistantMessageId",
+            "columnName": "assistantMessageId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "model",
+            "columnName": "model",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "promptVersion",
+            "columnName": "promptVersion",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "promptHash",
+            "columnName": "promptHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "roleVersion",
+            "columnName": "roleVersion",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "generationParamsJson",
+            "columnName": "generationParamsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "traceJson",
+            "columnName": "traceJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "memoryResultJson",
+            "columnName": "memoryResultJson",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'{}'"
+          },
+          {
+            "fieldPath": "inputTokens",
+            "columnName": "inputTokens",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "outputTokens",
+            "columnName": "outputTokens",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "latencyMs",
+            "columnName": "latencyMs",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_turn_traces_characterId",
+            "unique": false,
+            "columnNames": [
+              "characterId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_turn_traces_characterId` ON `${TABLE_NAME}` (`characterId`)"
+          },
+          {
+            "name": "index_turn_traces_runId",
+            "unique": true,
+            "columnNames": [
+              "runId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_turn_traces_runId` ON `${TABLE_NAME}` (`runId`)"
+          },
+          {
+            "name": "index_turn_traces_characterId_createdAt",
+            "unique": false,
+            "columnNames": [
+              "characterId",
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_turn_traces_characterId_createdAt` ON `${TABLE_NAME}` (`characterId`, `createdAt`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "app_meta",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`key` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`key`))",
+        "fields": [
+          {
+            "fieldPath": "key",
+            "columnName": "key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "key"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '99e6153ae71e8b36efa695c0f7021cfd')"
+    ]
+  }
+}

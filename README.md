@@ -190,7 +190,7 @@ android/app/build/outputs/apk/full/debug/app-full-debug.apk
 
 - 当前源码：`0.19.2 / versionCode 61`
 - 当前公开 Release：`0.19.2 / versionCode 61`
-- Room schema：13
+- Room schema：17
 - 完整版 APK：`299,221,972` 字节，约 285.36 MiB
 - 完整版 SHA-256：`60D2334D6555B6CB00EE35655BAD7574316C4A6F7C760E0F7E4BB9C3C5677B4F`
 - 安装后请在设置中填写自己的 OpenCode Go 或 DeepSeek Key。
@@ -228,6 +228,16 @@ android/app/build/outputs/apk/cloud/debug/app-cloud-debug.apk
 
 也可以直接在 Android Studio 中打开 `android/` 并运行 `app` 配置。
 
+不连接手机时，可启动电脑端 Android 模拟器测试云端界面、角色管理、聊天和长期
+记忆：
+
+```powershell
+.\scripts\run_android_emulator.ps1
+```
+
+模拟器使用独立包名 `com.shiyu.chat.emulator`，不会影响手机数据。MNN、Local
+Dream/QNN、本地语音、NPU 和真实触控帧率仍须在 ARM64 真机验证。
+
 本地生图在“应用设置 → Dream 本地生图”中导入 SD1.5 QNN ZIP，并可调整正面/负面提示词、步数、CFG、采样器和种子。角色编辑页可填写单独的生图外貌提示词。云端头像需要另外填写千问图片 API Key。
 
 连接已授权 Android 设备后，可用 `scripts/deploy_android_dream.ps1` 覆盖安装 APK，并把本机 MeinaMix V12 ZIP 推到手机 `Download` 目录；随后在应用内导入。
@@ -258,14 +268,15 @@ Android：
 cd android
 .\gradlew.bat testFullDebugUnitTest assembleFullDebug lintFullDebug --no-daemon
 .\gradlew.bat testCloudDebugUnitTest assembleCloudDebug lintCloudDebug --no-daemon
+.\gradlew.bat testEmulatorDebugUnitTest assembleEmulatorDebug --no-daemon
 ```
 
 当前发布前验证结果：
 
-- PC 全量 Python 回归：308 项通过。
+- PC 全量 Python 回归：313 项通过。
 - PC 前端状态测试：40 项通过。
 - React 生产构建通过。
-- Android JVM：94 项通过。
+- Android JVM：完整版、云端版和模拟器版各 107 项通过。
 - Android APK 构建和 Lint 通过；完整版与云端版均会执行真机覆盖安装验证。本地 Dream 生图仍取决于设备 NPU 与导入模型。
 
 这些结果证明主要工程流程可运行，不等同于大规模真实聊天质量评估。

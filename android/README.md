@@ -1,11 +1,13 @@
 # 拾语 Android
 
-当前源码版本：`0.19.2 / versionCode 61`，Room schema 13，提供两个安装版本：
+当前源码版本：`0.19.2 / versionCode 61`，Room schema 17，提供两个手机安装版本：
 
 - `com.shiyu.chat`：完整版，内置本地语音识别、角色朗读、MNN 和 Local Dream。
 - `com.shiyu.chat.cloud`：云端精简版，移除 MNN、QNN、Local Dream、ASR 和 TTS。
 
-技术栈：Kotlin、Jetpack Compose、Room schema 13、WorkManager、OkHttp、
+另有仅供电脑测试的 `com.shiyu.chat.emulator` x86_64 云端构建，不随 Release 发布。
+
+技术栈：Kotlin、Jetpack Compose、Room schema 17、WorkManager、OkHttp、
 Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 
 ## 已实现
@@ -69,6 +71,7 @@ $env:JAVA_HOME = "C:\path\to\jdk-17"
 $env:ANDROID_HOME = "C:\path\to\Android\Sdk"
 .\gradlew.bat testFullDebugUnitTest assembleFullDebug lintFullDebug --no-daemon
 .\gradlew.bat testCloudDebugUnitTest assembleCloudDebug lintCloudDebug --no-daemon
+.\gradlew.bat testEmulatorDebugUnitTest assembleEmulatorDebug --no-daemon
 ```
 
 也可以使用 Android Studio 打开 `android/` 并运行 `app`。
@@ -78,20 +81,39 @@ $env:ANDROID_HOME = "C:\path\to\Android\Sdk"
 ```text
 android/app/build/outputs/apk/full/debug/app-full-debug.apk
 android/app/build/outputs/apk/cloud/debug/app-cloud-debug.apk
+android/app/build/outputs/apk/emulator/debug/app-emulator-debug.apk
 ```
+
+## 电脑模拟器测试
+
+仓库提供一条命令启动 Android 35 x86_64 模拟器、构建并安装云端模拟器包：
+
+```powershell
+.\scripts\run_android_emulator.ps1
+```
+
+脚本会创建 `ShiyuCloud` AVD，安装包名独立的 `com.shiyu.chat.emulator`，不会
+读取或覆盖手机数据。首次运行需要 Windows 硬件虚拟化；如果提示加速不可用，
+请启用 Windows Hypervisor Platform，或以管理员身份运行 SDK 自带的
+`Android_Emulator_Hypervisor_Driver\silent_install.bat`。
+
+模拟器适合测试 Compose 界面、角色管理、云端聊天、长期记忆、事件、图片输入
+和滑动体验。MNN、Local Dream/QNN、本地 ASR/TTS、NPU 及真实触控帧率仍须在
+ARM64 真机验证。
 
 ## 当前验证
 
 - 普通角色默认关闭持久心情和关系数值注入；用户边界、本轮即时情绪和长期记忆仍保留。
-- `0.19.2` 源码通过完整版与云端版各 106 项 JVM 测试、Debug Lint 和 APK 构建。
+- `0.19.2` 源码通过完整版、云端版和模拟器版各 107 项 JVM 测试，以及三个版本 Debug Lint 和 APK 构建。
 - 完整版与云端版均执行覆盖安装验证，不清理已有用户数据。
 - 覆盖安装后两个包均确认只保留上述 8 个默认角色，头像与背景路径有效。
 - 预编译 APK 仅作为 GitHub Release 附件分发，不提交到 Git：
-  <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.19.0>
+  <https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.19.2>
 
 ## 已知限制
 
 - 没有 PC 与手机自动同步，也没有“手机输入、电脑推理”的当前产品入口。
+- 模拟器构建只覆盖云端和通用界面能力，不能替代 ARM64 真机上的本地模型、语音与性能验收。
 - 本地 MNN 模式不支持图片。
 - Android 未内置 BGE，长期记忆检索使用 FTS4 与词法排序。
 - 本地滚动摘要可能漏记或合并错误。

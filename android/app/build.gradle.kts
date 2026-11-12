@@ -18,9 +18,6 @@ android {
         targetSdk = 35
         versionCode = 61
         versionName = "0.19.2"
-        ndk {
-            abiFilters += "arm64-v8a"
-        }
     }
 
     buildFeatures {
@@ -34,6 +31,9 @@ android {
             dimension = "edition"
             resValue("bool", "feature_full", "true")
             resValue("string", "app_name", "拾语")
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
         }
         create("cloud") {
             dimension = "edition"
@@ -41,7 +41,24 @@ android {
             versionNameSuffix = "-cloud"
             resValue("bool", "feature_full", "false")
             resValue("string", "app_name", "拾语云端")
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
         }
+        create("emulator") {
+            dimension = "edition"
+            applicationIdSuffix = ".emulator"
+            versionNameSuffix = "-emulator"
+            resValue("bool", "feature_full", "false")
+            resValue("string", "app_name", "拾语模拟器")
+            ndk {
+                abiFilters += "x86_64"
+            }
+        }
+    }
+
+    sourceSets {
+        getByName("emulator").java.srcDir("src/cloud/java")
     }
 
     signingConfigs {
@@ -97,6 +114,7 @@ android {
 
 ksp {
     arg("room.generateKotlin", "true")
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {

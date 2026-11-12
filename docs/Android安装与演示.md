@@ -8,7 +8,7 @@ Android Keystore 实现。云端模式直接调用所选大模型 API，不要�
 
 从
 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases)
-下载最新 APK。当前公开版为 `0.19.0`。
+下载最新 APK。当前公开版为 `0.19.2`。
 
 Android 现在有两个构建版本：
 
@@ -24,8 +24,23 @@ Android 现在有两个构建版本：
 安装后进入设置，在“对话与模型”中选择 DeepSeek 官方 API 或 OpenCode Go，
 并填写对应 API Key。创建角色和新对话都会使用当前选择的 Provider。
 
-应用首次安装会显示 12 个可编辑、可删除的初始角色，每个角色都带有头像和聊天
+应用首次安装会显示 8 个可编辑、可删除的初始角色，每个角色都带有头像和聊天
 背景。升级只补充空白角色的初次见面简介，不覆盖已有角色档案。
+
+## 在电脑上测试
+
+不连接手机也可以运行云端版 Android 界面和主要业务流程：
+
+```powershell
+.\scripts\run_android_emulator.ps1
+```
+
+脚本会启动 Android 35 x86_64 模拟器，构建并安装独立的
+`com.shiyu.chat.emulator` 包，因此不会影响手机或已安装应用。它适合检查角色
+管理、聊天、长期记忆、事件、图片输入和页面操作。
+
+模拟器不能验证 ARM64 手机上的 MNN、Local Dream/QNN、本地语音、NPU 与真实
+触控帧率；这些能力仍需要真机测试。首次使用要求 Windows 已开启硬件虚拟化。
 
 ## 文字对话
 
