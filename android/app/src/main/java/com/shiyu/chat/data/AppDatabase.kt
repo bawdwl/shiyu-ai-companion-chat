@@ -49,11 +49,91 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE characterId=:characterId ORDER BY id")
     fun observeForCharacter(characterId: String): Flow<List<MessageEntity>>
 
+    @Query(
+        """SELECT * FROM (
+               SELECT * FROM messages
+               WHERE characterId=:characterId
+               ORDER BY id DESC LIMIT :limit
+           ) ORDER BY id"""
+    )
+    fun observeRecentForCharacter(
+        characterId: String,
+        limit: Int,
+    ): Flow<List<MessageEntity>>
+
+    @Query(
+        """SELECT * FROM (
+               SELECT * FROM messages
+               WHERE characterId=:characterId AND id<:beforeId
+               ORDER BY id DESC LIMIT :limit
+           ) ORDER BY id"""
+    )
+    suspend fun olderBefore(
+        characterId: String,
+        beforeId: Long,
+        limit: Int,
+    ): List<MessageEntity>
+
+    @Query(
+        """SELECT EXISTS(
+               SELECT 1 FROM messages
+               WHERE characterId=:characterId AND id<:beforeId
+           )"""
+    )
+    suspend fun hasBefore(characterId: String, beforeId: Long): Boolean
+
     @Query("SELECT * FROM messages WHERE characterId=:characterId ORDER BY id")
     suspend fun getAllForCharacter(characterId: String): List<MessageEntity>
 
+    @Query("SELECT * FROM messages WHERE id=:id AND characterId=:characterId")
+    suspend fun get(characterId: String, id: Long): MessageEntity?
+
+    @Query(
+        """SELECT * FROM messages
+           WHERE characterId=:characterId AND role='user' AND id<:assistantId
+           ORDER BY id DESC LIMIT 1"""
+    )
+    suspend fun previousUserBefore(
+        characterId: String,
+        assistantId: Long,
+    ): MessageEntity?
+
+    @Query(
+        """SELECT * FROM messages
+           WHERE characterId=:characterId AND id<:beforeId
+           ORDER BY id DESC LIMIT :limit"""
+    )
+    suspend fun recentBefore(
+        characterId: String,
+        beforeId: Long,
+        limit: Int,
+    ): List<MessageEntity>
+
     @Query("SELECT * FROM messages WHERE characterId=:characterId ORDER BY id DESC LIMIT :limit")
     suspend fun recent(characterId: String, limit: Int): List<MessageEntity>
+
+    @Query(
+        """SELECT * FROM messages
+           WHERE characterId=:characterId AND id>:afterId AND id<=:throughId
+           ORDER BY id LIMIT :limit"""
+    )
+    suspend fun afterIdThrough(
+        characterId: String,
+        afterId: Long,
+        throughId: Long,
+        limit: Int,
+    ): List<MessageEntity>
+
+    @Query(
+        """SELECT * FROM messages
+           WHERE characterId=:characterId AND id<=:throughId
+           ORDER BY id DESC LIMIT :limit"""
+    )
+    suspend fun throughDescending(
+        characterId: String,
+        throughId: Long,
+        limit: Int,
+    ): List<MessageEntity>
 
     @Query("SELECT COALESCE(MAX(id),0) FROM messages WHERE characterId=:characterId AND id<:messageId")
     suspend fun maxIdBefore(characterId: String, messageId: Long): Long
@@ -63,6 +143,13 @@ interface MessageDao {
 
     @Query("DELETE FROM messages WHERE characterId=:characterId")
     suspend fun clear(characterId: String)
+
+    @Query("UPDATE messages SET content=:content,displayJson=:displayJson WHERE id=:id")
+    suspend fun updateContent(
+        id: Long,
+        content: String,
+        displayJson: String?,
+    ): Int
 
     @Query("DELETE FROM messages WHERE characterId=:characterId AND id>=:messageId")
     suspend fun deleteFrom(characterId: String, messageId: Long): Int
@@ -84,6 +171,70 @@ interface MessageDao {
            ORDER BY m.createdAt DESC""",
     )
     fun observeConversationSummaries(): Flow<List<ConversationSummaryRow>>
+}
+
+@Dao
+interface MessageVariantDao {
+    @Query("SELECT * FROM message_variants WHERE messageId=:messageId ORDER BY id")
+    fun observeForMessage(messageId: Long): Flow<List<MessageVariantEntity>>
+
+    @Query("SELECT * FROM message_variants WHERE messageId=:messageId ORDER BY id")
+    suspend fun forMessage(messageId: Long): List<MessageVariantEntity>
+
+    @Query("SELECT * FROM message_variants WHERE id=:variantId AND messageId=:messageId")
+    suspend fun get(messageId: Long, variantId: Long): MessageVariantEntity?
+
+    @Insert
+    suspend fun insert(variant: MessageVariantEntity): Long
+
+    @Query("UPDATE message_variants SET isCurrent=0 WHERE messageId=:messageId")
+    suspend fun clearCurrent(messageId: Long)
+
+    @Query(
+        "UPDATE message_variants SET isCurrent=1 WHERE id=:variantId AND messageId=:messageId",
+    )
+    suspend fun markCurrent(messageId: Long, variantId: Long): Int
+
+    @Query("DELETE FROM message_variants WHERE messageId=:messageId")
+    suspend fun clearForMessage(messageId: Long)
+
+    @Query(
+        """DELETE FROM message_variants
+           WHERE messageId IN (
+               SELECT id FROM messages WHERE characterId=:characterId
+           )"""
+    )
+    suspend fun clearForCharacter(characterId: String)
+
+    @Query(
+        """DELETE FROM message_variants
+           WHERE messageId IN (
+               SELECT id FROM messages
+               WHERE characterId=:characterId AND id>=:messageId
+           )"""
+    )
+    suspend fun deleteFromMessage(characterId: String, messageId: Long)
+}
+
+@Dao
+interface ConversationBranchDao {
+    @Query(
+        """SELECT * FROM conversation_branches
+           WHERE characterId=:characterId ORDER BY createdAt DESC,id DESC""",
+    )
+    fun observeForCharacter(characterId: String): Flow<List<ConversationBranchEntity>>
+
+    @Query("SELECT * FROM conversation_branches WHERE id=:id AND characterId=:characterId")
+    suspend fun get(characterId: String, id: Long): ConversationBranchEntity?
+
+    @Insert
+    suspend fun insert(branch: ConversationBranchEntity): Long
+
+    @Query("DELETE FROM conversation_branches WHERE id=:id AND characterId=:characterId")
+    suspend fun delete(characterId: String, id: Long): Int
+
+    @Query("DELETE FROM conversation_branches WHERE characterId=:characterId")
+    suspend fun clear(characterId: String)
 }
 
 @Dao
@@ -162,6 +313,16 @@ interface StructuredMemoryDao {
            ORDER BY observedOrder DESC,id DESC LIMIT :limit"""
     )
     suspend fun recentActive(
+        characterId: String,
+        limit: Int,
+    ): List<StructuredMemoryEntity>
+
+    @Query(
+        """SELECT * FROM structured_memories
+           WHERE characterId=:characterId AND state='active' AND pinned=1
+           ORDER BY observedOrder DESC,id DESC LIMIT :limit"""
+    )
+    suspend fun pinnedActive(
         characterId: String,
         limit: Int,
     ): List<StructuredMemoryEntity>
@@ -253,6 +414,44 @@ interface StructuredMemoryDao {
         id: Long,
         characterId: String,
         reason: String,
+        updatedAt: Long,
+    ): Int
+
+    @Query(
+        """UPDATE structured_memories
+           SET pinned=:pinned,updatedAt=:updatedAt
+           WHERE id=:id AND characterId=:characterId"""
+    )
+    suspend fun setPinned(
+        id: Long,
+        characterId: String,
+        pinned: Boolean,
+        updatedAt: Long,
+    ): Int
+
+    @Query(
+        """UPDATE structured_memories
+           SET state='active',content=:content,value=:value,
+               semanticVerified=1,updatedAt=:updatedAt
+           WHERE id=:id AND characterId=:characterId
+             AND state IN ('active','candidate','contested','superseded')"""
+    )
+    suspend fun editContent(
+        id: Long,
+        characterId: String,
+        content: String,
+        value: String?,
+        updatedAt: Long,
+    ): Int
+
+    @Query(
+        """UPDATE structured_memories
+           SET state='superseded',validTo=:updatedAt,updatedAt=:updatedAt
+           WHERE id=:id AND characterId=:characterId AND state='active'"""
+    )
+    suspend fun markOutdated(
+        id: Long,
+        characterId: String,
         updatedAt: Long,
     ): Int
 
@@ -607,12 +806,14 @@ interface SceneStateDao {
     suspend fun clear(characterId: String): Int
 }
 
-const val APP_DATABASE_VERSION = 17
+const val APP_DATABASE_VERSION = 20
 
 @Database(
     entities = [
         CharacterEntity::class,
         MessageEntity::class,
+        MessageVariantEntity::class,
+        ConversationBranchEntity::class,
         MemoryEntity::class,
         StructuredMemoryEntity::class,
         StructuredMemoryJobEntity::class,
@@ -634,6 +835,8 @@ const val APP_DATABASE_VERSION = 17
 abstract class AppDatabase : RoomDatabase() {
     abstract fun characters(): CharacterDao
     abstract fun messages(): MessageDao
+    abstract fun messageVariants(): MessageVariantDao
+    abstract fun conversationBranches(): ConversationBranchDao
     abstract fun memories(): MemoryDao
     abstract fun structuredMemories(): StructuredMemoryDao
     abstract fun structuredMemoryJobs(): StructuredMemoryJobDao
@@ -1051,6 +1254,54 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE structured_memories ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """CREATE TABLE IF NOT EXISTS message_variants(
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        messageId INTEGER NOT NULL,
+                        content TEXT NOT NULL,
+                        displayJson TEXT,
+                        createdAt INTEGER NOT NULL,
+                        isCurrent INTEGER NOT NULL DEFAULT 0)""".trimIndent(),
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_message_variants_messageId ON message_variants(messageId)",
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_message_variants_messageId_isCurrent ON message_variants(messageId,isCurrent)",
+                )
+            }
+        }
+
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """CREATE TABLE IF NOT EXISTS conversation_branches(
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        characterId TEXT NOT NULL,
+                        sourceMessageId INTEGER NOT NULL,
+                        title TEXT NOT NULL,
+                        snapshotJson TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL)""".trimIndent(),
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_conversation_branches_characterId ON conversation_branches(characterId)",
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_conversation_branches_characterId_sourceMessageId ON conversation_branches(characterId,sourceMessageId)",
+                )
+            }
+        }
+
         val ALL_MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_2_3,
             MIGRATION_3_4,
@@ -1067,6 +1318,9 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_14_15,
             MIGRATION_15_16,
             MIGRATION_16_17,
+            MIGRATION_17_18,
+            MIGRATION_18_19,
+            MIGRATION_19_20,
         )
 
         val CREATE_SEARCH_INDEX_CALLBACK = object : RoomDatabase.Callback() {

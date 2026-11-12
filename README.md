@@ -10,6 +10,10 @@ Git 仓库。
 
 最新发布：[GitHub Release `v0.19.2`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.19.2)
 
+本机开发构建：Android `0.20.0 / versionCode 62`，尚未作为 GitHub Release 发布；
+本地 APK 包含备份恢复、聊天分页、记忆控制、回复版本、分支检查点、Prompt
+Inspector 和增强世界书。
+
 ## 项目展示
 
 <p align="center">
@@ -82,6 +86,7 @@ Android `0.19.0` 新增约 21.9 MiB 的云端精简版，并把完整版与云�
 - 结构化事实、摘要和历史摘录使用统一上下文预算。
 - 每个角色每天有独立的后台记忆 Token 预算。
 - 候选事实经过确定性证据校验和一次批量语义审核。
+- 记忆卡片展示逐字证据，并支持纠正、钉住、标为过时、本轮忽略和删除。
 - 角色自述、计划、假设和观点保留各自权限，不能自动升级为确定事实。
 - 计划和共同事件可形成最小事件链与未完成事项，只在相关话题出现时承接。
 
@@ -188,9 +193,9 @@ PC 语音优先调用本机 CosyVoice 2 FastAPI；服务或角色参考音频不
 android/app/build/outputs/apk/full/debug/app-full-debug.apk
 ```
 
-- 当前源码：`0.19.2 / versionCode 61`
+- 当前源码：`0.20.0 / versionCode 62`
 - 当前公开 Release：`0.19.2 / versionCode 61`
-- Room schema：17
+- Room schema：20
 - 完整版 APK：`299,221,972` 字节，约 285.36 MiB
 - 完整版 SHA-256：`60D2334D6555B6CB00EE35655BAD7574316C4A6F7C760E0F7E4BB9C3C5677B4F`
 - 安装后请在设置中填写自己的 OpenCode Go 或 DeepSeek Key。
@@ -276,7 +281,7 @@ cd android
 - PC 全量 Python 回归：313 项通过。
 - PC 前端状态测试：40 项通过。
 - React 生产构建通过。
-- Android JVM：完整版、云端版和模拟器版各 107 项通过。
+- Android JVM：完整版、云端版和模拟器版各 116 项通过。
 - Android APK 构建和 Lint 通过；完整版与云端版均会执行真机覆盖安装验证。本地 Dream 生图仍取决于设备 NPU 与导入模型。
 
 这些结果证明主要工程流程可运行，不等同于大规模真实聊天质量评估。

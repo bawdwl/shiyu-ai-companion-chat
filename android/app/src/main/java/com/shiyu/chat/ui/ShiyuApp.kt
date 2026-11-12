@@ -144,6 +144,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.shiyu.chat.data.CharacterEntity
 import com.shiyu.chat.data.ChatRepository
+import com.shiyu.chat.data.ConversationBranchEntity
 import com.shiyu.chat.data.ArtworkCropSelection
 import com.shiyu.chat.data.CharacterArtworkPolicy
 import com.shiyu.chat.data.DeepSeekClient
@@ -151,14 +152,21 @@ import com.shiyu.chat.data.DreamGenerationSettings
 import com.shiyu.chat.data.insertActionBrackets
 import com.shiyu.chat.data.MemoryEntity
 import com.shiyu.chat.data.MessageEntity
+import com.shiyu.chat.data.MessageVariantEntity
 import com.shiyu.chat.data.MODEL_SOURCE_API
 import com.shiyu.chat.data.MODEL_SOURCE_LOCAL_MNN
+import com.shiyu.chat.data.memoryEvidenceLines
+import com.shiyu.chat.data.memoryOriginLabel
 import com.shiyu.chat.data.StructuredMemoryEntity
 import com.shiyu.chat.data.TurnTraceEntity
 import com.shiyu.chat.data.LocalVoice
 import com.shiyu.chat.data.TTS_SELECTABLE_SPEAKER_IDS
 import com.shiyu.chat.data.normalizeTtsSpeakerId
 import com.shiyu.chat.data.naturalMessageText
+import com.shiyu.chat.data.parsePromptInspectorSnapshot
+import com.shiyu.chat.data.parseWorldbookEntries
+import com.shiyu.chat.data.restartAfterRestore
+import com.shiyu.chat.data.selectWorldbookEntries
 import com.shiyu.chat.data.speechOnlyText
 import com.shiyu.chat.R
 import kotlinx.coroutines.Dispatchers
@@ -337,6 +345,22 @@ fun ShiyuApp(repository: ChatRepository) {
         }
     }
 
+    if (state.restoreReady) {
+        val context = LocalContext.current
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("备份已准备好") },
+            text = {
+                Text("备份文件已通过校验。应用将重启并在数据库打开前替换当前数据；API Key 和本地模型不会改变。")
+            },
+            confirmButton = {
+                Button(onClick = { restartAfterRestore(context) }) {
+                    Text("立即重启并恢复")
+                }
+            },
+        )
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
@@ -381,6 +405,17 @@ fun ShiyuApp(repository: ChatRepository) {
                         showEdit = true
                     },
                     onRollback = vm::rollbackToUserMessage,
+                    onRegenerate = vm::regenerate,
+                    onShowVariants = vm::loadMessageVariants,
+                    onDismissVariants = vm::dismissMessageVariants,
+                    onSelectVariant = vm::selectMessageVariant,
+                    onBranches = vm::showBranches,
+                    onCreateBranch = vm::createBranchAt,
+                    onDismissBranches = vm::hideBranches,
+                    onCreateCheckpoint = vm::createCurrentCheckpoint,
+                    onSwitchBranch = vm::switchBranch,
+                    onDeleteBranch = vm::deleteBranch,
+                    onLoadOlderMessages = vm::loadOlderMessages,
                     onReset = vm::reset,
                     onDelete = {
                         fullScreenChat = false
@@ -486,6 +521,17 @@ fun ShiyuApp(repository: ChatRepository) {
                                             showEdit = true
                                         },
                                         onRollback = vm::rollbackToUserMessage,
+                                        onRegenerate = vm::regenerate,
+                                        onShowVariants = vm::loadMessageVariants,
+                                        onDismissVariants = vm::dismissMessageVariants,
+                                        onSelectVariant = vm::selectMessageVariant,
+                                        onBranches = vm::showBranches,
+                                        onCreateBranch = vm::createBranchAt,
+                                        onDismissBranches = vm::hideBranches,
+                                        onCreateCheckpoint = vm::createCurrentCheckpoint,
+                                        onSwitchBranch = vm::switchBranch,
+                                        onDeleteBranch = vm::deleteBranch,
+                                        onLoadOlderMessages = vm::loadOlderMessages,
                                         onReset = vm::reset,
                                         onDelete = vm::deleteCharacter,
                                     )
@@ -591,6 +637,10 @@ fun ShiyuApp(repository: ChatRepository) {
                                 onDeleteLocalModel = vm::deleteLocalModel,
                                 onDownloadLocalModel = vm::downloadLocalModel,
                                 onDownloadDreamModel = vm::downloadDreamModel,
+                                onCreateBackup = vm::createBackup,
+                                onRestoreBackup = vm::restoreBackup,
+                                onExportDiagnostics = vm::exportDiagnostics,
+                                onSavePersona = vm::savePersona,
                             )
                         }
                     }
@@ -616,6 +666,11 @@ fun ShiyuApp(repository: ChatRepository) {
             onDelete = vm::deleteMemory,
             onEdit = vm::editMemory,
             onDeleteStructured = vm::deleteStructuredMemory,
+            ignoredMemoryIds = state.ignoredMemoryIds,
+            onToggleIgnored = vm::toggleStructuredMemoryIgnored,
+            onEditStructured = vm::editStructuredMemory,
+            onPinStructured = vm::setStructuredMemoryPinned,
+            onMarkOutdated = vm::markStructuredMemoryOutdated,
         )
     }
     if (showTrace && state.selected != null) {
@@ -1902,6 +1957,17 @@ private fun ChatScreen(
     onTrace: () -> Unit,
     onEdit: () -> Unit,
     onRollback: (Long, (String) -> Unit) -> Unit,
+    onRegenerate: (Long) -> Unit,
+    onShowVariants: (Long) -> Unit,
+    onDismissVariants: () -> Unit,
+    onSelectVariant: (Long) -> Unit,
+    onBranches: () -> Unit,
+    onCreateBranch: (Long) -> Unit,
+    onDismissBranches: () -> Unit,
+    onCreateCheckpoint: () -> Unit,
+    onSwitchBranch: (Long) -> Unit,
+    onDeleteBranch: (Long) -> Unit,
+    onLoadOlderMessages: () -> Unit,
     onReset: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -2005,6 +2071,8 @@ private fun ChatScreen(
     var imageUri by remember(character.id) { mutableStateOf<Uri?>(null) }
     val listState = rememberLazyListState()
     val latestListState = rememberLazyListState()
+    var prependAnchorId by remember(character.id) { mutableStateOf<Long?>(null) }
+    var prependAnchorOffset by remember(character.id) { mutableIntStateOf(0) }
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
     ) { imageUri = it }
@@ -2013,6 +2081,45 @@ private fun ChatScreen(
 
     LaunchedEffect(historyVisible) {
         onHistoryVisibilityChange(historyVisible)
+    }
+
+    LaunchedEffect(
+        historyVisible,
+        state.hasOlderMessages,
+        state.loadingOlderMessages,
+        state.messages.firstOrNull()?.id,
+    ) {
+        if (
+            !historyVisible ||
+            !state.hasOlderMessages ||
+            state.loadingOlderMessages
+        ) {
+            return@LaunchedEffect
+        }
+        snapshotFlow { listState.firstVisibleItemIndex }.collect { index ->
+            if (index <= 3) {
+                prependAnchorId = state.messages.getOrNull(index)?.id
+                    ?: state.messages.firstOrNull()?.id
+                prependAnchorOffset = listState.firstVisibleItemScrollOffset
+                onLoadOlderMessages()
+            }
+        }
+    }
+
+    LaunchedEffect(
+        state.messages.firstOrNull()?.id,
+        state.loadingOlderMessages,
+    ) {
+        if (!state.loadingOlderMessages) {
+            prependAnchorId?.let { anchorId ->
+                val index = state.messages.indexOfFirst { it.id == anchorId }
+                if (index >= 0) {
+                    listState.scrollToItem(index, prependAnchorOffset)
+                }
+                prependAnchorId = null
+                prependAnchorOffset = 0
+            }
+        }
     }
 
     var initialPositionApplied by remember(character.id) { mutableStateOf(false) }
@@ -2027,7 +2134,7 @@ private fun ChatScreen(
         }
     }
     LaunchedEffect(
-        state.messages.size,
+        state.messages.lastOrNull()?.id,
         state.busy,
         state.streamingText.length / 96,
         historyVisible,
@@ -2168,7 +2275,7 @@ private fun ChatScreen(
                             },
                         )
                         androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("调试 Trace") },
+                            text = { Text("Prompt Inspector") },
                             leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
                             onClick = {
                                 menu = false
@@ -2186,6 +2293,16 @@ private fun ChatScreen(
                             onClick = {
                                 menu = false
                                 showRollback = true
+                            },
+                        )
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("分支与检查点") },
+                            leadingIcon = {
+                                Icon(Icons.Default.History, contentDescription = null)
+                            },
+                            onClick = {
+                                menu = false
+                                onBranches()
                             },
                         )
                         androidx.compose.material3.DropdownMenuItem(
@@ -2281,6 +2398,9 @@ private fun ChatScreen(
                             message,
                             onPlay = { playMessage(message) },
                             playing = { playingId == message.id },
+                            onRegenerate = { onRegenerate(message.id) },
+                            onShowVariants = { onShowVariants(message.id) },
+                            onCreateBranch = { onCreateBranch(message.id) },
                         )
                     }
                     if (state.busy) {
@@ -2292,6 +2412,32 @@ private fun ChatScreen(
                                     role = "assistant",
                                     content = state.streamingText.ifBlank { "正在回应…" },
                                 ),
+                            )
+                        }
+                    }
+                }
+                if (state.loadingOlderMessages) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 18.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        color = Color.Black.copy(alpha = 0.42f),
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp,
+                            )
+                            Text(
+                                "加载更早消息",
+                                color = Color.White,
+                                fontSize = 10.sp,
                             )
                         }
                     }
@@ -2546,6 +2692,25 @@ private fun ChatScreen(
             }
         }
     }
+    }
+    if (state.variantMessageId != null) {
+        MessageVariantSheet(
+            variants = state.messageVariants,
+            busy = state.busy,
+            onDismiss = onDismissVariants,
+            onSelect = onSelectVariant,
+        )
+    }
+    if (state.branchSheetVisible) {
+        ConversationBranchSheet(
+            branches = state.branches,
+            busy = state.branchBusy,
+            canCreateCheckpoint = state.messages.isNotEmpty(),
+            onDismiss = onDismissBranches,
+            onCreateCheckpoint = onCreateCheckpoint,
+            onSelect = onSwitchBranch,
+            onDelete = onDeleteBranch,
+        )
     }
     if (showVoicePicker) {
         VoicePickerSheet(
@@ -3030,7 +3195,179 @@ private fun VoicePickerSheet(
 }
 
 @Composable
-private fun MessageBubble(character: CharacterEntity, message: MessageEntity, onPlay: (() -> Unit)? = null, playing: () -> Boolean = { false }) {
+private fun ConversationBranchSheet(
+    branches: List<ConversationBranchEntity>,
+    busy: Boolean,
+    canCreateCheckpoint: Boolean,
+    onDismiss: () -> Unit,
+    onCreateCheckpoint: () -> Unit,
+    onSelect: (Long) -> Unit,
+    onDelete: (Long) -> Unit,
+) {
+    FullScreenPage(
+        title = "分支与检查点",
+        onBack = onDismiss,
+    ) { modifier ->
+        Column(modifier.padding(horizontal = 18.dp)) {
+            Text(
+                "分支共享同一个角色卡、世界书和固定事实；聊天、共同经历、事件与当前场景分别保存在各自检查点中。",
+                modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.sp,
+                lineHeight = 17.sp,
+            )
+            OutlinedButton(
+                onClick = onCreateCheckpoint,
+                enabled = !busy && canCreateCheckpoint,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("保存当前检查点")
+            }
+            Spacer(Modifier.height(10.dp))
+            if (branches.isEmpty()) {
+                Text(
+                    "还没有保存的分支。你也可以在任意消息下面点击“分支”，从那条消息创建一个检查点。",
+                    color = InkMuted,
+                    fontSize = 12.sp,
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(9.dp),
+                    contentPadding = PaddingValues(bottom = 36.dp),
+                ) {
+                    items(branches, key = { it.id }) { branch ->
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color.White,
+                            border = BorderStroke(1.dp, Hairline),
+                        ) {
+                            Column(Modifier.padding(14.dp)) {
+                                Text(
+                                    branch.title,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                )
+                                Text(
+                                    "消息 #${branch.sourceMessageId} · " +
+                                        SimpleDateFormat("M月d日 HH:mm", Locale.CHINA)
+                                            .format(Date(branch.createdAt)),
+                                    color = InkMuted,
+                                    fontSize = 9.sp,
+                                )
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
+                                ) {
+                                    TextButton(
+                                        enabled = !busy,
+                                        onClick = { onDelete(branch.id) },
+                                    ) {
+                                        Text("删除", color = MaterialTheme.colorScheme.error)
+                                    }
+                                    TextButton(
+                                        enabled = !busy,
+                                        onClick = { onSelect(branch.id) },
+                                    ) { Text("切换到此分支") }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageVariantSheet(
+    variants: List<MessageVariantEntity>,
+    busy: Boolean,
+    onDismiss: () -> Unit,
+    onSelect: (Long) -> Unit,
+) {
+    FullScreenPage(
+        title = "回复版本",
+        onBack = onDismiss,
+    ) { modifier ->
+        Column(modifier.padding(horizontal = 18.dp)) {
+            Text(
+                "重答不会覆盖旧回复。只有当前选中的版本会作为后续聊天的近期历史。",
+                modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.sp,
+                lineHeight = 17.sp,
+            )
+            if (variants.isEmpty()) {
+                Text(
+                    "这条回复还没有生成过其他版本。点击回复下方的“重答”即可保留旧版本并生成新版本。",
+                    color = InkMuted,
+                    fontSize = 12.sp,
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(9.dp),
+                    contentPadding = PaddingValues(bottom = 36.dp),
+                ) {
+                    items(variants, key = { it.id }) { variant ->
+                        Surface(
+                            onClick = { if (!busy) onSelect(variant.id) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (variant.isCurrent) Sage else Color.White,
+                            border = BorderStroke(
+                                1.dp,
+                                if (variant.isCurrent) Forest else Hairline,
+                            ),
+                        ) {
+                            Column(Modifier.padding(14.dp)) {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text(
+                                        if (variant.isCurrent) "当前版本" else "历史版本",
+                                        color = Forest,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    Text(
+                                        SimpleDateFormat("M月d日 HH:mm", Locale.CHINA)
+                                            .format(Date(variant.createdAt)),
+                                        color = InkMuted,
+                                        fontSize = 9.sp,
+                                    )
+                                }
+                                Text(
+                                    naturalMessageText(
+                                        variant.content,
+                                        variant.displayJson,
+                                    ),
+                                    modifier = Modifier.padding(top = 6.dp),
+                                    fontSize = 13.sp,
+                                    lineHeight = 20.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageBubble(
+    character: CharacterEntity,
+    message: MessageEntity,
+    onPlay: (() -> Unit)? = null,
+    playing: () -> Boolean = { false },
+    onRegenerate: (() -> Unit)? = null,
+    onShowVariants: (() -> Unit)? = null,
+    onCreateBranch: (() -> Unit)? = null,
+) {
     val fullFeatures = LocalContext.current.resources.getBoolean(R.bool.feature_full)
     val user = message.role == "user"
     val shownContent = naturalMessageText(message.content, message.displayJson)
@@ -3089,6 +3426,27 @@ private fun MessageBubble(character: CharacterEntity, message: MessageEntity, on
                             )
                             Spacer(Modifier.width(3.dp))
                             Text(if (playing()) "停止" else "朗读", fontSize = 10.sp)
+                        }
+                    }
+                    if (!user && message.id > 0 && onRegenerate != null) {
+                        TextButton(onClick = onRegenerate) {
+                            Icon(
+                                Icons.Default.RestartAlt,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp),
+                            )
+                            Spacer(Modifier.width(3.dp))
+                            Text("重答", fontSize = 10.sp)
+                        }
+                    }
+                    if (!user && message.id > 0 && onShowVariants != null) {
+                        TextButton(onClick = onShowVariants) {
+                            Text("版本", fontSize = 10.sp)
+                        }
+                    }
+                    if (message.id > 0 && onCreateBranch != null) {
+                        TextButton(onClick = onCreateBranch) {
+                            Text("分支", fontSize = 10.sp)
                         }
                     }
                     Text(
@@ -3293,10 +3651,15 @@ private fun SettingsDialog(
     onDeleteLocalModel: () -> Unit,
     onDownloadLocalModel: (String) -> Unit,
     onDownloadDreamModel: () -> Unit,
+    onCreateBackup: (Uri) -> Unit,
+    onRestoreBackup: (Uri) -> Unit,
+    onExportDiagnostics: (Uri) -> Unit,
+    onSavePersona: (String) -> Unit,
 ) {
     var openCodeKey by remember { mutableStateOf("") }
     var deepSeekKey by remember { mutableStateOf("") }
     var imageKey by remember { mutableStateOf("") }
+    var personaText by remember(state.persona) { mutableStateOf(state.persona) }
     var dreamPositive by remember(state.dreamGenerationSettings) {
         mutableStateOf(state.dreamGenerationSettings.positiveTemplate)
     }
@@ -3322,6 +3685,7 @@ private fun SettingsDialog(
     var requestLimit by remember(state.limits) { mutableStateOf(state.limits.requestTokens.toString()) }
     var dailyLimit by remember(state.limits) { mutableStateOf(state.limits.dailyTokens.toString()) }
     var settingsPage by remember { mutableIntStateOf(0) }
+    var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     val localAvatarPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
     ) { uri ->
@@ -3331,6 +3695,21 @@ private fun SettingsDialog(
         ActivityResultContracts.GetContent(),
     ) { uri ->
         uri?.let(onImportLocalModel)
+    }
+    val backupCreator = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri ->
+        uri?.let(onCreateBackup)
+    }
+    val restorePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri ->
+        pendingRestoreUri = uri
+    }
+    val diagnosticCreator = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        uri?.let(onExportDiagnostics)
     }
     val pageContent: @Composable (Modifier) -> Unit = { pageModifier ->
         Column(pageModifier) {
@@ -3368,6 +3747,15 @@ private fun SettingsDialog(
                             contentColor = if (settingsPage == 1) Color.White else DeepForest,
                         ),
                     ) { Text("图片生成") }
+                    Button(
+                        onClick = { settingsPage = 2 },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 2.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (settingsPage == 2) DeepForest else Color.Transparent,
+                            contentColor = if (settingsPage == 2) Color.White else DeepForest,
+                        ),
+                    ) { Text("数据与安全") }
                 }
                 if (settingsPage == 0) {
                 Text("当前聊天 Provider", fontWeight = FontWeight.SemiBold)
@@ -3524,6 +3912,20 @@ private fun SettingsDialog(
                     )
                 }
                 Text("今日已使用 ${state.todayUsage} tokens", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+                HorizontalDivider()
+                Text("我的 Persona", fontWeight = FontWeight.SemiBold)
+                OutlinedTextField(
+                    value = personaText,
+                    onValueChange = { personaText = it.take(600) },
+                    label = { Text("用户身份、称呼、背景或偏好") },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "仅用于帮助角色理解你，不会覆盖角色固定档案；长度上限 600 字。",
+                    fontSize = 9.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 }
                 if (settingsPage == 1) {
                 Text("千问 AI 平台云端角色头像", fontWeight = FontWeight.SemiBold)
@@ -3817,6 +4219,63 @@ private fun SettingsDialog(
                 )
                 }
                 }
+                if (settingsPage == 2) {
+                    Text("备份与恢复", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "完整备份包含角色、聊天、长期记忆、事件、场景、Trace 和角色图片。" +
+                            "默认不包含 API Key、加密密钥、MNN/Dream/语音模型或临时缓存。",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.CHINA)
+                                .format(Date())
+                            backupCreator.launch("shiyu-backup-$stamp.zip")
+                        },
+                        enabled = !state.backupBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("导出完整 ZIP 备份")
+                    }
+                    OutlinedButton(
+                        onClick = { restorePicker.launch("application/zip") },
+                        enabled = !state.backupBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("选择 ZIP 备份恢复")
+                    }
+                    Text(
+                        "恢复会先在临时目录验证清单、逐文件 SHA-256、数据库完整性和 Schema 版本。" +
+                            "任何校验失败都会保留当前数据；校验通过后才在下次启动时替换。",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    HorizontalDivider()
+                    Text("脱敏诊断", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "仅导出应用版本、设备信息、数据数量和存储大小，不包含聊天正文、角色图片或 API Key。",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.CHINA)
+                                .format(Date())
+                            diagnosticCreator.launch("shiyu-diagnostics-$stamp.json")
+                        },
+                        enabled = !state.backupBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("导出脱敏诊断")
+                    }
+                    if (state.backupBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                            strokeWidth = 2.dp,
+                        )
+                    }
+                }
             }
             HorizontalDivider()
             Row(
@@ -3824,33 +4283,59 @@ private fun SettingsDialog(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = onDismiss) { Text("取消") }
-                Spacer(Modifier.width(8.dp))
-                Button(onClick = {
-                    if (openCodeKey.isNotBlank()) onSaveOpenCodeKey(openCodeKey)
-                    if (deepSeekKey.isNotBlank()) onSaveKey(deepSeekKey)
-                    if (imageKey.isNotBlank()) onSaveImageKey(imageKey)
-                    if (state.fullFeatures) {
-                        onSaveDreamSettings(
-                            DreamGenerationSettings(
-                                positiveTemplate = dreamPositive,
-                                negativePrompt = dreamNegative,
-                                steps = dreamSteps.toIntOrNull() ?: 50,
-                                cfg = dreamCfg.toFloatOrNull() ?: 7.0f,
-                                scheduler = dreamScheduler,
-                                seed = dreamSeed.toLongOrNull() ?: 20261102L,
-                                resolution = dreamResolution.toIntOrNull() ?: 1024,
-                            ),
+                if (settingsPage == 2) {
+                    Button(onClick = onDismiss) { Text("完成") }
+                } else {
+                    TextButton(onClick = onDismiss) { Text("取消") }
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = {
+                        if (openCodeKey.isNotBlank()) onSaveOpenCodeKey(openCodeKey)
+                        if (deepSeekKey.isNotBlank()) onSaveKey(deepSeekKey)
+                        if (imageKey.isNotBlank()) onSaveImageKey(imageKey)
+                        onSavePersona(personaText)
+                        if (state.fullFeatures) {
+                            onSaveDreamSettings(
+                                DreamGenerationSettings(
+                                    positiveTemplate = dreamPositive,
+                                    negativePrompt = dreamNegative,
+                                    steps = dreamSteps.toIntOrNull() ?: 50,
+                                    cfg = dreamCfg.toFloatOrNull() ?: 7.0f,
+                                    scheduler = dreamScheduler,
+                                    seed = dreamSeed.toLongOrNull() ?: 20261102L,
+                                    resolution = dreamResolution.toIntOrNull() ?: 1024,
+                                ),
+                            )
+                        }
+                        onSaveLimits(
+                            requestLimit.toIntOrNull() ?: 12_000,
+                            dailyLimit.toIntOrNull() ?: 200_000,
                         )
-                    }
-                    onSaveLimits(
-                        requestLimit.toIntOrNull() ?: 12_000,
-                        dailyLimit.toIntOrNull() ?: 200_000,
-                    )
-                    onDismiss()
-                }) { Text("保存") }
+                        onDismiss()
+                    }) { Text("保存") }
+                }
             }
         }
+    }
+    pendingRestoreUri?.let { uri ->
+        AlertDialog(
+            onDismissRequest = { pendingRestoreUri = null },
+            title = { Text("恢复完整备份？") },
+            text = {
+                Text("当前数据会在应用重启前保留一份回滚副本。备份校验失败时不会改动现有数据。")
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRestoreUri = null }) { Text("取消") }
+            },
+            confirmButton = {
+                Button(
+                    enabled = !state.backupBusy,
+                    onClick = {
+                        pendingRestoreUri = null
+                        onRestoreBackup(uri)
+                    },
+                ) { Text("校验并准备恢复") }
+            },
+        )
     }
     if (embedded) {
         pageContent(Modifier.fillMaxSize().statusBarsPadding())
@@ -3990,6 +4475,10 @@ private fun EditCharacterDialog(
     var forbidden by remember(character.id) { mutableStateOf(character.forbiddenKnowledge) }
     var forbiddenTerms by remember(character.id) { mutableStateOf(character.forbiddenTerms) }
     var worldbookJson by remember(character.id) { mutableStateOf(character.worldbookJson) }
+    var worldbookProbe by remember(character.id) { mutableStateOf("") }
+    var worldbookProbeResults by remember(character.id) {
+        mutableStateOf<List<String>>(emptyList())
+    }
     var roleContextJson by remember(character.id) {
         mutableStateOf(character.roleContextJson)
     }
@@ -4398,6 +4887,40 @@ private fun EditCharacterDialog(
                     minLines = 5,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                OutlinedTextField(
+                    worldbookProbe,
+                    onValueChange = { worldbookProbe = it.take(200) },
+                    label = { Text("测试一句话会命中哪些世界书条目") },
+                    placeholder = { Text("例如：我们去看海，还记得那个约定吗") },
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                    trailingIcon = {
+                        TextButton(
+                            onClick = {
+                                worldbookProbeResults = selectWorldbookEntries(
+                                    parseWorldbookEntries(worldbookJson),
+                                    worldbookProbe,
+                                    maxEntries = 12,
+                                ).map { it.title }
+                            },
+                            enabled = worldbookProbe.isNotBlank(),
+                        ) { Text("测试") }
+                    },
+                )
+                if (worldbookProbeResults.isNotEmpty()) {
+                    Text(
+                        "命中：" + worldbookProbeResults.joinToString("、"),
+                        fontSize = 9.sp,
+                        color = Forest,
+                        modifier = Modifier.padding(top = 3.dp),
+                    )
+                } else if (worldbookProbe.isNotBlank()) {
+                    Text(
+                        "这条测试没有命中任何已启用的世界书条目。",
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 3.dp),
+                    )
+                }
             }
             item {
                 OutlinedTextField(
@@ -4832,14 +5355,14 @@ private fun TraceSheet(
     onDismiss: () -> Unit,
 ) {
     FullScreenPage(
-        title = "调试 Trace",
+        title = "Prompt Inspector",
         onBack = onDismiss,
     ) { modifier ->
         Column(
             modifier.padding(horizontal = 18.dp),
         ) {
             Text(
-                "仅保存模型、Prompt 哈希、记忆 ID、状态、Token 与耗时，不保存 API Key 或完整 Prompt。",
+                "只读展示本轮 Prompt 的分区估算、预算、记忆选择和耗时；不保存 API Key 或完整 Prompt 原文。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
             )
@@ -4853,6 +5376,9 @@ private fun TraceSheet(
                     contentPadding = PaddingValues(bottom = 36.dp),
                 ) {
                     items(traces, key = { it.runId }) { trace ->
+                        val inspector = remember(trace.traceJson) {
+                            parsePromptInspectorSnapshot(trace.traceJson)
+                        }
                         Surface(
                             shape = RoundedCornerShape(14.dp),
                             color = Color.White.copy(alpha = 0.76f),
@@ -4879,9 +5405,58 @@ private fun TraceSheet(
                                         (trace.latencyMs?.let { " · ${it} ms" } ?: ""),
                                     fontSize = 10.sp,
                                 )
+                                inspector?.let { snapshot ->
+                                    Spacer(Modifier.height(7.dp))
+                                    Text(
+                                        "预算 ${snapshot.inputTokens + snapshot.outputTokens} / " +
+                                            "${snapshot.requestLimit} tokens · " +
+                                            "近期 ${snapshot.historyMessages} 条消息",
+                                        fontSize = 9.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    snapshot.sections.forEach { section ->
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                        ) {
+                                            Text(section.label, fontSize = 9.sp)
+                                            Text(
+                                                "${section.characters} 字符 · ~${section.approximateTokens} tokens",
+                                                fontSize = 9.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                        androidx.compose.material3.LinearProgressIndicator(
+                                            progress = {
+                                                if (snapshot.requestLimit <= 0) {
+                                                    0f
+                                                } else {
+                                                    (section.approximateTokens.toFloat() /
+                                                        snapshot.requestLimit.toFloat())
+                                                        .coerceIn(0f, 1f)
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
+                                    val memoryText = if (snapshot.memoryCandidates == 0) {
+                                        "本轮未检索长期记忆"
+                                    } else {
+                                        "记忆候选 ${snapshot.memoryCandidates} 条，选入 ${snapshot.memorySelected} 条" +
+                                            if (snapshot.memoryTruncated) "；其余因预算或相关性未注入" else ""
+                                    }
+                                    Text(
+                                        memoryText +
+                                            if (snapshot.ignoredMemoryIds.isNotEmpty()) {
+                                                "；本轮手动忽略 ${snapshot.ignoredMemoryIds.size} 条"
+                                            } else "",
+                                        fontSize = 9.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                                 Spacer(Modifier.height(6.dp))
                                 Text(
-                                    trace.traceJson,
+                                    if (inspector == null) trace.traceJson else "完整 Trace 元数据",
                                     fontSize = 9.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -4911,10 +5486,17 @@ private fun MemorySheet(
     onDelete: (Long) -> Unit,
     onEdit: (Long, String) -> Unit,
     onDeleteStructured: (Long) -> Unit,
+    ignoredMemoryIds: Set<Long>,
+    onToggleIgnored: (Long) -> Unit,
+    onEditStructured: (Long, String) -> Unit,
+    onPinStructured: (Long, Boolean) -> Unit,
+    onMarkOutdated: (Long) -> Unit,
 ) {
     var editing by remember { mutableStateOf<MemoryEntity?>(null) }
+    var editingStructured by remember { mutableStateOf<StructuredMemoryEntity?>(null) }
     var deleting by remember { mutableStateOf<MemoryEntity?>(null) }
     var editedText by remember { mutableStateOf("") }
+    var structuredEditedText by remember { mutableStateOf("") }
     FullScreenPage(
         title = "${character.name}的长期记忆",
         onBack = onDismiss,
@@ -4970,39 +5552,87 @@ private fun MemorySheet(
                         shape = RoundedCornerShape(14.dp),
                     ) {
                         Column(Modifier.padding(13.dp)) {
-                            Text(
-                                when {
-                                    memory.state == "candidate" -> "历史草稿"
-                                    memory.state == "contested" -> "有疑义"
-                                    memory.state == "superseded" -> "已被替代"
-                                    memory.state == "deleted" -> "已删除"
-                                    memory.kind == "role_claim" ||
-                                        memory.factType == "role_claim" ||
-                                        memory.sourceAuthority == "character_self_report" ->
-                                        "角色自述 · 非正式设定"
-                                    memory.factType == "plan" -> "当前计划"
-                                    memory.factType == "hypothesis" -> "假设 · 非既成事实"
-                                    memory.factType == "opinion" -> "主观观点"
-                                    else -> "当前事实"
-                                },
-                                color = Forest,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                            )
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    memoryOriginLabel(memory),
+                                    color = Forest,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    when (memory.state) {
+                                        "candidate" -> "历史草稿"
+                                        "contested" -> "有疑义"
+                                        "superseded" -> "已过时"
+                                        "deleted" -> "已删除"
+                                        else -> if (memory.pinned) "已钉住" else "当前"
+                                    },
+                                    color = InkMuted,
+                                    fontSize = 9.sp,
+                                )
+                            }
                             Text(memory.content, fontSize = 12.sp, lineHeight = 19.sp)
                             memory.value?.let {
                                 Text("准确值：$it", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                             }
                             Text(
-                                "类型：${memory.factType} · 权限：${memory.sourceAuthority}",
+                                "认知：${memory.epistemicStatus} · 来源权限：${memory.sourceAuthority}",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 9.sp,
                             )
+                            Text(
+                                "证据",
+                                color = InkMuted,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            memoryEvidenceLines(memory.id, memory.evidenceJson)
+                                .take(3)
+                                .forEach {
+                                    Text(
+                                        it,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 9.sp,
+                                        lineHeight = 14.sp,
+                                    )
+                                }
                             if (memory.state != "deleted") {
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End,
-                                ) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    TextButton(
+                                        enabled = !memoryBusy,
+                                        onClick = {
+                                            editingStructured = memory
+                                            structuredEditedText = memory.content
+                                        },
+                                    ) { Text("纠正") }
+                                    TextButton(
+                                        enabled = !memoryBusy && memory.state == "active",
+                                        onClick = { onPinStructured(memory.id, !memory.pinned) },
+                                    ) { Text(if (memory.pinned) "取消钉住" else "钉住") }
+                                    if (memory.state == "active") {
+                                        TextButton(
+                                            enabled = !memoryBusy,
+                                            onClick = { onMarkOutdated(memory.id) },
+                                        ) { Text("标为过时") }
+                                    }
+                                }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    TextButton(
+                                        enabled = !memoryBusy && memory.state == "active",
+                                        onClick = { onToggleIgnored(memory.id) },
+                                    ) {
+                                        Text(
+                                            if (memory.id in ignoredMemoryIds) {
+                                                "恢复本轮"
+                                            } else {
+                                                "本轮忽略"
+                                            },
+                                        )
+                                    }
                                     TextButton(
                                         enabled = !memoryBusy,
                                         onClick = { onDeleteStructured(memory.id) },
@@ -5054,6 +5684,39 @@ private fun MemorySheet(
                 }
             }
         }
+    }
+    editingStructured?.let { memory ->
+        AlertDialog(
+            onDismissRequest = { editingStructured = null },
+            title = { Text("纠正这条长期记忆") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "纠正后会保留原证据，并把当前事实标记为人工核实。",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 10.sp,
+                    )
+                    OutlinedTextField(
+                        value = structuredEditedText,
+                        onValueChange = { structuredEditedText = it.take(1_200) },
+                        minLines = 3,
+                        label = { Text("准确内容") },
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = structuredEditedText.isNotBlank() && !memoryBusy,
+                    onClick = {
+                        onEditStructured(memory.id, structuredEditedText)
+                        editingStructured = null
+                    },
+                ) { Text("保存纠正") }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingStructured = null }) { Text("取消") }
+            },
+        )
     }
     editing?.let { memory ->
         AlertDialog(onDismissRequest = { editing = null }, title = { Text("修改记忆") },

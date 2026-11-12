@@ -1,6 +1,7 @@
 package com.shiyu.chat.ui
 
 import android.net.Uri
+import android.util.Log
 import com.shiyu.chat.data.ArtworkCropSelection
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -8,9 +9,11 @@ import androidx.lifecycle.viewModelScope
 import com.shiyu.chat.data.CharacterEntity
 import com.shiyu.chat.data.ChatRepository
 import com.shiyu.chat.data.ConversationSummaryRow
+import com.shiyu.chat.data.ConversationBranchEntity
 import com.shiyu.chat.data.DeviceModelCompatibility
 import com.shiyu.chat.data.Limits
 import com.shiyu.chat.data.MemoryEntity
+import com.shiyu.chat.data.MessageVariantEntity
 import com.shiyu.chat.data.MessageEntity
 import com.shiyu.chat.data.MODEL_SOURCE_LOCAL_MNN
 import com.shiyu.chat.data.DreamGenerationSettings
@@ -61,7 +64,18 @@ data class ShiyuUiState(
     val modelDownloadLabel: String? = null,
     val modelDownloadProgress: Float = 0f,
     val deviceCompatibility: DeviceModelCompatibility? = null,
+    val backupBusy: Boolean = false,
+    val restoreReady: Boolean = false,
     val status: String? = null,
+    val loadingOlderMessages: Boolean = false,
+    val hasOlderMessages: Boolean = false,
+    val ignoredMemoryIds: Set<Long> = emptySet(),
+    val persona: String = "",
+    val messageVariants: List<MessageVariantEntity> = emptyList(),
+    val variantMessageId: Long? = null,
+    val branches: List<ConversationBranchEntity> = emptyList(),
+    val branchSheetVisible: Boolean = false,
+    val branchBusy: Boolean = false,
 )
 
 class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
@@ -69,9 +83,11 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
     val state: StateFlow<ShiyuUiState> = _state.asStateFlow()
     private var stopRequested = false
     private var observeJob: Job? = null
+    private var variantJob: Job? = null
 
     init {
         viewModelScope.launch {
+            val restoreResult = repository.consumeRestoreResult()
             repository.ensureDefaults()
             repository.ensureBuiltInCharacters()
             val provider = repository.cloudProvider()
@@ -83,6 +99,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 openCodeConfigured = !repository.openCodeApiKey().isNullOrBlank(),
                 deepSeekConfigured = !repository.apiKey().isNullOrBlank(),
                 imageApiConfigured = repository.imageApiKeyConfigured(),
+                persona = repository.persona(),
                 limits = repository.limits(),
                 todayUsage = repository.todayUsage(),
                 avatarModelReady = repository.avatarModelReady(),
@@ -93,6 +110,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 localModelBytes = repository.localModelBytes(),
                 localModelName = repository.localModelName(),
                 deviceCompatibility = repository.deviceCompatibility(),
+                status = restoreResult?.message,
             )
             launch {
                 repository.conversationSummaries.collect { summaries ->
@@ -181,17 +199,197 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
             .onFailure { _state.value = _state.value.copy(status = it.message) }
     }
 
+    fun savePersona(value: String) {
+        repository.savePersona(value)
+        _state.value = _state.value.copy(
+            persona = repository.persona(),
+            status = "用户 Persona 已保存",
+        )
+    }
+
+    fun createBackup(uri: Uri) {
+        if (_state.value.backupBusy) return
+        _state.value = _state.value.copy(
+            backupBusy = true,
+            status = "正在创建完整备份…",
+        )
+        viewModelScope.launch {
+            runCatching { repository.exportBackup(uri) }
+                .onSuccess { summary ->
+                    _state.value = _state.value.copy(
+                        backupBusy = false,
+                        status = "备份已创建：${summary.entryCount} 个文件，" +
+                            "${String.format(java.util.Locale.CHINA, "%.1f", summary.bytes / 1024.0 / 1024.0)} MiB",
+                    )
+                }
+                .onFailure { error ->
+                    Log.e("ShiyuViewModel", "Backup export failed", error)
+                    _state.value = _state.value.copy(
+                        backupBusy = false,
+                        status = error.message ?: "备份创建失败，现有数据未改动",
+                    )
+                }
+        }
+    }
+
+    fun restoreBackup(uri: Uri) {
+        if (_state.value.backupBusy || _state.value.restoreReady) return
+        _state.value = _state.value.copy(
+            backupBusy = true,
+            status = "正在校验备份并准备恢复…",
+        )
+        viewModelScope.launch {
+            runCatching { repository.stageRestore(uri) }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        backupBusy = false,
+                        restoreReady = true,
+                        status = "备份校验通过，重启应用后完成恢复",
+                    )
+                }
+                .onFailure { error ->
+                    Log.e("ShiyuViewModel", "Backup restore staging failed", error)
+                    _state.value = _state.value.copy(
+                        backupBusy = false,
+                        status = error.message ?: "备份校验失败，现有数据未改动",
+                    )
+                }
+        }
+    }
+
+    fun exportDiagnostics(uri: Uri) {
+        if (_state.value.backupBusy) return
+        _state.value = _state.value.copy(
+            backupBusy = true,
+            status = "正在导出脱敏诊断…",
+        )
+        viewModelScope.launch {
+            runCatching { repository.exportDiagnostics(uri) }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        backupBusy = false,
+                        status = "脱敏诊断已导出，不包含聊天正文或 API Key",
+                    )
+                }
+                .onFailure { error ->
+                    Log.e("ShiyuViewModel", "Diagnostics export failed", error)
+                    _state.value = _state.value.copy(
+                        backupBusy = false,
+                        status = error.message ?: "诊断导出失败",
+                    )
+                }
+        }
+    }
+
+    fun showBranches() {
+        if (_state.value.selected == null) return
+        _state.value = _state.value.copy(branchSheetVisible = true)
+    }
+
+    fun hideBranches() {
+        if (_state.value.branchBusy) return
+        _state.value = _state.value.copy(branchSheetVisible = false)
+    }
+
+    fun createBranchAt(messageId: Long) {
+        val character = _state.value.selected ?: return
+        if (_state.value.branchBusy || messageId <= 0) return
+        _state.value = _state.value.copy(branchBusy = true)
+        viewModelScope.launch {
+            runCatching { repository.createBranch(character.id, messageId) }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        branchBusy = false,
+                        status = "分支检查点已保存",
+                    )
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(
+                        branchBusy = false,
+                        status = it.message ?: "创建分支失败",
+                    )
+                }
+        }
+    }
+
+    fun createCurrentCheckpoint() {
+        val messageId = _state.value.messages.lastOrNull()?.id ?: return
+        createBranchAt(messageId)
+    }
+
+    fun switchBranch(branchId: Long) {
+        val character = _state.value.selected ?: return
+        if (_state.value.branchBusy || _state.value.busy) return
+        _state.value = _state.value.copy(branchBusy = true)
+        viewModelScope.launch {
+            runCatching { repository.switchBranch(character.id, branchId) }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        branchBusy = false,
+                        branchSheetVisible = false,
+                        status = "已切换到所选分支",
+                    )
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(
+                        branchBusy = false,
+                        status = it.message ?: "切换分支失败",
+                    )
+                }
+        }
+    }
+
+    fun deleteBranch(branchId: Long) {
+        val character = _state.value.selected ?: return
+        if (_state.value.branchBusy) return
+        _state.value = _state.value.copy(branchBusy = true)
+        viewModelScope.launch {
+            runCatching { repository.deleteBranch(character.id, branchId) }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        branchBusy = false,
+                        status = "分支已删除",
+                    )
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(
+                        branchBusy = false,
+                        status = it.message ?: "删除分支失败",
+                    )
+                }
+        }
+    }
+
     fun select(character: CharacterEntity, ensureOpening: Boolean = true) {
         observeJob?.cancel()
+        variantJob?.cancel()
         _state.value = _state.value.copy(
             selected = character, messages = emptyList(), memories = emptyList(),
             structuredMemories = emptyList(), turnTraces = emptyList(),
+            loadingOlderMessages = false, hasOlderMessages = false,
+            ignoredMemoryIds = emptySet(),
+            messageVariants = emptyList(), variantMessageId = null,
+            branches = emptyList(), branchSheetVisible = false, branchBusy = false,
         )
         observeJob = viewModelScope.launch {
             if (ensureOpening) repository.ensureOpening(character)
             launch {
-                repository.observeMessages(character.id).collect { messages ->
-                    _state.value = _state.value.copy(messages = messages)
+                repository.observeRecentMessages(character.id).collect { recent ->
+                    val current = _state.value.messages
+                    val older = if (recent.isEmpty()) {
+                        emptyList()
+                    } else {
+                        current.filter { it.id < recent.first().id }
+                    }
+                    val merged = (older + recent)
+                        .distinctBy { it.id }
+                        .sortedBy { it.id }
+                    val hasOlder = recent.isNotEmpty() &&
+                        repository.hasOlderMessages(character.id, recent.first().id)
+                    _state.value = _state.value.copy(
+                        messages = merged,
+                        hasOlderMessages = hasOlder,
+                    )
                 }
             }
             launch {
@@ -209,15 +407,53 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                     _state.value = _state.value.copy(turnTraces = traces)
                 }
             }
+            launch {
+                repository.observeBranches(character.id).collect { branches ->
+                    _state.value = _state.value.copy(branches = branches)
+                }
+            }
         }
     }
 
     fun closeCharacter() {
         observeJob?.cancel()
+        variantJob?.cancel()
         _state.value = _state.value.copy(
             selected = null, messages = emptyList(), memories = emptyList(),
             structuredMemories = emptyList(), turnTraces = emptyList(),
+            loadingOlderMessages = false, hasOlderMessages = false,
+            ignoredMemoryIds = emptySet(),
+            messageVariants = emptyList(), variantMessageId = null,
+            branches = emptyList(), branchSheetVisible = false, branchBusy = false,
         )
+    }
+
+    fun loadOlderMessages() {
+        val character = _state.value.selected ?: return
+        if (_state.value.loadingOlderMessages || !_state.value.hasOlderMessages) return
+        val firstId = _state.value.messages.firstOrNull()?.id ?: return
+        _state.value = _state.value.copy(loadingOlderMessages = true)
+        viewModelScope.launch {
+            runCatching {
+                repository.olderMessages(character.id, firstId)
+            }.onSuccess { older ->
+                val merged = (older + _state.value.messages)
+                    .distinctBy { it.id }
+                    .sortedBy { it.id }
+                val oldestId = merged.firstOrNull()?.id
+                _state.value = _state.value.copy(
+                    messages = merged,
+                    loadingOlderMessages = false,
+                    hasOlderMessages = oldestId != null &&
+                        repository.hasOlderMessages(character.id, oldestId),
+                )
+            }.onFailure { error ->
+                _state.value = _state.value.copy(
+                    loadingOlderMessages = false,
+                    status = error.message ?: "加载更早消息失败",
+                )
+            }
+        }
     }
 
     fun send(text: String, imageUri: Uri?) {
@@ -231,6 +467,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                     character = character,
                     text = text.ifBlank { "请看看这张图片。" },
                     imageUri = imageUri,
+                    ignoredMemoryIds = _state.value.ignoredMemoryIds,
                     isCancelled = { stopRequested },
                 ) { piece ->
                     _state.value = _state.value.copy(streamingText = _state.value.streamingText + piece)
@@ -239,6 +476,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                     busy = false,
                     streamingText = "",
                     todayUsage = repository.todayUsage(),
+                    ignoredMemoryIds = emptySet(),
                     status = null,
                 )
             } catch (_: CancellationException) {
@@ -249,6 +487,86 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                     streamingText = "",
                     status = error.message ?: "生成失败",
                 )
+            }
+        }
+    }
+
+    fun regenerate(messageId: Long) {
+        val character = _state.value.selected ?: return
+        if (_state.value.busy || messageId <= 0) return
+        stopRequested = false
+        _state.value = _state.value.copy(
+            busy = true,
+            status = "正在重新生成回复…",
+            streamingText = "",
+        )
+        viewModelScope.launch {
+            try {
+                repository.regenerate(
+                    character = character,
+                    assistantMessageId = messageId,
+                    ignoredMemoryIds = _state.value.ignoredMemoryIds,
+                    isCancelled = { stopRequested },
+                ) { piece ->
+                    _state.value = _state.value.copy(
+                        streamingText = _state.value.streamingText + piece,
+                    )
+                }
+                _state.value = _state.value.copy(
+                    busy = false,
+                    streamingText = "",
+                    ignoredMemoryIds = emptySet(),
+                    status = "已生成新的回复版本，旧版本仍保留",
+                )
+            } catch (_: CancellationException) {
+                _state.value = _state.value.copy(
+                    busy = false,
+                    streamingText = "",
+                    status = "已停止生成",
+                )
+            } catch (error: Exception) {
+                _state.value = _state.value.copy(
+                    busy = false,
+                    streamingText = "",
+                    status = error.message ?: "重新生成失败",
+                )
+            }
+        }
+    }
+
+    fun loadMessageVariants(messageId: Long) {
+        variantJob?.cancel()
+        _state.value = _state.value.copy(
+            variantMessageId = messageId,
+            messageVariants = emptyList(),
+        )
+        variantJob = viewModelScope.launch {
+            repository.observeMessageVariants(messageId).collect { variants ->
+                if (_state.value.variantMessageId == messageId) {
+                    _state.value = _state.value.copy(messageVariants = variants)
+                }
+            }
+        }
+    }
+
+    fun dismissMessageVariants() {
+        variantJob?.cancel()
+        _state.value = _state.value.copy(
+            variantMessageId = null,
+            messageVariants = emptyList(),
+        )
+    }
+
+    fun selectMessageVariant(variantId: Long) {
+        val character = _state.value.selected ?: return
+        val messageId = _state.value.variantMessageId ?: return
+        viewModelScope.launch {
+            runCatching {
+                repository.selectMessageVariant(character.id, messageId, variantId)
+            }.onSuccess {
+                _state.value = _state.value.copy(status = "已切换回复版本")
+            }.onFailure {
+                _state.value = _state.value.copy(status = it.message ?: "切换回复版本失败")
             }
         }
     }
@@ -355,6 +673,85 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 .onFailure {
                     _state.value = _state.value.copy(memoryBusy = false, status = it.message ?: "更新失败")
                 }
+        }
+    }
+
+    fun toggleStructuredMemoryIgnored(itemId: Long) {
+        val current = _state.value.ignoredMemoryIds
+        _state.value = _state.value.copy(
+            ignoredMemoryIds = if (itemId in current) {
+                current - itemId
+            } else {
+                current + itemId
+            },
+            status = if (itemId in current) {
+                "已恢复这条记忆参与下一轮"
+            } else {
+                "这条记忆只会忽略下一轮，不会删除"
+            },
+        )
+    }
+
+    fun editStructuredMemory(itemId: Long, content: String) {
+        val character = _state.value.selected ?: return
+        if (_state.value.memoryBusy) return
+        _state.value = _state.value.copy(memoryBusy = true)
+        viewModelScope.launch {
+            runCatching {
+                repository.editStructuredMemory(character.id, itemId, content)
+            }.onSuccess {
+                _state.value = _state.value.copy(
+                    memoryBusy = false,
+                    status = "记忆已纠正",
+                )
+            }.onFailure {
+                _state.value = _state.value.copy(
+                    memoryBusy = false,
+                    status = it.message ?: "记忆纠正失败",
+                )
+            }
+        }
+    }
+
+    fun setStructuredMemoryPinned(itemId: Long, pinned: Boolean) {
+        val character = _state.value.selected ?: return
+        if (_state.value.memoryBusy) return
+        _state.value = _state.value.copy(memoryBusy = true)
+        viewModelScope.launch {
+            runCatching {
+                repository.setStructuredMemoryPinned(character.id, itemId, pinned)
+            }.onSuccess {
+                _state.value = _state.value.copy(
+                    memoryBusy = false,
+                    status = if (pinned) "记忆已钉住" else "已取消钉住",
+                )
+            }.onFailure {
+                _state.value = _state.value.copy(
+                    memoryBusy = false,
+                    status = it.message ?: "钉住状态更新失败",
+                )
+            }
+        }
+    }
+
+    fun markStructuredMemoryOutdated(itemId: Long) {
+        val character = _state.value.selected ?: return
+        if (_state.value.memoryBusy) return
+        _state.value = _state.value.copy(memoryBusy = true)
+        viewModelScope.launch {
+            runCatching {
+                repository.markStructuredMemoryOutdated(character.id, itemId)
+            }.onSuccess {
+                _state.value = _state.value.copy(
+                    memoryBusy = false,
+                    status = "记忆已标为过时",
+                )
+            }.onFailure {
+                _state.value = _state.value.copy(
+                    memoryBusy = false,
+                    status = it.message ?: "标记失败",
+                )
+            }
         }
     }
 

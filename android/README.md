@@ -1,13 +1,13 @@
 # 拾语 Android
 
-当前源码版本：`0.19.2 / versionCode 61`，Room schema 17，提供两个手机安装版本：
+当前源码版本：`0.20.0 / versionCode 62`，Room schema 20，提供两个手机安装版本：
 
 - `com.shiyu.chat`：完整版，内置本地语音识别、角色朗读、MNN 和 Local Dream。
 - `com.shiyu.chat.cloud`：云端精简版，移除 MNN、QNN、Local Dream、ASR 和 TTS。
 
 另有仅供电脑测试的 `com.shiyu.chat.emulator` x86_64 云端构建，不随 Release 发布。
 
-技术栈：Kotlin、Jetpack Compose、Room schema 17、WorkManager、OkHttp、
+技术栈：Kotlin、Jetpack Compose、Room schema 20、WorkManager、OkHttp、
 Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 
 ## 已实现
@@ -31,6 +31,14 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 - 角色管理页使用独立缩略图缓存，限制并发图片解码并减少列表绘制开销。
 - API Key 使用 Android Keystore；聊天、记忆、图片和状态保存在本机。
 - 聊天页使用固定全屏角色背景、默认仅显示最新角色回复，并提供独立历史开关；键盘弹出时消息和输入栏上移。输入栏包含“（）”动作快捷插入，并可从菜单回退到任意一条用户发言之前。
+- 首页和聊天历史按消息 ID 分页加载，首屏只读取最近 80 条；上滑加载每页 60 条，发送模型请求只使用最近完整轮次和历史摘要。
+- 设置中的“数据与安全”支持完整 ZIP 备份、SHA-256 校验、恢复前回滚副本和脱敏诊断；备份默认排除 API Key、模型权重和临时缓存。
+- 结构化记忆支持查看逐字证据、角色自述/用户资料/剧情事件区分、纠正、钉住、标为过时、本轮忽略和删除。
+- 角色回复支持保留式重答和版本切换；当前版本才会进入后续聊天上下文和记忆提取。
+- 角色对话支持从任意消息保存分支检查点；切换分支会恢复该时间点的聊天、共同经历、事件、场景和记忆。
+- 菜单提供只读 Prompt Inspector，显示角色卡、世界书、记忆、事件、历史和输出分区估算，以及记忆候选、预算和本轮忽略情况。
+- 世界书支持 AND/OR/NOT 关键词、优先级、Inclusion Group、Sticky/Cooldown，并在角色编辑页提供一句话命中测试。
+- 设置支持用户 Persona，角色卡编辑器支持世界书测试；固定宋知意和裴既明训练 Prompt 保持不变。
 - Local Dream 保留模型生成的方形原图；用户先选择 `9:16` 聊天背景，再从该背景
   中选择 `1:1` 头像。相册导入使用相同流程，不再自动执行中间裁切。
 - Dream 默认优先使用 `1024.patch`、50 步、DPM++ 2M SDE Karras；设置页可切换 512/768/1024、5 种调度器与 Karras。
@@ -104,7 +112,7 @@ ARM64 真机验证。
 ## 当前验证
 
 - 普通角色默认关闭持久心情和关系数值注入；用户边界、本轮即时情绪和长期记忆仍保留。
-- `0.19.2` 源码通过完整版、云端版和模拟器版各 107 项 JVM 测试，以及三个版本 Debug Lint 和 APK 构建。
+- `0.20.0` 源码通过完整版、云端版和模拟器版 JVM 测试，以及三个版本 Debug Lint 和 APK 构建。
 - 完整版与云端版均执行覆盖安装验证，不清理已有用户数据。
 - 覆盖安装后两个包均确认只保留上述 8 个默认角色，头像与背景路径有效。
 - 预编译 APK 仅作为 GitHub Release 附件分发，不提交到 Git：

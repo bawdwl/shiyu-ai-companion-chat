@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-11-12 — Android `0.20.0`
+
+- Added verified user-data ZIP backup and restore. Archives contain the database,
+  character artwork and non-sensitive settings, while excluding API keys,
+  encrypted-secret files, local model weights and caches.
+- Added checksum, manifest, database integrity and schema validation. Restore is
+  applied only after the user reloads the app; the previous database and artwork
+  are kept as a rollback copy and invalid imports leave current data untouched.
+- Added redacted diagnostic export and a dedicated data-and-security settings page.
+- Added 80-message initial history loading with 60-message ID pagination. The
+  model request path now uses a bounded recent complete-turn window instead of
+  loading the full conversation, and background memory/local summary queries are
+  independently bounded.
+- Added evidence display and controls for structured memories: correct, pin,
+  mark outdated, ignore for the next turn and delete. Origin labels distinguish
+  user facts, character self-report and current story events.
+- Added retained reply variants. Regeneration keeps the old answer, lets the user
+  switch versions, and only the active version participates in later history and
+  memory extraction.
+- Added branch checkpoints from arbitrary messages. Character cards and worldbook
+  stay shared; chat, shared events, scene and branch-specific memories are restored
+  together.
+- Added read-only Prompt Inspector estimates and worldbook AND/OR/NOT,
+  inclusion-group, sticky/cooldown and one-line hit testing.
+- Added user Persona support. Fixed training prompts for Song Zhiyi and Pei Jiming
+  remain unchanged.
+
 ## 2026-11-12 — Android `0.19.2`
 
 - Restored multiline auto-growth for the home and chat composer. Empty drafts

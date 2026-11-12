@@ -52,6 +52,38 @@ data class MessageEntity(
 )
 
 @Entity(
+    tableName = "message_variants",
+    indices = [
+        Index("messageId"),
+        Index(value = ["messageId", "isCurrent"]),
+    ],
+)
+data class MessageVariantEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val messageId: Long,
+    val content: String,
+    val displayJson: String? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(defaultValue = "0") val isCurrent: Boolean = false,
+)
+
+@Entity(
+    tableName = "conversation_branches",
+    indices = [
+        Index("characterId"),
+        Index(value = ["characterId", "sourceMessageId"]),
+    ],
+)
+data class ConversationBranchEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val characterId: String,
+    val sourceMessageId: Long,
+    val title: String,
+    val snapshotJson: String,
+    val createdAt: Long = System.currentTimeMillis(),
+)
+
+@Entity(
     tableName = "memories",
     indices = [Index("characterId")],
 )
@@ -94,6 +126,7 @@ data class StructuredMemoryEntity(
     val semanticVerified: Boolean = false,
     @ColumnInfo(defaultValue = "0.5") val importance: Double = 0.5,
     @ColumnInfo(defaultValue = "0.55") val confidence: Double = 0.55,
+    @ColumnInfo(defaultValue = "0") val pinned: Boolean = false,
     val state: String = "candidate",
     val supersedes: Long? = null,
     val contestedWith: Long? = null,
