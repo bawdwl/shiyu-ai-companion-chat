@@ -415,6 +415,9 @@ fun ShiyuApp(repository: ChatRepository) {
                     onCreateCheckpoint = vm::createCurrentCheckpoint,
                     onSwitchBranch = vm::switchBranch,
                     onDeleteBranch = vm::deleteBranch,
+                    onOpenSearch = vm::openMessageSearch,
+                    onCloseSearch = vm::closeMessageSearch,
+                    onSearchQuery = vm::searchMessages,
                     onLoadOlderMessages = vm::loadOlderMessages,
                     onReset = vm::reset,
                     onDelete = {
@@ -531,6 +534,9 @@ fun ShiyuApp(repository: ChatRepository) {
                                         onCreateCheckpoint = vm::createCurrentCheckpoint,
                                         onSwitchBranch = vm::switchBranch,
                                         onDeleteBranch = vm::deleteBranch,
+                                        onOpenSearch = vm::openMessageSearch,
+                                        onCloseSearch = vm::closeMessageSearch,
+                                        onSearchQuery = vm::searchMessages,
                                         onLoadOlderMessages = vm::loadOlderMessages,
                                         onReset = vm::reset,
                                         onDelete = vm::deleteCharacter,
@@ -1967,6 +1973,9 @@ private fun ChatScreen(
     onCreateCheckpoint: () -> Unit,
     onSwitchBranch: (Long) -> Unit,
     onDeleteBranch: (Long) -> Unit,
+    onOpenSearch: () -> Unit,
+    onCloseSearch: () -> Unit,
+    onSearchQuery: (String) -> Unit,
     onLoadOlderMessages: () -> Unit,
     onReset: () -> Unit,
     onDelete: () -> Unit,
@@ -2303,6 +2312,16 @@ private fun ChatScreen(
                             onClick = {
                                 menu = false
                                 onBranches()
+                            },
+                        )
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("搜索当前对话") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Search, contentDescription = null)
+                            },
+                            onClick = {
+                                menu = false
+                                onOpenSearch()
                             },
                         )
                         androidx.compose.material3.DropdownMenuItem(
@@ -2710,6 +2729,15 @@ private fun ChatScreen(
             onCreateCheckpoint = onCreateCheckpoint,
             onSelect = onSwitchBranch,
             onDelete = onDeleteBranch,
+        )
+    }
+    if (state.messageSearchVisible) {
+        MessageSearchSheet(
+            query = state.messageSearchQuery,
+            results = state.messageSearchResults,
+            busy = state.messageSearchBusy,
+            onQueryChange = onSearchQuery,
+            onDismiss = onCloseSearch,
         )
     }
     if (showVoicePicker) {
@@ -3186,6 +3214,76 @@ private fun VoicePickerSheet(
                                     modifier = Modifier.size(18.dp),
                                 )
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageSearchSheet(
+    query: String,
+    results: List<MessageEntity>,
+    busy: Boolean,
+    onQueryChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    FullScreenPage(
+        title = "搜索当前对话",
+        onBack = onDismiss,
+    ) { modifier ->
+        Column(modifier.padding(horizontal = 18.dp)) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                singleLine = true,
+                label = { Text("输入关键词") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            )
+            Text(
+                if (busy) "正在搜索…" else "找到 ${results.size} 条结果（最多显示 80 条）",
+                color = InkMuted,
+                fontSize = 10.sp,
+                modifier = Modifier.padding(top = 7.dp, bottom = 8.dp),
+            )
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 36.dp),
+            ) {
+                items(results, key = { "search-${it.id}" }) { message ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color.White,
+                        border = BorderStroke(1.dp, Hairline),
+                    ) {
+                        Column(Modifier.padding(13.dp)) {
+                            Text(
+                                if (message.role == "user") "用户" else "角色",
+                                color = Forest,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                naturalMessageText(message.content, message.displayJson),
+                                modifier = Modifier.padding(top = 4.dp),
+                                fontSize = 12.sp,
+                                lineHeight = 18.sp,
+                                maxLines = 4,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                "#${message.id} · " +
+                                    SimpleDateFormat("M月d日 HH:mm", Locale.CHINA)
+                                        .format(Date(message.createdAt)),
+                                color = InkMuted,
+                                fontSize = 9.sp,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
                         }
                     }
                 }

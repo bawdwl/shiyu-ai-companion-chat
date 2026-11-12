@@ -85,6 +85,18 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE characterId=:characterId ORDER BY id")
     suspend fun getAllForCharacter(characterId: String): List<MessageEntity>
 
+    @Query(
+        """SELECT * FROM messages
+           WHERE characterId=:characterId
+             AND content LIKE '%' || :query || '%'
+           ORDER BY id DESC LIMIT :limit"""
+    )
+    suspend fun search(
+        characterId: String,
+        query: String,
+        limit: Int = 80,
+    ): List<MessageEntity>
+
     @Query("SELECT * FROM messages WHERE id=:id AND characterId=:characterId")
     suspend fun get(characterId: String, id: Long): MessageEntity?
 

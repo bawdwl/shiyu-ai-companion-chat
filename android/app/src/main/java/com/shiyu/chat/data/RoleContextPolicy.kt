@@ -22,6 +22,7 @@ internal data class CharacterRoleContext(
     val boundaries: String = "",
     val fixedFacts: List<RoleFixedFact> = emptyList(),
     val examples: List<RoleExampleDialogue> = emptyList(),
+    val alternateGreetings: List<String> = emptyList(),
     val useExamples: Boolean = false,
     val interactionMode: String = "daily",
     val goals: List<String> = emptyList(),
@@ -38,6 +39,8 @@ internal object RoleContextPolicy {
         val root = JSONObject(raw)
         val fixedFacts = root.optJSONArray("fixed_facts").toFixedFacts()
         val examples = root.optJSONArray("example_dialogue").toExamples()
+        val alternateGreetings = root.optJSONArray("alternate_greetings")
+            .toStringList(limit = 6, maxLength = 600)
         val goals = root.optJSONArray("goals").toStringList(limit = 8, maxLength = 160)
         return CharacterRoleContext(
             version = root.optInt("version", 1).coerceAtLeast(1),
@@ -47,6 +50,7 @@ internal object RoleContextPolicy {
             boundaries = root.optString("boundaries").trim().take(800),
             fixedFacts = fixedFacts,
             examples = examples,
+            alternateGreetings = alternateGreetings,
             useExamples = root.optBoolean("use_examples", false),
             interactionMode = root.optString(
                 "interaction_mode",
@@ -90,6 +94,7 @@ internal object RoleContextPolicy {
                     }
                 },
             )
+            .put("alternate_greetings", JSONArray(context.alternateGreetings))
             .put("use_examples", context.useExamples)
             .put("interaction_mode", context.interactionMode)
             .put("goals", JSONArray(context.goals))
@@ -105,6 +110,9 @@ internal object RoleContextPolicy {
             root.optJSONArray("example_dialogue")
                 ?: root.optJSONArray("exampleDialogue")
             ).toExamples()
+        val alternateGreetings = root.optJSONArray("alternate_greetings")
+            ?.toStringList(limit = 6, maxLength = 600)
+            .orEmpty()
         val interactionMode = root.optString("interaction_mode")
             .ifBlank { root.optString("interactionMode", "daily") }
             .takeIf { it in setOf("daily", "immersive") }
@@ -116,6 +124,7 @@ internal object RoleContextPolicy {
             boundaries = root.optString("boundaries").trim().take(800),
             fixedFacts = fixedFacts,
             examples = examples,
+            alternateGreetings = alternateGreetings,
             useExamples = root.optBoolean(
                 "use_examples",
                 root.optBoolean("useExamples", false),

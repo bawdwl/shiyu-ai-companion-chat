@@ -76,6 +76,10 @@ data class ShiyuUiState(
     val branches: List<ConversationBranchEntity> = emptyList(),
     val branchSheetVisible: Boolean = false,
     val branchBusy: Boolean = false,
+    val messageSearchVisible: Boolean = false,
+    val messageSearchQuery: String = "",
+    val messageSearchResults: List<MessageEntity> = emptyList(),
+    val messageSearchBusy: Boolean = false,
 )
 
 class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
@@ -84,6 +88,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
     private var stopRequested = false
     private var observeJob: Job? = null
     private var variantJob: Job? = null
+    private var messageSearchJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -360,6 +365,52 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
         }
     }
 
+    fun openMessageSearch() {
+        if (_state.value.selected == null) return
+        _state.value = _state.value.copy(
+            messageSearchVisible = true,
+            messageSearchQuery = "",
+            messageSearchResults = emptyList(),
+        )
+    }
+
+    fun closeMessageSearch() {
+        messageSearchJob?.cancel()
+        _state.value = _state.value.copy(
+            messageSearchVisible = false,
+            messageSearchBusy = false,
+            messageSearchQuery = "",
+            messageSearchResults = emptyList(),
+        )
+    }
+
+    fun searchMessages(query: String) {
+        val character = _state.value.selected ?: return
+        val clean = query.trim()
+        messageSearchJob?.cancel()
+        _state.value = _state.value.copy(
+            messageSearchQuery = query.take(80),
+            messageSearchResults = if (clean.isEmpty()) emptyList() else _state.value.messageSearchResults,
+            messageSearchBusy = clean.isNotEmpty(),
+        )
+        if (clean.isEmpty()) return
+        messageSearchJob = viewModelScope.launch {
+            runCatching { repository.searchMessages(character.id, clean) }
+                .onSuccess { results ->
+                    _state.value = _state.value.copy(
+                        messageSearchResults = results,
+                        messageSearchBusy = false,
+                    )
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(
+                        messageSearchBusy = false,
+                        status = it.message ?: "搜索失败",
+                    )
+                }
+        }
+    }
+
     fun select(character: CharacterEntity, ensureOpening: Boolean = true) {
         observeJob?.cancel()
         variantJob?.cancel()
@@ -370,6 +421,8 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
             ignoredMemoryIds = emptySet(),
             messageVariants = emptyList(), variantMessageId = null,
             branches = emptyList(), branchSheetVisible = false, branchBusy = false,
+            messageSearchVisible = false, messageSearchQuery = "",
+            messageSearchResults = emptyList(), messageSearchBusy = false,
         )
         observeJob = viewModelScope.launch {
             if (ensureOpening) repository.ensureOpening(character)
@@ -425,6 +478,8 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
             ignoredMemoryIds = emptySet(),
             messageVariants = emptyList(), variantMessageId = null,
             branches = emptyList(), branchSheetVisible = false, branchBusy = false,
+            messageSearchVisible = false, messageSearchQuery = "",
+            messageSearchResults = emptyList(), messageSearchBusy = false,
         )
     }
 

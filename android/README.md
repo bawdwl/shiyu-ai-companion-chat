@@ -37,6 +37,7 @@ Android Keystore、sherpa-onnx、MNN LLM 和 Local Dream。
 - 角色回复支持保留式重答和版本切换；当前版本才会进入后续聊天上下文和记忆提取。
 - 角色对话支持从任意消息保存分支检查点；切换分支会恢复该时间点的聊天、共同经历、事件、场景和记忆。
 - 菜单提供只读 Prompt Inspector，显示角色卡、世界书、记忆、事件、历史和输出分区估算，以及记忆候选、预算和本轮忽略情况。
+- 对话菜单支持当前角色消息搜索；`roleContextJson.alternate_greetings` 可提供备用开场白。
 - 世界书支持 AND/OR/NOT 关键词、优先级、Inclusion Group、Sticky/Cooldown，并在角色编辑页提供一句话命中测试。
 - 设置支持用户 Persona，角色卡编辑器支持世界书测试；固定宋知意和裴既明训练 Prompt 保持不变。
 - Local Dream 保留模型生成的方形原图；用户先选择 `9:16` 聊天背景，再从该背景

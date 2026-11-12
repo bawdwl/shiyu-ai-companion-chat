@@ -634,6 +634,12 @@ class ChatRepository(
     suspend fun messages(characterId: String): List<MessageEntity> =
         database.messages().getAllForCharacter(characterId)
 
+    suspend fun searchMessages(characterId: String, query: String): List<MessageEntity> {
+        val clean = query.trim()
+        if (clean.isEmpty()) return emptyList()
+        return database.messages().search(characterId, clean, limit = 80)
+    }
+
     fun observeMessages(characterId: String): Flow<List<MessageEntity>> =
         database.messages().observeForCharacter(characterId)
 
@@ -3718,6 +3724,13 @@ class ChatRepository(
 }
 
 internal fun openingForCharacter(character: CharacterEntity): String {
+    val context = runCatching {
+        RoleContextPolicy.parse(character.roleContextJson)
+    }.getOrDefault(CharacterRoleContext())
+    context.alternateGreetings.firstOrNull()
+        ?.trim()
+        ?.takeIf(String::isNotBlank)
+        ?.let { return it }
     character.greeting.trim().takeIf(String::isNotBlank)?.let { return it }
     val hint = character.description.trim()
         .ifBlank { character.tag.trim() }
