@@ -91,6 +91,13 @@ class ExperiencePoliciesTest {
         assertTrue(expanded.query.contains("软件园面试"))
         assertTrue(expanded.query.contains("我记住了"))
         assertEquals(listOf(1L, 2L), expanded.expandedSourceIds)
+
+        val naturalRecall = MemoryNeedPolicy.decide(
+            history,
+            "你还记得我后来去做什么了吗？",
+        )
+        assertTrue(naturalRecall.retrieve)
+        assertTrue(naturalRecall.query.contains("软件园面试"))
     }
 
     @Test
@@ -200,6 +207,14 @@ class ExperiencePoliciesTest {
         )
         assertTrue(MemoryEventPolicy.selectRelevant(listOf(event), "面试怎么样了").isNotEmpty())
         assertTrue(MemoryEventPolicy.selectRelevant(listOf(event), "今天天气真好").isEmpty())
+        assertEquals(
+            listOf(1L),
+            MemoryEventPolicy.selectRelevant(
+                events = listOf(event),
+                query = "今天工作有点累",
+                includeRecentOpenFallback = true,
+            ).map { it.id },
+        )
         val completed = event.copy(
             id = 3,
             title = "面试结果",

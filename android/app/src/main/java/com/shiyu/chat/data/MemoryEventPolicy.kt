@@ -104,6 +104,7 @@ internal object MemoryEventPolicy {
         events: List<MemoryEventEntity>,
         query: String,
         limit: Int = 3,
+        includeRecentOpenFallback: Boolean = false,
     ): List<MemoryEventEntity> {
         if (limit <= 0 || events.isEmpty()) return emptyList()
         val normalized = normalizedMemoryText(query)
@@ -152,7 +153,8 @@ internal object MemoryEventPolicy {
             .take(limit)
             .map { it.first }
             .toList()
-        if (ranked.isNotEmpty() || !continuation) return ranked
+        if (ranked.isNotEmpty()) return ranked
+        if (!continuation && !includeRecentOpenFallback) return emptyList()
         return events.asSequence()
             .filter { it.status == "open" }
             .sortedWith(

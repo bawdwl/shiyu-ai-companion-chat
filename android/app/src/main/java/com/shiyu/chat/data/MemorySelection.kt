@@ -1,6 +1,14 @@
 package com.shiyu.chat.data
 
+import kotlin.math.exp
 import kotlin.math.max
+
+internal enum class MemorySelectionReason(val traceLabel: String) {
+    CORE_PROFILE("常驻用户资料"),
+    PINNED("人工钉住"),
+    RELEVANT("话题相关"),
+    RECENT("近期事实"),
+}
 
 internal data class UnifiedMemorySelection(
     val structuredMemories: List<StructuredMemoryEntity>,
@@ -8,14 +16,15 @@ internal data class UnifiedMemorySelection(
     val charactersUsed: Int,
     val historicalQuery: Boolean,
     val retrievalMode: String,
+    val structuredReasons: Map<Long, MemorySelectionReason> = emptyMap(),
 )
 
 /**
- * Optional hook for an on-device embedding model. Android currently ships no
- * BGE/ONNX weights; callers therefore pass null and retrieval deterministically
- * falls back to FTS4 plus lexical/phrase ranking.
+ * Optional hook for external semantic providers. The default Android build
+ * ships no weights and deterministically falls back to FTS4 plus lexical
+ * ranking; the optional Qwen index supplies a separate direct score map.
  */
-internal fun interface MemorySemanticProvider {
+fun interface MemorySemanticProvider {
     /** Return one value in [0,1] for every input text, in the same order. */
     fun score(query: String, texts: List<String>): List<Double>
 }
@@ -52,7 +61,31 @@ internal fun suppressCoveredExcerpts(
 }
 
 private val structuredHistoryCues =
-    listOf("原来", "原本", "一开始", "最初", "之前", "以前", "旧", "历史")
+    listOf(
+        "记得",
+        "想起来",
+        "原来",
+        "原本",
+        "一开始",
+        "最初",
+        "之前",
+        "以前",
+        "过去",
+        "旧",
+        "历史",
+        "上次",
+        "那次",
+        "当时",
+        "第一次",
+        "后来",
+        "那阵子",
+        "前几天",
+        "前阵子",
+        "共同经历",
+        "约好",
+        "答应",
+        "曾经",
+    )
 
 internal fun isHistoricalMemoryQuery(query: String): Boolean =
     structuredHistoryCues.any { it in query }
@@ -107,7 +140,9 @@ internal fun selectStructuredMemories(
     limit: Int,
     ftsScores: Map<Long, Double> = emptyMap(),
     semanticProvider: MemorySemanticProvider? = null,
-    includeCoreProfile: Boolean = false,
+    semanticScores: Map<Long, Double> = emptyMap(),
+    includeCoreProfile: Boolean = true,
+    now: Long = System.currentTimeMillis(),
 ): List<StructuredMemoryEntity> = rankStructuredMemories(
     memories = memories,
     query = query,
@@ -115,7 +150,9 @@ internal fun selectStructuredMemories(
     includeSuperseded = isHistoricalMemoryQuery(query),
     ftsScores = ftsScores,
     semanticProvider = semanticProvider,
+    semanticScores = semanticScores,
     includeCoreProfile = includeCoreProfile,
+    now = now,
 ).map { it.memory }
 
 /**
@@ -133,6 +170,8 @@ internal fun selectUnifiedMemoryContext(
     maxCharacters: Int = 1_600,
     ftsScores: Map<Long, Double> = emptyMap(),
     semanticProvider: MemorySemanticProvider? = null,
+    semanticScores: Map<Long, Double> = emptyMap(),
+    now: Long = System.currentTimeMillis(),
 ): UnifiedMemorySelection {
     require(maxFacts >= 0 && maxExcerpts >= 0 && maxCharacters >= 0)
     val historical = isHistoricalMemoryQuery(query)
@@ -144,18 +183,74 @@ internal fun selectUnifiedMemoryContext(
     val rankedFacts = rankStructuredMemories(
         memories = scopedFacts,
         query = query,
-        limit = max(1, maxFacts * 2),
+        limit = max(1, maxFacts * 3),
         includeSuperseded = historical,
         ftsScores = ftsScores,
         semanticProvider = semanticProvider,
+        semanticScores = semanticScores,
         includeCoreProfile = false,
+        includeRecentFallback = false,
+        now = now,
     )
     val rankedExcerpts = rankExcerpts(
         excerpts = scopedExcerpts,
         query = query,
         limit = max(1, maxExcerpts * 2),
         semanticProvider = semanticProvider,
+        includeRecentFallback = true,
+        now = now,
     )
+
+    val activeFacts = scopedFacts.filter { it.state == "active" }
+    val coreProfile = activeFacts
+        .filter(::isCoreProfileMemory)
+        .sortedWith(
+            compareByDescending<StructuredMemoryEntity> { it.importance }
+                .thenByDescending { it.observedOrder }
+                .thenByDescending { it.id },
+        )
+    val pinnedFacts = activeFacts
+        .filter { it.pinned }
+        .sortedWith(
+            compareByDescending<StructuredMemoryEntity> { it.observedOrder }
+                .thenByDescending { it.id },
+        )
+    val recentFacts = activeFacts.sortedWith(
+        compareByDescending<StructuredMemoryEntity> { it.observedOrder }
+            .thenByDescending { it.id },
+    )
+
+    val selectedFacts = mutableListOf<StructuredMemoryEntity>()
+    val selectedReasons = linkedMapOf<Long, MemorySelectionReason>()
+    fun addFact(
+        memory: StructuredMemoryEntity,
+        reason: MemorySelectionReason,
+    ) {
+        if (selectedFacts.size >= maxFacts || memory.id in selectedReasons) return
+        selectedFacts += memory
+        selectedReasons[memory.id] = reason
+    }
+
+    pinnedFacts.take(2).forEach {
+        addFact(it, MemorySelectionReason.PINNED)
+    }
+    coreProfile.take(minOf(2, maxFacts)).forEach {
+        addFact(it, MemorySelectionReason.CORE_PROFILE)
+    }
+
+    // Leave room for recent continuity instead of allowing a large relevant
+    // result set to consume every fact slot.
+    val recentReserve = minOf(2, (maxFacts - selectedFacts.size).coerceAtLeast(0))
+    val relevantSlots = (maxFacts - selectedFacts.size - recentReserve).coerceAtLeast(0)
+    rankedFacts.take(relevantSlots).forEach {
+        addFact(it.memory, MemorySelectionReason.RELEVANT)
+    }
+    recentFacts.take(3).forEach {
+        addFact(it, MemorySelectionReason.RECENT)
+    }
+    rankedFacts.forEach {
+        addFact(it.memory, MemorySelectionReason.RELEVANT)
+    }
 
     data class Candidate(
         val type: String,
@@ -167,30 +262,30 @@ internal fun selectUnifiedMemoryContext(
     )
 
     val candidates = buildList {
-        rankedFacts.forEach {
+        selectedFacts.forEachIndexed { index, memory ->
             add(
                 Candidate(
                     type = "fact",
-                    fact = it.memory,
-                    text = it.memory.content,
-                    // Explicit structured facts win ties against raw excerpts.
-                    score = it.score + 0.12,
-                    order = it.memory.observedOrder,
+                    fact = memory,
+                    text = memory.content,
+                    // Standing and relevant facts are ranked before raw excerpts.
+                    score = 2.0 - index * 0.01,
+                    order = memory.observedOrder,
                 ),
             )
         }
-        rankedExcerpts.forEach {
+        rankedExcerpts.forEachIndexed { index, ranked ->
             val promptText = compactMemoryExcerptForPrompt(
-                content = it.memory.content,
+                content = ranked.memory.content,
                 query = query,
             )
             add(
                 Candidate(
                     type = "excerpt",
-                    excerpt = it.memory,
+                    excerpt = ranked.memory,
                     text = promptText,
-                    score = it.score,
-                    order = it.memory.id,
+                    score = 1.0 - index * 0.01,
+                    order = ranked.memory.id,
                 ),
             )
         }
@@ -199,32 +294,35 @@ internal fun selectUnifiedMemoryContext(
             .thenByDescending { it.order },
     )
 
-    val selectedFacts = mutableListOf<StructuredMemoryEntity>()
-    val selectedExcerpts = mutableListOf<MemoryEntity>()
+    val budgetFacts = mutableListOf<StructuredMemoryEntity>()
+    val budgetExcerpts = mutableListOf<MemoryEntity>()
     val seen = mutableSetOf<String>()
     var used = 0
     for (candidate in candidates) {
-        if (candidate.type == "fact" && selectedFacts.size >= maxFacts) continue
-        if (candidate.type == "excerpt" && selectedExcerpts.size >= maxExcerpts) continue
+        if (candidate.type == "fact" && budgetFacts.size >= maxFacts) continue
+        if (candidate.type == "excerpt" && budgetExcerpts.size >= maxExcerpts) continue
         if (!seen.add(normalizedMemoryText(candidate.text))) continue
         val estimatedCost = candidate.text.length + 40
         if (used + estimatedCost > maxCharacters) continue
         used += estimatedCost
         if (candidate.fact != null) {
-            selectedFacts += candidate.fact
+            budgetFacts += candidate.fact
         } else {
-            selectedExcerpts += candidate.excerpt!!
+            budgetExcerpts += candidate.excerpt!!
         }
     }
     return UnifiedMemorySelection(
-        structuredMemories = selectedFacts,
-        excerpts = selectedExcerpts,
+        structuredMemories = budgetFacts,
+        excerpts = budgetExcerpts,
         charactersUsed = used,
         historicalQuery = historical,
-        retrievalMode = if (semanticProvider == null) {
+        retrievalMode = if (semanticProvider == null && semanticScores.isEmpty()) {
             "fts4_lexical"
         } else {
-            "fts4_lexical_semantic"
+            "fts4_lexical_qwen_semantic"
+        },
+        structuredReasons = selectedReasons.filterKeys { id ->
+            budgetFacts.any { it.id == id }
         },
     )
 }
@@ -246,7 +344,10 @@ private fun rankStructuredMemories(
     includeSuperseded: Boolean,
     ftsScores: Map<Long, Double>,
     semanticProvider: MemorySemanticProvider?,
+    semanticScores: Map<Long, Double> = emptyMap(),
     includeCoreProfile: Boolean = false,
+    includeRecentFallback: Boolean = false,
+    now: Long = System.currentTimeMillis(),
 ): List<RankedFact> {
     if (limit <= 0) return emptyList()
     val allowed = if (includeSuperseded) {
@@ -275,37 +376,52 @@ private fun rankStructuredMemories(
             normalizedQuery in normalizedMemoryText(body)
         ) 1.0 else 0.0
         val fts = (ftsScores[memory.id] ?: 0.0).coerceIn(0.0, 1.0)
-        val semantic = semanticValues.getOrElse(index) { 0.0 }.coerceIn(0.0, 1.0)
-        if (fts <= 0.0 && lexical <= 0.0 && phrase <= 0.0 && semantic < 0.30) {
+        val semantic = (
+            semanticScores[memory.id]
+                ?: semanticValues.getOrElse(index) { 0.0 }
+            ).coerceIn(0.0, 1.0)
+        if (
+            fts <= 0.0 &&
+            lexical <= 0.0 &&
+            phrase <= 0.0 &&
+            semantic < 0.30 &&
+            !memory.pinned
+        ) {
             return@forEachIndexed
         }
         val recency = memory.observedOrder.toDouble() / max(1L, maxOrder)
         val importance = memory.importance.coerceIn(0.0, 1.0)
         val confidence = memory.confidence.coerceIn(0.0, 1.0)
+        val lifecycle = MemoryLifecyclePolicy.signals(memory, now)
         val sourceQuality =
             0.55 * confidence + 0.45 * structuredSourceTrust(memory.kind)
-        val score = if (semanticValues.isNotEmpty()) {
-            0.44 * semantic +
-                0.22 * fts +
-                0.14 * lexical +
+        val score = if (semanticValues.isNotEmpty() || semanticScores.isNotEmpty()) {
+            0.40 * semantic +
+                0.18 * fts +
+                0.12 * lexical +
                 0.06 * phrase +
-                0.07 * importance +
-                0.03 * sourceQuality +
-                0.04 * recency
+                0.08 * importance +
+                0.04 * sourceQuality +
+                0.06 * recency +
+                0.04 * lifecycle.freshness +
+                if (lifecycle.stalePlan) 0.04 else 0.0
         } else {
-            0.38 * fts +
-                0.30 * lexical +
+            0.34 * fts +
+                0.26 * lexical +
                 0.12 * phrase +
                 0.10 * importance +
                 0.04 * sourceQuality +
-                0.06 * recency
+                0.06 * recency +
+                0.04 * lifecycle.freshness +
+                if (lifecycle.stalePlan) 0.04 else 0.0
         }
         val stateBoost = when {
             memory.state == "active" -> 0.06
             includeSuperseded -> 0.04
             else -> 0.0
         }
-        val finalScore = score + stateBoost
+        val finalScore = score + stateBoost +
+            if (memory.pinned) 0.12 else 0.0
         if (finalScore > 0.0) {
             scored[memory.id] = RankedFact(memory, finalScore)
         }
@@ -313,12 +429,7 @@ private fun rankStructuredMemories(
 
     if (includeCoreProfile) {
         eligible.asSequence()
-            .filter {
-                it.state == "active" &&
-                    it.subject == "user" &&
-                    it.kind == "user_report" &&
-                    it.factType in setOf("fact", "preference")
-            }
+            .filter(::isCoreProfileMemory)
             .sortedWith(
                 compareByDescending<StructuredMemoryEntity> { it.importance }
                     .thenByDescending { it.observedOrder },
@@ -332,6 +443,22 @@ private fun rankStructuredMemories(
                         0.16 + 0.06 * memory.importance.coerceIn(0.0, 1.0) +
                             0.03 * recency,
                     )
+                }
+            }
+    }
+
+    if (includeRecentFallback && scored.size < limit) {
+        eligible.asSequence()
+            .filter { it.state == "active" }
+            .sortedWith(
+                compareByDescending<StructuredMemoryEntity> { it.pinned }
+                    .thenByDescending { it.importance }
+                    .thenByDescending { it.observedOrder },
+            )
+            .take((limit - scored.size).coerceAtLeast(0))
+            .forEach { memory ->
+                if (memory.id !in scored) {
+                    scored[memory.id] = RankedFact(memory, 0.14)
                 }
             }
     }
@@ -367,6 +494,8 @@ private fun rankExcerpts(
     query: String,
     limit: Int,
     semanticProvider: MemorySemanticProvider?,
+    includeRecentFallback: Boolean = false,
+    now: Long = System.currentTimeMillis(),
 ): List<RankedExcerpt> {
     if (limit <= 0 || excerpts.isEmpty()) return emptyList()
     val queryTerms = retrievalTerms(query.take(2_000))
@@ -377,7 +506,7 @@ private fun rankExcerpts(
         excerpts.map { it.content },
     )
     val maxOrder = excerpts.maxOfOrNull { it.id } ?: 1L
-    return excerpts.mapIndexedNotNull { index, memory ->
+    val ranked = excerpts.mapIndexedNotNull { index, memory ->
         val lexical = memoryTermSimilarity(queryTerms, retrievalTerms(memory.content))
         val phrase = if (
             normalizedQuery.isNotEmpty() &&
@@ -386,24 +515,40 @@ private fun rankExcerpts(
         val semantic = semanticValues.getOrElse(index) { 0.0 }.coerceIn(0.0, 1.0)
         if (lexical <= 0.0 && phrase <= 0.0 && semantic < 0.30) return@mapIndexedNotNull null
         val recency = memory.id.toDouble() / max(1L, maxOrder)
+        val ageDays = ((now - memory.createdAt).coerceAtLeast(0L) / 86_400_000.0)
+        val freshness = exp(-ageDays / 365.0).coerceIn(0.05, 1.0)
         val sourceQuality = if (memory.memoryType == "user_edited") 0.92 else 0.72
         val score = if (semanticValues.isNotEmpty()) {
             0.44 * semantic +
                 0.14 * lexical +
                 0.06 * phrase +
                 0.07 * sourceQuality +
-                0.12 * recency
+                0.12 * recency +
+                0.04 * freshness
         } else {
             0.62 * lexical +
                 0.16 * phrase +
                 0.07 * sourceQuality +
-                0.15 * recency
+                0.15 * recency +
+                0.04 * freshness
         }
         RankedExcerpt(memory, score)
     }.sortedWith(
         compareByDescending<RankedExcerpt> { it.score }
             .thenByDescending { it.memory.id },
-    ).take(limit)
+    ).toMutableList()
+    if (includeRecentFallback && ranked.size < limit) {
+        excerpts.asSequence()
+            .filter { it.id > 0 }
+            .sortedByDescending { it.id }
+            .take(limit - ranked.size)
+            .forEach { memory ->
+                if (ranked.none { it.memory.id == memory.id }) {
+                    ranked += RankedExcerpt(memory, 0.12)
+                }
+            }
+    }
+    return ranked.take(limit)
 }
 
 private fun safeSemanticValues(
@@ -420,6 +565,12 @@ private fun safeSemanticValues(
 
 private fun structuredSearchBody(memory: StructuredMemoryEntity): String =
     "${memory.subject} ${memory.factKey.orEmpty()} ${memory.value.orEmpty()} ${memory.content}"
+
+private fun isCoreProfileMemory(memory: StructuredMemoryEntity): Boolean =
+    memory.state == "active" &&
+        memory.subject == "user" &&
+        memory.kind == "user_report" &&
+        memory.factType in setOf("fact", "preference")
 
 private fun structuredSourceTrust(kind: String): Double = when (kind) {
     "user_report" -> 1.0
@@ -448,8 +599,23 @@ private fun retrievalTerms(text: String): Set<String> {
             terms += part
         }
     }
+    memoryTermAliases.forEach { (aliases, canonical) ->
+        if (aliases.any(text::contains)) terms += canonical
+    }
     return terms
 }
+
+private val memoryTermAliases = mapOf(
+    listOf("旅行", "旅游", "出游", "出去玩", "去玩") to "旅行",
+    listOf("面试", "应聘", "求职") to "面试",
+    listOf("搬家", "迁居", "搬走") to "搬家",
+    listOf("上班", "工作", "加班") to "工作",
+    listOf("不舒服", "生病", "发烧", "感冒") to "健康",
+    listOf("开心", "高兴", "快乐") to "愉快",
+    listOf("难过", "伤心", "低落") to "低落",
+    listOf("约定", "约好", "答应") to "约定",
+    listOf("喜欢", "偏好", "最爱") to "偏好",
+)
 
 private fun memoryTermSimilarity(query: Set<String>, body: Set<String>): Double {
     if (query.isEmpty() || body.isEmpty()) return 0.0

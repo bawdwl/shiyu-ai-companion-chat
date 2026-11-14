@@ -16,8 +16,8 @@ android {
         applicationId = "com.shiyu.chat"
         minSdk = 26
         targetSdk = 35
-        versionCode = 63
-        versionName = "0.20.1"
+        versionCode = 65
+        versionName = "0.21.0"
     }
 
     buildFeatures {
@@ -101,6 +101,9 @@ android {
             // The Dream backend is an executable packaged as a .so and must be
             // extracted to nativeLibraryDir so Android can execute it.
             useLegacyPackaging = true
+            // Full includes the same ONNX Runtime through sherpa. Cloud uses
+            // the shared JNI copy for optional semantic memory.
+            pickFirsts += "**/libonnxruntime.so"
         }
     }
 
@@ -140,6 +143,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation(files("libs/onnxruntime-android-1.28.0.jar"))
     testImplementation("junit:junit:4.13.2")
 }
 

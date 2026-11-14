@@ -11,6 +11,21 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
+internal object OpenCodeRequestPolicy {
+    fun fields(
+        maxTokens: Int,
+        stream: Boolean,
+    ): Map<String, Any> = buildMap {
+        put("model", OpenCodeClient.MODEL)
+        put("max_tokens", maxTokens)
+        put("stream", stream)
+        put("thinking", mapOf("type" to "disabled"))
+        if (stream) {
+            put("stream_options", mapOf("include_usage" to true))
+        }
+    }
+}
+
 /** OpenCode Go uses an OpenAI-compatible Chat Completions endpoint. */
 class OpenCodeClient {
     private val client = OkHttpClient.Builder()
@@ -42,13 +57,9 @@ class OpenCodeClient {
         isCancelled: () -> Boolean = { false },
         onDelta: (String) -> Unit,
     ): TokenUsage = withContext(Dispatchers.IO) {
-        val payload = JSONObject()
-            .put("model", MODEL)
-            .put("messages", messages)
-            .put("max_tokens", maxTokens)
-            .put("stream", true)
-            .put("thinking", JSONObject().put("type", "disabled"))
-            .put("stream_options", JSONObject().put("include_usage", true))
+        val payload = JSONObject(
+            OpenCodeRequestPolicy.fields(maxTokens, stream = true),
+        ).put("messages", messages)
         val request = requestBuilder(apiKey, sessionId, stream = true)
             .post(payload.toString().toRequestBody(JSON))
             .build()
@@ -93,12 +104,11 @@ class OpenCodeClient {
         sessionId: String,
         json: Boolean = false,
     ): Pair<String, TokenUsage> = withContext(Dispatchers.IO) {
-        val payload = JSONObject()
-            .put("model", MODEL)
-            .put("messages", messages)
-            .put("max_tokens", maxTokens)
-            .put("thinking", JSONObject().put("type", "disabled"))
-        if (json) payload.put("response_format", JSONObject().put("type", "json_object"))
+        // OpenCode Go's atlas gateway may reject response_format=json_object.
+        // JSON output is enforced by the prompt for every OpenCode request.
+        val payload = JSONObject(
+            OpenCodeRequestPolicy.fields(maxTokens, stream = false),
+        ).put("messages", messages)
         val request = requestBuilder(apiKey, sessionId, stream = false)
             .post(payload.toString().toRequestBody(JSON))
             .build()
@@ -128,7 +138,7 @@ class OpenCodeClient {
     companion object {
         const val MODEL = "deepseek-v4.1-flash"
         const val BASE_URL = "https://opencode.ai/zen/go/v1"
-        const val USER_AGENT = "shiyu-chat/0.12.0"
+        const val USER_AGENT = "shiyu-chat/0.21.0"
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }
 }

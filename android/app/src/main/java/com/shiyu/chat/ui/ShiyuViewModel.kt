@@ -60,6 +60,14 @@ data class ShiyuUiState(
     val localModelBytes: Long = 0L,
     val localModelName: String = "Qwen3-1.7B MNN",
     val localModelBusy: Boolean = false,
+    val embeddingModelReady: Boolean = false,
+    val embeddingModelBytes: Long = 0L,
+    val embeddingModelName: String = "Qwen3-Embedding 0.6B",
+    val embeddingModelBusy: Boolean = false,
+    val embeddingSelfTestBusy: Boolean = false,
+    val embeddingSelfTestResult: String = "",
+    val embeddingIndexedCount: Int = 0,
+    val embeddingModelDiagnostics: String = "",
     val modelDownloadBusy: Boolean = false,
     val modelDownloadLabel: String? = null,
     val modelDownloadProgress: Float = 0f,
@@ -116,6 +124,11 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 localModelReady = repository.localModelReady(),
                 localModelBytes = repository.localModelBytes(),
                 localModelName = repository.localModelName(),
+                embeddingModelReady = repository.embeddingModelReady(),
+                embeddingModelBytes = repository.embeddingModelBytes(),
+                embeddingModelName = repository.embeddingModelName(),
+                embeddingIndexedCount = repository.embeddingIndexedCount(),
+                embeddingModelDiagnostics = repository.embeddingModelDiagnostics(),
                 deviceCompatibility = repository.deviceCompatibility(),
                 status = restoreResult?.message,
             )
@@ -1147,6 +1160,146 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                         localModelBytes = repository.localModelBytes(),
                         localModelName = repository.localModelName(),
                         status = error.message ?: "本地 MNN 模型删除失败",
+                    )
+                }
+        }
+    }
+
+    fun importEmbeddingModel(uri: Uri) {
+        if (_state.value.embeddingModelBusy || _state.value.modelDownloadBusy) return
+        _state.value = _state.value.copy(
+            embeddingModelBusy = true,
+            embeddingSelfTestResult = "",
+            status = "正在导入 Qwen3-Embedding 模型…",
+        )
+        viewModelScope.launch {
+            runCatching { repository.importQwenEmbeddingModel(uri) }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        embeddingModelBusy = false,
+                        embeddingModelReady = repository.embeddingModelReady(),
+                        embeddingModelBytes = repository.embeddingModelBytes(),
+                        embeddingModelName = repository.embeddingModelName(),
+                        embeddingIndexedCount = repository.embeddingIndexedCount(),
+                        embeddingModelDiagnostics = repository.embeddingModelDiagnostics(),
+                        status = "Qwen3-Embedding 模型已导入，正在后台建立语义索引",
+                    )
+                }
+                .onFailure { error ->
+                    _state.value = _state.value.copy(
+                        embeddingModelBusy = false,
+                        embeddingModelReady = repository.embeddingModelReady(),
+                        embeddingModelBytes = repository.embeddingModelBytes(),
+                        embeddingModelName = repository.embeddingModelName(),
+                        status = error.message ?: "Qwen3-Embedding 模型导入失败",
+                    )
+                }
+        }
+    }
+
+    fun deleteEmbeddingModel() {
+        if (_state.value.embeddingModelBusy || _state.value.modelDownloadBusy) return
+        _state.value = _state.value.copy(
+            embeddingModelBusy = true,
+            embeddingSelfTestResult = "",
+            status = "正在删除 Qwen3-Embedding 模型和本地向量索引…",
+        )
+        viewModelScope.launch {
+            runCatching { repository.deleteQwenEmbeddingModel() }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        embeddingModelBusy = false,
+                        embeddingModelReady = false,
+                        embeddingModelBytes = 0L,
+                        embeddingIndexedCount = 0,
+                        status = "Qwen3-Embedding 模型已删除，长期记忆回退到 FTS4",
+                    )
+                }
+                .onFailure { error ->
+                    _state.value = _state.value.copy(
+                        embeddingModelBusy = false,
+                        embeddingModelReady = repository.embeddingModelReady(),
+                        embeddingModelBytes = repository.embeddingModelBytes(),
+                        status = error.message ?: "Qwen3-Embedding 模型删除失败",
+                    )
+                }
+        }
+    }
+
+    fun testEmbeddingModel() {
+        if (state.value.embeddingSelfTestBusy || state.value.embeddingModelBusy) return
+        if (!state.value.embeddingModelReady) {
+            _state.value = _state.value.copy(status = "请先安装 Qwen embedding 模型")
+            return
+        }
+        _state.value = _state.value.copy(
+            embeddingSelfTestBusy = true,
+            embeddingSelfTestResult = "",
+            status = "正在运行 Qwen embedding 自检…",
+        )
+        viewModelScope.launch {
+            runCatching { repository.testQwenEmbedding() }
+                .onSuccess { result ->
+                    _state.value = _state.value.copy(
+                        embeddingSelfTestBusy = false,
+                        embeddingSelfTestResult = "通过：$result",
+                        status = "Qwen embedding 自检通过：$result",
+                    )
+                }
+                .onFailure { error ->
+                    _state.value = _state.value.copy(
+                        embeddingSelfTestBusy = false,
+                        embeddingSelfTestResult = "失败：${error.message ?: "未知错误"}",
+                        status = error.message ?: "Qwen embedding 自检失败",
+                    )
+                }
+        }
+    }
+
+    fun downloadEmbeddingModel() {
+        if (
+            _state.value.embeddingModelBusy ||
+            _state.value.modelDownloadBusy ||
+            _state.value.localModelBusy ||
+            _state.value.avatarBusy
+        ) return
+        _state.value = _state.value.copy(
+            modelDownloadBusy = true,
+            modelDownloadLabel = "准备下载 Qwen3-Embedding 0.6B ONNX INT8",
+            modelDownloadProgress = 0f,
+            status = null,
+        )
+        viewModelScope.launch {
+            runCatching {
+                repository.downloadAndInstallQwenEmbedding { label, progress ->
+                    _state.value = _state.value.copy(
+                        modelDownloadLabel = label,
+                        modelDownloadProgress = progress,
+                    )
+                }
+            }
+                .onSuccess {
+                    _state.value = _state.value.copy(
+                        modelDownloadBusy = false,
+                        modelDownloadLabel = null,
+                        modelDownloadProgress = 1f,
+                        embeddingModelReady = repository.embeddingModelReady(),
+                        embeddingModelBytes = repository.embeddingModelBytes(),
+                        embeddingModelName = repository.embeddingModelName(),
+                        embeddingIndexedCount = repository.embeddingIndexedCount(),
+                        embeddingModelDiagnostics = repository.embeddingModelDiagnostics(),
+                        status = "Qwen3-Embedding 已安装，正在后台建立语义索引",
+                    )
+                }
+                .onFailure { error ->
+                    _state.value = _state.value.copy(
+                        modelDownloadBusy = false,
+                        modelDownloadLabel = null,
+                        embeddingModelReady = repository.embeddingModelReady(),
+                        embeddingModelBytes = repository.embeddingModelBytes(),
+                        embeddingModelName = repository.embeddingModelName(),
+                        embeddingModelDiagnostics = repository.embeddingModelDiagnostics(),
+                        status = error.message ?: "Qwen3-Embedding 下载安装失败",
                     )
                 }
         }

@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-11-14 — Android `0.21.0`
+
+- Added segmented Prompt assembly with an explicit system budget, dropped-section
+  reporting, worldbook hit titles and memory-selection explanations in Prompt
+  Inspector.
+- Added rolling cloud conversation summaries beside recent raw history.
+- Reworked structured-memory selection around core user facts, pinned facts,
+  recent facts, relevant facts, excerpts and timeline events.
+- Repaired OpenCode Go memory extraction by removing the unsupported JSON mode
+  request, requeueing affected jobs and tolerating truncated candidate arrays.
+- Added optional `Qwen3-Embedding-0.6B-ONNX` INT8 download/import, Qwen BPE
+  tokenization, 1024-dimensional embeddings, cosine reranking over current
+  memory candidates and FTS4 fallback.
+- Added Room schema 22 with content-hash-bound memory vectors and ONNX Runtime
+  1.28 JNI support, without packaging model weights in either APK.
+- Confirmed facts and proposal facts are separated; worldbook supports categories,
+  constant entries and AND/OR/NOT activation.
+- Android cloud now removes Song Zhiyi and Pei Jiming together with their scoped
+  chat, memory, event, Trace, artwork and media data.
+- Android `0.21.0 / versionCode 65` is the final full-edition feature release.
+  The cloud edition continues after this version.
+- Verification: 137 full JVM tests, 137 cloud JVM tests, both lint variants and
+  both APKs passed; Qwen embedding passed a real-device semantic self-test; both
+  APKs were installed over existing data with `adb install -r -d`.
+
 ## 2026-11-13 — Android `0.20.1`
 
 - Branch switching now auto-saves the current live conversation before restoring

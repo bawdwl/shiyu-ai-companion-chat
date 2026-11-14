@@ -128,6 +128,75 @@ class ManagedModelDownloader(private val context: Context) {
         }
     }
 
+    suspend fun downloadQwenEmbedding(
+        onProgress: (label: String, progress: Float) -> Unit,
+    ): File = withContext(Dispatchers.IO) {
+        val downloadRoot = context.getExternalFilesDir(null) ?: context.filesDir
+        val root = File(
+            downloadRoot,
+            "managed-models/${QwenEmbeddingModelManager.MODEL_ID}",
+        )
+        root.deleteRecursively()
+        root.mkdirs()
+        val files = listOf(
+            EmbeddingModelFile(
+                path = "onnx/model_int8.onnx",
+                size = 613_527_539L,
+                sha256 = "6D0EA863F78B4A84AFA3C7FCBA1EC341572B5E28121AEF77B7092B1DFDF679C7",
+            ),
+            EmbeddingModelFile(
+                path = "tokenizer.json",
+                size = 11_423_705L,
+                sha256 = "DEF76FB086971C7867B829C23A26261E38D9D74E02139253B38AEB9DF8B4B50A",
+            ),
+            EmbeddingModelFile(
+                path = "config.json",
+                size = 1_576L,
+                sha256 = "66A10929782F3C9A3CD5DEC90E2A95C60E05736134A63CD54479EEAE80BED175",
+            ),
+            EmbeddingModelFile(
+                path = "tokenizer_config.json",
+                size = 9_731L,
+                sha256 = "977648852447CB6587327FF3205B0A84CF2FC9F05621D6C8E88A497CAAFAB2E1",
+            ),
+        )
+        val total = files.sumOf { it.size }.coerceAtLeast(1L)
+        ensureFreeSpace(root, total, "Qwen3-Embedding 0.6B")
+        var completed = 0L
+        try {
+            files.forEach { item ->
+                val target = File(root, item.path)
+                downloadUrl(
+                    url = "${QWEN_EMBEDDING_BASE_URL}${item.path}",
+                    output = target,
+                    expectedSha256 = item.sha256,
+                    label = item.path.substringAfterLast('/'),
+                ) { label, itemProgress ->
+                    onProgress(
+                        label,
+                        ((completed + itemProgress * item.size) / total)
+                            .toFloat()
+                            .coerceIn(0f, 1f),
+                    )
+                }
+                require(target.length() == item.size) {
+                    "${item.path} 下载大小不正确"
+                }
+                completed += item.size
+                onProgress(
+                    item.path.substringAfterLast('/'),
+                    (completed.toFloat() / total).coerceIn(0f, 1f),
+                )
+            }
+            File(root, "display-name.txt")
+                .writeText("Qwen3-Embedding 0.6B ONNX INT8")
+            root
+        } catch (error: Throwable) {
+            root.deleteRecursively()
+            throw error
+        }
+    }
+
     private fun downloadUrl(
         url: String,
         output: File,
@@ -191,5 +260,13 @@ class ManagedModelDownloader(private val context: Context) {
     companion object {
         private const val DOWNLOAD_MARGIN_BYTES = 320L * 1024 * 1024
         private const val STALE_DOWNLOAD_MS = 24L * 60 * 60 * 1000
+        private const val QWEN_EMBEDDING_BASE_URL =
+            "https://huggingface.co/onnx-community/Qwen3-Embedding-0.6B-ONNX/resolve/main/"
     }
 }
+
+private data class EmbeddingModelFile(
+    val path: String,
+    val size: Long,
+    val sha256: String,
+)

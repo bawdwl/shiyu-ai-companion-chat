@@ -8,7 +8,7 @@ import org.junit.Test
 class CharacterGenerationPolicyTest {
     @Test
     fun promptRequestsDetailedDistinctiveAppearance() {
-        assertTrue(CharacterGenerationPolicy.SYSTEM_PROMPT.contains("worldbook 生成3条"))
+        assertTrue(CharacterGenerationPolicy.SYSTEM_PROMPT.contains("worldbook 生成5条"))
         assertTrue(CharacterGenerationPolicy.SYSTEM_PROMPT.contains("description 用100至200个中文字符"))
         assertTrue(CharacterGenerationPolicy.SYSTEM_PROMPT.contains("public_intro 用120至220个中文字符"))
         assertFalse(CharacterGenerationPolicy.SYSTEM_PROMPT.contains("beautiful detailed face"))
@@ -23,7 +23,7 @@ class CharacterGenerationPolicyTest {
             ),
         )
         assertTrue(CharacterGenerationPolicy.SYSTEM_PROMPT.contains("控制在28至42个英文词"))
-        assertTrue(CharacterGenerationPolicy.MATERIAL_REPAIR_PROMPT.contains("worldbook 给 3 条"))
+        assertTrue(CharacterGenerationPolicy.MATERIAL_REPAIR_PROMPT.contains("worldbook 给 5 条"))
     }
 
     @Test
@@ -63,7 +63,7 @@ class CharacterGenerationPolicyTest {
                     "straight brows high nose thin lips fair skin short black hair " +
                     "tall broad shoulders dark charcoal suit silver tie watch " +
                     "calm expression candlelit study",
-            worldbookJson = "[{},{}]",
+            worldbookJson = "[{},{},{},{}]",
         )
         assertTrue(CharacterGenerationPolicy.missingMaterials(complete).isEmpty())
     }

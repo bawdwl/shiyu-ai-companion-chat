@@ -127,6 +127,8 @@ data class StructuredMemoryEntity(
     @ColumnInfo(defaultValue = "0.5") val importance: Double = 0.5,
     @ColumnInfo(defaultValue = "0.55") val confidence: Double = 0.55,
     @ColumnInfo(defaultValue = "0") val pinned: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val accessCount: Int = 0,
+    val lastAccessedAt: Long? = null,
     val state: String = "candidate",
     val supersedes: Long? = null,
     val contestedWith: Long? = null,
@@ -138,6 +140,25 @@ data class StructuredMemoryEntity(
     @ColumnInfo(defaultValue = "''") val searchTokens: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(defaultValue = "0") val updatedAt: Long = createdAt,
+)
+
+@Entity(
+    tableName = "memory_embeddings",
+    primaryKeys = ["sourceType", "sourceId", "modelVersion"],
+    indices = [
+        Index("characterId"),
+        Index(value = ["characterId", "sourceType"]),
+    ],
+)
+data class MemoryEmbeddingEntity(
+    val sourceType: String,
+    val sourceId: Long,
+    val modelVersion: String,
+    val characterId: String,
+    val dimension: Int,
+    val contentHash: String,
+    val vector: ByteArray,
+    val updatedAt: Long = System.currentTimeMillis(),
 )
 
 @Entity(
@@ -323,6 +344,16 @@ data class MemoryEventEntity(
     val timelineJson: String = "[]",
     val lastMentionedAt: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+)
+
+@Entity(tableName = "conversation_summaries")
+data class ConversationSummaryEntity(
+    @PrimaryKey val characterId: String,
+    val summary: String,
+    val sourceMessageIds: String,
+    val coveredFromMessageId: Long,
+    val coveredThroughMessageId: Long,
     val updatedAt: Long = System.currentTimeMillis(),
 )
 

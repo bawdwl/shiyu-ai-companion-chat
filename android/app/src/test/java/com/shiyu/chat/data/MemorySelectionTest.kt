@@ -13,23 +13,30 @@ class MemorySelectionTest {
         state: String = "active",
         factKey: String = "user.interview.time",
         supersedes: Long? = null,
+        subject: String = "user",
+        kind: String = "user_report",
+        factType: String = "fact",
+        pinned: Boolean = false,
+        importance: Double = 0.84,
         validFrom: Long? = if (state == "active" || state == "superseded") 100 else null,
         validTo: Long? = if (state == "superseded" || state == "deleted") 200 else null,
     ) = StructuredMemoryEntity(
         id = id,
         characterId = characterId,
-        subject = "user",
+        subject = subject,
         factKey = factKey,
         value = text,
         content = text,
-        kind = "user_report",
+        kind = kind,
+        factType = factType,
         evidenceJson = "[]",
         observedOrder = id,
         semanticVerified = state == "active",
-        importance = 0.84,
+        importance = importance,
         confidence = 0.60,
         state = state,
         supersedes = supersedes,
+        pinned = pinned,
         validFrom = validFrom,
         validTo = validTo,
     )
@@ -158,6 +165,17 @@ class MemorySelectionTest {
         assertEquals(listOf(3L), selected.map { it.id })
     }
 
+    @Test fun indexedSemanticScoresCanRecallWithoutLiteralOverlap() {
+        val current = structured(3, "会面挪到周五")
+        val selected = selectStructuredMemories(
+            memories = listOf(current),
+            query = "日程",
+            limit = 8,
+            semanticScores = mapOf(3L to 0.82),
+        )
+        assertEquals(listOf(3L), selected.map { it.id })
+    }
+
     @Test fun unifiedBudgetLimitsLongContent() {
         val facts = (1L..8L).map { id ->
             structured(
@@ -179,7 +197,7 @@ class MemorySelectionTest {
         assertTrue(selection.structuredMemories.size < facts.size)
     }
 
-    @Test fun unrelatedCoreUserFactIsNotForcedIntoEveryPrompt() {
+    @Test fun coreUserFactStaysAvailableWithoutLexicalOverlap() {
         val stablePreference = structured(
             id = 7,
             text = "用户长期偏好安静的环境",
@@ -194,7 +212,111 @@ class MemorySelectionTest {
             maxExcerpts = 2,
             maxCharacters = 1_600,
         )
-        assertTrue(selection.structuredMemories.isEmpty())
+        assertEquals(listOf(7L), selection.structuredMemories.map { it.id })
+        assertEquals(
+            MemorySelectionReason.CORE_PROFILE,
+            selection.structuredReasons[7L],
+        )
+    }
+
+    @Test fun pinnedFactSurvivesWhenNoQueryTermMatches() {
+        val pinned = structured(
+            id = 8,
+            text = "用户希望在提到家人时避开具体住址",
+            factKey = "user.boundary.privacy",
+            pinned = true,
+        )
+        val selection = selectUnifiedMemoryContext(
+            characterId = "a",
+            structuredMemories = listOf(pinned),
+            excerpts = emptyList(),
+            query = "今天工作有点累",
+            maxFacts = 8,
+            maxExcerpts = 2,
+            maxCharacters = 1_600,
+        )
+        assertEquals(listOf(8L), selection.structuredMemories.map { it.id })
+        assertEquals(MemorySelectionReason.PINNED, selection.structuredReasons[8L])
+    }
+
+    @Test fun recentFactsProvideBoundedFallbackWithoutDumpingAllHistory() {
+        val facts = (1L..8L).map { id ->
+            structured(
+                id = id,
+                text = "第${id}条共同经历",
+                factKey = "shared.event.$id",
+                subject = "shared",
+                kind = "shared_event",
+                factType = "event",
+            )
+        }
+        val selection = selectUnifiedMemoryContext(
+            characterId = "a",
+            structuredMemories = facts,
+            excerpts = emptyList(),
+            query = "今天想随便聊聊",
+            maxFacts = 8,
+            maxExcerpts = 2,
+            maxCharacters = 1_600,
+        )
+        assertEquals(listOf(8L, 7L, 6L), selection.structuredMemories.map { it.id })
+        assertTrue(
+            selection.structuredReasons.values.all {
+                it == MemorySelectionReason.RECENT
+            },
+        )
+    }
+
+    @Test fun relevantOldFactIsPreferredBeforeRecentFallback() {
+        val oldRelevant = structured(
+            id = 1,
+            text = "用户准备去厦门参加面试",
+            factKey = "user.interview.place",
+            kind = "shared_event",
+            factType = "event",
+        )
+        val recent = (2L..6L).map { id ->
+            structured(
+                id = id,
+                text = "第${id}条无关日常",
+                factKey = "shared.daily.$id",
+                subject = "shared",
+                kind = "shared_event",
+                factType = "event",
+            )
+        }
+        val selection = selectUnifiedMemoryContext(
+            characterId = "a",
+            structuredMemories = listOf(oldRelevant) + recent,
+            excerpts = emptyList(),
+            query = "厦门面试准备得怎么样",
+            maxFacts = 8,
+            maxExcerpts = 2,
+            maxCharacters = 1_600,
+        )
+        assertEquals(1L, selection.structuredMemories.first().id)
+        assertEquals(
+            MemorySelectionReason.RELEVANT,
+            selection.structuredReasons[1L],
+        )
+    }
+
+    @Test fun commonChineseParaphraseRecallsTheOriginalMemory() {
+        val travel = structured(
+            id = 9,
+            text = "用户上次去厦门旅游",
+            factKey = "shared.trip.xiamen",
+            subject = "shared",
+            kind = "shared_event",
+            factType = "event",
+        )
+        val selected = selectStructuredMemories(
+            memories = listOf(travel),
+            query = "还记得那次出去玩吗",
+            limit = 4,
+        )
+
+        assertEquals(listOf(9L), selected.map { it.id })
     }
 
     @Test fun longExcerptKeepsQueryRelevantWindowAndStaysCompact() {

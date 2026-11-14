@@ -1,6 +1,7 @@
 package com.shiyu.chat.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WorldbookPolicyTest {
@@ -52,6 +53,26 @@ class WorldbookPolicyTest {
         assertEquals(false, excluded.inject)
     }
 
+    @Test
+    fun constantWorldRuleIgnoresKeywordsAndCooldown() {
+        val constant = entry("世界规则").copy(
+            constant = true,
+            cooldownSeconds = 600,
+        )
+        val activation = decideWorldbookActivation(
+            entry = constant,
+            regularHit = worldbookEntryMatches(constant, "完全无关的消息"),
+            explicitlyExcluded = false,
+            lastHit = 99_000L,
+            stickyUntil = 0L,
+            now = 100_000L,
+            stickyWindowMs = 60_000L,
+        )
+
+        assertTrue(worldbookEntryMatches(constant, "完全无关的消息"))
+        assertTrue(activation.inject)
+    }
+
     private fun entry(
         title: String,
         any: List<String> = emptyList(),
@@ -62,11 +83,13 @@ class WorldbookPolicyTest {
     ) = WorldbookEntry(
         title = title,
         content = title,
+        category = "",
         anyKeywords = any,
         allKeywords = all,
         excludedKeywords = excluded,
         priority = priority,
         inclusionGroup = group,
+        constant = false,
         sticky = false,
         cooldownSeconds = 0,
     )

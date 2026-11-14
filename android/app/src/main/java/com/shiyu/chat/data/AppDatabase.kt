@@ -463,6 +463,32 @@ interface StructuredMemoryDao {
 
     @Query(
         """UPDATE structured_memories
+           SET accessCount=accessCount+1,lastAccessedAt=:accessedAt
+           WHERE characterId=:characterId AND id IN (:ids)"""
+    )
+    suspend fun markAccessed(
+        characterId: String,
+        ids: List<Long>,
+        accessedAt: Long,
+    ): Int
+
+    @Query(
+        """UPDATE structured_memories
+           SET state='superseded',supersedes=:replacementId,
+               autoAction='deduplicate',autoReason=:reason,
+               updatedAt=:updatedAt,validTo=:updatedAt
+           WHERE id=:id AND characterId=:characterId AND state='active'"""
+    )
+    suspend fun supersedeDuplicate(
+        id: Long,
+        characterId: String,
+        replacementId: Long,
+        reason: String,
+        updatedAt: Long,
+    ): Int
+
+    @Query(
+        """UPDATE structured_memories
            SET state='active',content=:content,value=:value,
                semanticVerified=1,autoAction='manual_correct',
                autoReason=:reason,semanticReason=:reason,updatedAt=:updatedAt
@@ -510,6 +536,62 @@ interface StructuredMemoryDao {
 
     @Query("DELETE FROM structured_memories WHERE id=:id AND characterId=:characterId")
     suspend fun deleteById(id: Long, characterId: String): Int
+}
+
+@Dao
+interface ConversationSummaryDao {
+    @Query("SELECT * FROM conversation_summaries WHERE characterId=:characterId")
+    suspend fun get(characterId: String): ConversationSummaryEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(summary: ConversationSummaryEntity)
+
+    @Query("DELETE FROM conversation_summaries WHERE characterId=:characterId")
+    suspend fun clear(characterId: String): Int
+}
+
+@Dao
+interface MemoryEmbeddingDao {
+    @Query(
+        """SELECT * FROM memory_embeddings
+           WHERE characterId=:characterId AND modelVersion=:modelVersion
+             AND sourceType=:sourceType AND sourceId IN (:sourceIds)"""
+    )
+    suspend fun forStructuredIds(
+        characterId: String,
+        modelVersion: String,
+        sourceType: String,
+        sourceIds: List<Long>,
+    ): List<MemoryEmbeddingEntity>
+
+    @Query(
+        """SELECT * FROM memory_embeddings
+           WHERE characterId=:characterId AND modelVersion=:modelVersion
+             AND sourceType=:sourceType"""
+    )
+    suspend fun forCharacter(
+        characterId: String,
+        modelVersion: String,
+        sourceType: String,
+    ): List<MemoryEmbeddingEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(records: List<MemoryEmbeddingEntity>)
+
+    @Query("SELECT COUNT(*) FROM memory_embeddings WHERE modelVersion=:modelVersion")
+    suspend fun countForModel(modelVersion: String): Int
+
+    @Query("DELETE FROM memory_embeddings WHERE characterId=:characterId")
+    suspend fun clear(characterId: String): Int
+
+    @Query(
+        """DELETE FROM memory_embeddings
+           WHERE modelVersion!=:modelVersion"""
+    )
+    suspend fun deleteOtherModelVersions(modelVersion: String): Int
+
+    @Query("DELETE FROM memory_embeddings WHERE modelVersion=:modelVersion")
+    suspend fun deleteModelVersion(modelVersion: String): Int
 }
 
 @Dao
@@ -631,7 +713,11 @@ interface StructuredMemoryJobDao {
            WHERE status='failed' AND (
                lastError LIKE 'Unterminated%' OR
                lastError LIKE '%JSONException%' OR
-               lastError LIKE '%End of input%'
+               lastError LIKE '%End of input%' OR
+               lastError LIKE '%response_format%' OR
+               lastError LIKE '%json_object%' OR
+               lastError LIKE '%not yet supported%' OR
+               lastError LIKE '%atlas%'
            )"""
     )
     suspend fun recoverableFailureCharacterIds(): List<String>
@@ -643,7 +729,11 @@ interface StructuredMemoryJobDao {
            WHERE status='failed' AND (
                lastError LIKE 'Unterminated%' OR
                lastError LIKE '%JSONException%' OR
-               lastError LIKE '%End of input%'
+               lastError LIKE '%End of input%' OR
+               lastError LIKE '%response_format%' OR
+               lastError LIKE '%json_object%' OR
+               lastError LIKE '%not yet supported%' OR
+               lastError LIKE '%atlas%'
            )"""
     )
     suspend fun requeueRecoverableFailures(now: Long): Int
@@ -840,7 +930,7 @@ interface SceneStateDao {
     suspend fun clear(characterId: String): Int
 }
 
-const val APP_DATABASE_VERSION = 20
+const val APP_DATABASE_VERSION = 22
 
 @Database(
     entities = [
@@ -850,6 +940,7 @@ const val APP_DATABASE_VERSION = 20
         ConversationBranchEntity::class,
         MemoryEntity::class,
         StructuredMemoryEntity::class,
+        MemoryEmbeddingEntity::class,
         StructuredMemoryJobEntity::class,
         StructuredMemoryTombstoneEntity::class,
         StructuredMemoryAliasEntity::class,
@@ -859,6 +950,7 @@ const val APP_DATABASE_VERSION = 20
         RelationshipStateEntity::class,
         StateTransitionEntity::class,
         MemoryEventEntity::class,
+        ConversationSummaryEntity::class,
         SceneStateEntity::class,
         TurnTraceEntity::class,
         AppMetaEntity::class,
@@ -873,10 +965,12 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun conversationBranches(): ConversationBranchDao
     abstract fun memories(): MemoryDao
     abstract fun structuredMemories(): StructuredMemoryDao
+    abstract fun memoryEmbeddings(): MemoryEmbeddingDao
     abstract fun structuredMemoryJobs(): StructuredMemoryJobDao
     abstract fun structuredMemorySupport(): StructuredMemorySupportDao
     abstract fun internalStates(): InternalStateDao
     abstract fun memoryEvents(): MemoryEventDao
+    abstract fun conversationSummaries(): ConversationSummaryDao
     abstract fun sceneStates(): SceneStateDao
     abstract fun turnTraces(): TurnTraceDao
     abstract fun meta(): MetaDao
@@ -1336,6 +1430,49 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE structured_memories ADD COLUMN accessCount INTEGER NOT NULL DEFAULT 0",
+                )
+                database.execSQL(
+                    "ALTER TABLE structured_memories ADD COLUMN lastAccessedAt INTEGER",
+                )
+                database.execSQL(
+                    """CREATE TABLE IF NOT EXISTS conversation_summaries(
+                        characterId TEXT NOT NULL PRIMARY KEY,
+                        summary TEXT NOT NULL,
+                        sourceMessageIds TEXT NOT NULL,
+                        coveredFromMessageId INTEGER NOT NULL,
+                        coveredThroughMessageId INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL)""".trimIndent(),
+                )
+            }
+        }
+
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """CREATE TABLE IF NOT EXISTS memory_embeddings(
+                        sourceType TEXT NOT NULL,
+                        sourceId INTEGER NOT NULL,
+                        modelVersion TEXT NOT NULL,
+                        characterId TEXT NOT NULL,
+                        dimension INTEGER NOT NULL,
+                        contentHash TEXT NOT NULL,
+                        vector BLOB NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        PRIMARY KEY(sourceType,sourceId,modelVersion))""".trimIndent(),
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_memory_embeddings_characterId ON memory_embeddings(characterId)",
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_memory_embeddings_characterId_sourceType ON memory_embeddings(characterId,sourceType)",
+                )
+            }
+        }
+
         val ALL_MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_2_3,
             MIGRATION_3_4,
@@ -1355,6 +1492,8 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_17_18,
             MIGRATION_18_19,
             MIGRATION_19_20,
+            MIGRATION_20_21,
+            MIGRATION_21_22,
         )
 
         val CREATE_SEARCH_INDEX_CALLBACK = object : RoomDatabase.Callback() {

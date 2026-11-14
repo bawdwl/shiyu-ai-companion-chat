@@ -149,6 +149,8 @@ import com.shiyu.chat.data.ArtworkCropSelection
 import com.shiyu.chat.data.CharacterArtworkPolicy
 import com.shiyu.chat.data.DeepSeekClient
 import com.shiyu.chat.data.DreamGenerationSettings
+import com.shiyu.chat.data.RoleContextPolicy
+import com.shiyu.chat.data.RoleFixedFact
 import com.shiyu.chat.data.insertActionBrackets
 import com.shiyu.chat.data.MemoryEntity
 import com.shiyu.chat.data.MessageEntity
@@ -174,6 +176,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.io.File
 import java.io.ByteArrayInputStream
@@ -646,6 +650,10 @@ fun ShiyuApp(repository: ChatRepository) {
                                 onImportLocalModel = vm::importLocalModel,
                                 onDeleteLocalModel = vm::deleteLocalModel,
                                 onDownloadLocalModel = vm::downloadLocalModel,
+                                onImportEmbeddingModel = vm::importEmbeddingModel,
+                                onDeleteEmbeddingModel = vm::deleteEmbeddingModel,
+                                onTestEmbeddingModel = vm::testEmbeddingModel,
+                                onDownloadEmbeddingModel = vm::downloadEmbeddingModel,
                                 onDownloadDreamModel = vm::downloadDreamModel,
                                 onCreateBackup = vm::createBackup,
                                 onRestoreBackup = vm::restoreBackup,
@@ -3830,6 +3838,10 @@ private fun SettingsDialog(
     onImportLocalModel: (Uri) -> Unit,
     onDeleteLocalModel: () -> Unit,
     onDownloadLocalModel: (String) -> Unit,
+    onImportEmbeddingModel: (Uri) -> Unit,
+    onDeleteEmbeddingModel: () -> Unit,
+    onTestEmbeddingModel: () -> Unit,
+    onDownloadEmbeddingModel: () -> Unit,
     onDownloadDreamModel: () -> Unit,
     onCreateBackup: (Uri) -> Unit,
     onRestoreBackup: (Uri) -> Unit,
@@ -3875,6 +3887,11 @@ private fun SettingsDialog(
         ActivityResultContracts.GetContent(),
     ) { uri ->
         uri?.let(onImportLocalModel)
+    }
+    val embeddingModelPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri ->
+        uri?.let(onImportEmbeddingModel)
     }
     val backupCreator = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip"),
@@ -4059,7 +4076,10 @@ private fun SettingsDialog(
                         }
                     }
                 }
-                if (state.modelDownloadBusy) {
+                if (
+                    state.modelDownloadBusy &&
+                    !state.modelDownloadLabel.orEmpty().contains("Qwen3-Embedding")
+                ) {
                     Text(state.modelDownloadLabel.orEmpty(), fontSize = 9.sp)
                     androidx.compose.material3.LinearProgressIndicator(
                         progress = { state.modelDownloadProgress },
@@ -4073,6 +4093,107 @@ private fun SettingsDialog(
                     fontSize = 10.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                }
+                HorizontalDivider()
+                Text("Android 语义记忆 · ${state.embeddingModelName}", fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (state.embeddingModelReady) {
+                        "Qwen3-Embedding 0.6B ONNX INT8 已安装，约 ${
+                            String.format(
+                                Locale.CHINA,
+                                "%.2f",
+                                state.embeddingModelBytes / 1024.0 / 1024.0 / 1024.0,
+                            )
+                        } GiB；已建立 ${state.embeddingIndexedCount} 条记忆向量。" +
+                            "语义召回会与 FTS4 融合，模型删除后自动回退。"
+                    } else {
+                        "默认不包含模型。可下载约 596 MiB 的 ONNX INT8 包，或导入包含 " +
+                            "config.json、tokenizer.json、tokenizer_config.json 和 " +
+                            "onnx/model_int8.onnx 的 ZIP。未安装时继续使用 FTS4。"
+                    },
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (state.embeddingModelDiagnostics.isNotBlank()) {
+                    Text(
+                        state.embeddingModelDiagnostics,
+                        fontSize = 8.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { embeddingModelPicker.launch("*/*") },
+                        enabled = !state.embeddingModelBusy && !state.modelDownloadBusy,
+                    ) {
+                        if (state.embeddingModelBusy) {
+                            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(
+                            when {
+                                state.embeddingModelBusy -> "正在导入…"
+                                state.embeddingModelReady -> "重新导入 embedding"
+                                else -> "导入 Qwen embedding ZIP"
+                            },
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = onDownloadEmbeddingModel,
+                        enabled = !state.embeddingModelBusy && !state.modelDownloadBusy &&
+                            !state.localModelBusy && !state.avatarBusy,
+                    ) {
+                        Text(if (state.embeddingModelReady) "重新下载 embedding" else "下载 Qwen embedding")
+                    }
+                }
+                if (state.embeddingModelReady) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = onTestEmbeddingModel,
+                            enabled = !state.embeddingSelfTestBusy &&
+                                !state.embeddingModelBusy && !state.modelDownloadBusy,
+                        ) {
+                            if (state.embeddingSelfTestBusy) {
+                                CircularProgressIndicator(
+                                    Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Text(if (state.embeddingSelfTestBusy) "正在自检…" else "测试语义模型")
+                        }
+                        TextButton(
+                            onClick = onDeleteEmbeddingModel,
+                            enabled = !state.embeddingSelfTestBusy &&
+                                !state.embeddingModelBusy && !state.modelDownloadBusy,
+                        ) {
+                            Text(
+                                "删除模型和向量索引",
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                    if (state.embeddingSelfTestResult.isNotBlank()) {
+                        Text(
+                            state.embeddingSelfTestResult,
+                            fontSize = 10.sp,
+                            color = if (state.embeddingSelfTestResult.startsWith("通过")) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            },
+                        )
+                    }
+                }
+                if (
+                    state.modelDownloadBusy &&
+                    state.modelDownloadLabel.orEmpty().contains("Qwen3-Embedding")
+                ) {
+                    Text(state.modelDownloadLabel.orEmpty(), fontSize = 9.sp)
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { state.modelDownloadProgress },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
                 HorizontalDivider()
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -5060,12 +5181,25 @@ private fun EditCharacterDialog(
                 )
             }
             item {
+                WorldbookOverview(
+                    raw = worldbookJson,
+                    onRawChange = { worldbookJson = it },
+                )
+            }
+            item {
                 OutlinedTextField(
                     worldbookJson,
                     { worldbookJson = it },
-                    label = { Text("世界书 JSON（title / keywords / content）") },
+                    label = { Text("世界设定 Lore JSON（与聊天记忆分开）") },
                     minLines = 5,
                     modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "世界书保存地点、规则、组织、历史和秘密；聊天事实与共同经历由长期记忆单独管理。" +
+                        "这里不是角色已经知道一切的授权，仍需遵守知识边界。",
+                    fontSize = 9.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
                 )
                 OutlinedTextField(
                     worldbookProbe,
@@ -5103,10 +5237,31 @@ private fun EditCharacterDialog(
                 }
             }
             item {
+                val roleContext = remember(roleContextJson) {
+                    runCatching { RoleContextPolicy.parse(roleContextJson) }.getOrNull()
+                }
+                if (roleContext != null) {
+                    FixedFactsConfirmation(
+                        facts = roleContext.fixedFacts,
+                        onFactsChange = { updated ->
+                            roleContextJson = RoleContextPolicy.toJson(
+                                roleContext.copy(fixedFacts = updated),
+                            )
+                        },
+                    )
+                } else {
+                    Text(
+                        "角色上下文 JSON 当前无法解析；修复 JSON 后才能逐条确认固定事实。",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+            item {
                 OutlinedTextField(
                     roleContextJson,
                     { roleContextJson = it },
-                    label = { Text("角色上下文 JSON（固定事实 / 示例 / 场景 / 动机）") },
+                    label = { Text("高级：角色上下文 JSON（固定事实 / 示例 / 场景 / 动机）") },
                     placeholder = {
                         Text(
                             "{\"fixed_facts\":[{\"key\":\"身份\",\"value\":\"书店老板\",\"status\":\"confirmed\"}]," +
@@ -5528,6 +5683,182 @@ private fun decodeArtworkPreview(
     }
 }.getOrNull()
 
+@Composable
+private fun WorldbookOverview(
+    raw: String,
+    onRawChange: (String) -> Unit,
+) {
+    val entries = remember(raw) {
+        runCatching { JSONArray(raw) }.getOrNull()
+    }
+    Surface(
+        color = Sage.copy(alpha = 0.72f),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("世界设定 Lore", fontWeight = FontWeight.SemiBold)
+            Text(
+                "常驻条目每轮作为世界背景参与 Prompt；普通条目只在关键词命中时进入。" +
+                    "世界 Lore 与聊天长期记忆分开保存。",
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (entries == null) {
+                Text(
+                    "世界书 JSON 无法解析。",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            } else if (entries.length() == 0) {
+                Text(
+                    "还没有世界设定条目。",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            entries?.let { array ->
+                fun updateEntry(index: Int, update: (JSONObject) -> Unit) {
+                    val current = runCatching { JSONArray(raw) }.getOrNull() ?: return
+                    val entry = current.optJSONObject(index) ?: return
+                    update(entry)
+                    current.put(index, entry)
+                    onRawChange(current.toString())
+                }
+                for (index in 0 until array.length()) {
+                    val entry = array.optJSONObject(index) ?: continue
+                    if (index > 0) {
+                        HorizontalDivider(color = Hairline)
+                    }
+                    val title = entry.optString("title").ifBlank { "条目 #$index" }
+                    val category = entry.optString("category").trim()
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                category.ifBlank { "未分类世界设定" },
+                                fontSize = 9.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("常驻", fontSize = 8.sp)
+                            Switch(
+                                checked = entry.optBoolean("constant", false),
+                                onCheckedChange = { checked ->
+                                    updateEntry(index) { it.put("constant", checked) }
+                                },
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("启用", fontSize = 8.sp)
+                            Switch(
+                                checked = entry.optBoolean("enabled", true),
+                                onCheckedChange = { checked ->
+                                    updateEntry(index) { it.put("enabled", checked) }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FixedFactsConfirmation(
+    facts: List<RoleFixedFact>,
+    onFactsChange: (List<RoleFixedFact>) -> Unit,
+) {
+    Surface(
+        color = LilacMist.copy(alpha = 0.72f),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("正式固定事实", fontWeight = FontWeight.SemiBold)
+            Text(
+                "只有“已生效”的条目会进入 Prompt。提案保留在编辑器中，便于先检查模型生成的身份、经历和关系。" +
+                    "需要修改文字时使用下方高级 JSON。",
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (facts.isEmpty()) {
+                Text(
+                    "没有固定事实。模型生成的提议会显示在这里。",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            facts.forEachIndexed { index, fact ->
+                if (index > 0) {
+                    HorizontalDivider(color = Hairline)
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            fact.key.ifBlank { "未命名事实" },
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            fact.value.ifBlank { "（空）" },
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            if (fact.status == "confirmed") "已生效" else "待确认提案",
+                            fontSize = 9.sp,
+                            color = if (fact.status == "confirmed") Forest else InkMuted,
+                        )
+                    }
+                    Switch(
+                        checked = fact.status == "confirmed",
+                        onCheckedChange = { checked ->
+                            onFactsChange(
+                                facts.mapIndexed { itemIndex, item ->
+                                    if (itemIndex == index) {
+                                        item.copy(
+                                            status = if (checked) "confirmed" else "proposal",
+                                        )
+                                    } else {
+                                        item
+                                    }
+                                },
+                            )
+                        },
+                    )
+                    IconButton(
+                        onClick = {
+                            onFactsChange(facts.filterIndexed { itemIndex, _ ->
+                                itemIndex != index
+                            })
+                        },
+                    ) {
+                        Icon(
+                            Icons.Default.DeleteOutline,
+                            contentDescription = "删除固定事实",
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TraceSheet(
@@ -5594,6 +5925,14 @@ private fun TraceSheet(
                                         fontSize = 9.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
+                                    if (snapshot.systemBudgetCharacters > 0) {
+                                        Text(
+                                            "System Prompt ${snapshot.systemCharacters} / " +
+                                                "${snapshot.systemBudgetCharacters} 字符",
+                                            fontSize = 9.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                     snapshot.sections.forEach { section ->
                                         Row(
                                             Modifier.fillMaxWidth(),
@@ -5636,6 +5975,22 @@ private fun TraceSheet(
                                     if (snapshot.memoryReasons.isNotEmpty()) {
                                         Text(
                                             "选择原因：" + snapshot.memoryReasons.joinToString("；"),
+                                            fontSize = 9.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    if (snapshot.droppedSections.isNotEmpty()) {
+                                        Text(
+                                            "因系统分区预算未注入：" +
+                                                snapshot.droppedSections.joinToString("、"),
+                                            fontSize = 9.sp,
+                                            color = MaterialTheme.colorScheme.error,
+                                        )
+                                    }
+                                    if (snapshot.worldbookTitles.isNotEmpty()) {
+                                        Text(
+                                            "本轮世界设定 Lore：" +
+                                                snapshot.worldbookTitles.joinToString("、"),
                                             fontSize = 9.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )

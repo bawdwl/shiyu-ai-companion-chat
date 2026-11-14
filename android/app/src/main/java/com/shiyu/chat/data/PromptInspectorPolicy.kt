@@ -22,6 +22,10 @@ internal data class PromptInspectorSnapshot(
     val memoryTruncated: Boolean,
     val ignoredMemoryIds: List<Long>,
     val memoryReasons: List<String>,
+    val droppedSections: List<String>,
+    val systemCharacters: Int,
+    val systemBudgetCharacters: Int,
+    val worldbookTitles: List<String>,
 )
 
 internal fun approximatePromptTokens(characters: Int): Int =
@@ -32,14 +36,38 @@ internal fun parsePromptInspectorSnapshot(traceJson: String): PromptInspectorSna
         val root = JSONObject(traceJson).getJSONObject("metadata")
         val breakdown = root.optJSONObject("prompt_breakdown")
             ?: return@runCatching null
-        val sections = listOfNotNull(
-            section("角色卡", breakdown, "character_card_chars"),
-            section("世界书与边界", breakdown, "worldbook_chars"),
-            section("长期记忆", breakdown, "memory_chars"),
-            section("事件与场景", breakdown, "event_chars"),
-            section("近期聊天", breakdown, "history_chars"),
-            section("本轮输出", breakdown, "output_chars"),
-        )
+        val sectionArray = root.optJSONArray("prompt_sections")
+        val systemSections = if (sectionArray != null) {
+            buildList {
+                for (index in 0 until sectionArray.length()) {
+                    val item = sectionArray.optJSONObject(index) ?: continue
+                    val label = item.optString("label").trim()
+                    val characters = item.optInt("characters", -1)
+                    if (label.isNotBlank() && characters >= 0) {
+                        add(PromptSectionEstimate(label, characters))
+                    }
+                }
+            }
+        } else {
+            listOfNotNull(
+                section("角色卡", breakdown, "character_card_chars"),
+                section("世界书与边界", breakdown, "worldbook_chars"),
+                section("长期记忆", breakdown, "memory_chars"),
+                section("事件与场景", breakdown, "event_chars"),
+                section("近期聊天", breakdown, "history_chars"),
+                section("当前输入", breakdown, "current_input_chars"),
+                section("本轮输出", breakdown, "output_chars"),
+            )
+        }
+        val sections = if (sectionArray != null) {
+            systemSections + listOfNotNull(
+                section("近期聊天", breakdown, "history_chars"),
+                section("当前输入", breakdown, "current_input_chars"),
+                section("本轮输出", breakdown, "output_chars"),
+            )
+        } else {
+            systemSections
+        }
         PromptInspectorSnapshot(
             sections = sections,
             inputTokens = breakdown.optInt("estimated_input_tokens"),
@@ -64,6 +92,33 @@ internal fun parsePromptInspectorSnapshot(traceJson: String): PromptInspectorSna
                     if (id > 0 && reason.isNotBlank()) add("#$id $reason")
                 }
             },
+            droppedSections = root.optJSONArray("prompt_sections_dropped")
+                ?.let { array ->
+                    buildList {
+                        for (index in 0 until array.length()) {
+                            array.optString(index).trim()
+                                .takeIf(String::isNotBlank)
+                                ?.let(::add)
+                        }
+                    }
+                }
+                .orEmpty(),
+            systemCharacters = root.optInt("prompt_system_characters"),
+            systemBudgetCharacters = root.optInt(
+                "prompt_system_budget_characters",
+                PromptAssemblyPolicy.DEFAULT_MAX_CHARACTERS,
+            ),
+            worldbookTitles = root.optJSONArray("worldbook_titles")
+                ?.let { array ->
+                    buildList {
+                        for (index in 0 until array.length()) {
+                            array.optString(index).trim()
+                                .takeIf(String::isNotBlank)
+                                ?.let(::add)
+                        }
+                    }
+                }
+                .orEmpty(),
         )
     }.getOrNull()
 

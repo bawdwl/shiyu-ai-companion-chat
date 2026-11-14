@@ -5,11 +5,13 @@ import org.json.JSONArray
 internal data class WorldbookEntry(
     val title: String,
     val content: String,
+    val category: String,
     val anyKeywords: List<String>,
     val allKeywords: List<String>,
     val excludedKeywords: List<String>,
     val priority: Int,
     val inclusionGroup: String,
+    val constant: Boolean,
     val sticky: Boolean,
     val cooldownSeconds: Long,
 )
@@ -29,7 +31,8 @@ internal fun decideWorldbookActivation(
     now: Long,
     stickyWindowMs: Long,
 ): WorldbookActivation {
-    val cooldownBlocked = regularHit &&
+    val cooldownBlocked = !entry.constant &&
+        regularHit &&
         entry.cooldownSeconds > 0 &&
         now < lastHit + entry.cooldownSeconds * 1_000L
     val stickyHit = entry.sticky && stickyUntil > now && !explicitlyExcluded
@@ -59,6 +62,9 @@ internal fun parseWorldbookEntries(raw: String): List<WorldbookEntry> =
                     WorldbookEntry(
                         title = title,
                         content = content,
+                        category = entry.optString("category")
+                            .trim()
+                            .take(40),
                         anyKeywords = readKeywords(
                             entry.optJSONArray("keywords_any")
                                 ?: entry.optJSONArray("keywords"),
@@ -73,6 +79,13 @@ internal fun parseWorldbookEntries(raw: String): List<WorldbookEntry> =
                             "inclusion_group",
                             entry.optString("inclusionGroup"),
                         ).trim(),
+                        constant = entry.optBoolean(
+                            "constant",
+                            entry.optBoolean(
+                                "always_on",
+                                entry.optBoolean("alwaysOn", false),
+                            ),
+                        ),
                         sticky = entry.optBoolean("sticky", false),
                         cooldownSeconds = entry.optLong("cooldown", 0L)
                             .coerceIn(0L, 86_400L),
@@ -88,6 +101,7 @@ internal fun worldbookEntryMatches(
 ): Boolean {
     val scan = text.lowercase()
     val hasPositive = entry.anyKeywords.isNotEmpty() || entry.allKeywords.isNotEmpty()
+    if (entry.constant) return true
     val anyHit = entry.anyKeywords.isEmpty() ||
         entry.anyKeywords.any { scan.contains(it.lowercase()) }
     val allHit = entry.allKeywords.all { scan.contains(it.lowercase()) }

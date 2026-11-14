@@ -8,27 +8,37 @@ Android Keystore 实现。云端模式直接调用所选大模型 API，不要�
 
 从
 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases)
-下载最新 APK。当前公开版为 `0.20.1`。
+下载最新 APK。当前公开版为 `0.21.0`。
 
-当前版本为 `0.20.1 / versionCode 63`，包含备份恢复、聊天分页、记忆控制、
-回复版本、分支检查点、Prompt Inspector 和增强世界书。
+当前版本为 `0.21.0 / versionCode 65`，Room schema 22，包含备份恢复、聊天分页、
+记忆控制、回复版本、分支检查点、Prompt Inspector、增强世界书和可选 Qwen3 语义记忆。
 
 Android 现在有两个构建版本：
 
 - 完整版：包名 `com.shiyu.chat`，包含本地 MNN、Local Dream/QNN、ASR 和角色朗读。
-- 云端精简版：包名 `com.shiyu.chat.cloud`，约 22 MiB，只保留云端聊天、角色、
-  记忆、状态、场景、图片输入和千问云端生图。
+- 云端精简版：包名 `com.shiyu.chat.cloud`，只保留云端聊天、角色、记忆、状态、
+  场景、图片输入、千问云端生图和可选 Qwen3 语义记忆；不包含 MNN、Dream/QNN、
+  ASR 与角色 TTS。
 
-两个包可以同时安装，数据彼此独立，并且使用相同的 8 个初始角色：
-宋知意、裴既明、李白、萧承渊、姜拂衣、空条承太郎、凌清鸢和沈砚辞。
+两个包可以同时安装，数据彼此独立。完整版包含 8 个初始角色；云端版包含 6 个，
+不包含宋知意和裴既明。`0.21.0` 是完整版的最后一个功能版本，后续只更新云端版。
 
 ![拾语 Android 角色聊天界面](images/Android-0.18.22-chat.jpg)
 
 安装后进入设置，在“对话与模型”中选择 DeepSeek 官方 API 或 OpenCode Go，
 并填写对应 API Key。创建角色和新对话都会使用当前选择的 Provider。
 
-应用首次安装会显示 8 个可编辑、可删除的初始角色，每个角色都带有头像和聊天
-背景。升级只补充空白角色的初次见面简介，不覆盖已有角色档案。
+云端版升级会移除宋知意、裴既明及其聊天、记忆、事件、Trace 和角色图片；这是
+云端版初始角色范围调整的一部分。用户自建角色不受影响。
+
+## Qwen3 语义记忆
+
+设置页“Android 语义记忆”支持下载或导入
+`Qwen3-Embedding-0.6B-ONNX` INT8 模型。模型不进入 APK，安装包约 596 MiB。
+安装后后台生成 1024 维记忆向量，并与 FTS4、词面和生命周期信号共同排序。
+模型缺失或加载失败时自动回退到 FTS4。
+
+模拟器不包含 ARM64 embedding 原生运行库；该能力需要在 ARM64 真机上验证。
 
 ## 在电脑上测试
 
@@ -42,8 +52,8 @@ Android 现在有两个构建版本：
 `com.shiyu.chat.emulator` 包，因此不会影响手机或已安装应用。它适合检查角色
 管理、聊天、长期记忆、事件、图片输入和页面操作。
 
-模拟器不能验证 ARM64 手机上的 MNN、Local Dream/QNN、本地语音、NPU 与真实
-触控帧率；这些能力仍需要真机测试。首次使用要求 Windows 已开启硬件虚拟化。
+模拟器不能验证 ARM64 手机上的 Qwen embedding、MNN、Local Dream/QNN、本地语音、
+NPU 与真实触控帧率；这些能力仍需要真机测试。首次使用要求 Windows 已开启硬件虚拟化。
 
 ## 文字对话
 

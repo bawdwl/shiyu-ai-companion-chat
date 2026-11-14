@@ -19,7 +19,12 @@ internal object MemoryNeedPolicy {
         "这件事",
         "那件事",
         "上次",
+        "那次",
         "刚才",
+        "刚刚",
+        "当时",
+        "那阵子",
+        "前阵子",
         "之前说",
         "后来呢",
         "然后呢",
@@ -29,6 +34,7 @@ internal object MemoryNeedPolicy {
     private val recallCues = listOf(
         "记得",
         "还记得",
+        "想起来",
         "我以前",
         "我之前",
         "原来",
@@ -38,8 +44,17 @@ internal object MemoryNeedPolicy {
         "现在住",
         "我的偏好",
         "我说过",
+        "从前",
+        "过去",
+        "第一次",
+        "那阵子",
+        "前几天",
+        "前阵子",
+        "多久前",
         "共同经历",
         "我们的约定",
+        "约好",
+        "答应",
     )
 
     private val correctionCues = listOf(
@@ -128,7 +143,7 @@ internal object MemoryNeedPolicy {
         val needsExpansion =
             anaphoric ||
                 correctionCues.any(current::contains) ||
-                current.length <= 18
+                current.length <= 60
         if (!needsExpansion) return ExpandedQuery(current, emptyList())
         val eligible = history.asSequence()
             .filter { it.role == "user" || it.role == "assistant" }

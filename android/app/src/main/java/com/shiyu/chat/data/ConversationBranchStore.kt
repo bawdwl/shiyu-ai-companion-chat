@@ -110,6 +110,7 @@ internal class ConversationBranchStore(
             "structured_memory_tombstones",
             "structured_memory_aliases",
             "memory_events",
+            "conversation_summaries",
             "scene_states",
         )) {
             val rows = readRows(
@@ -166,11 +167,13 @@ internal class ConversationBranchStore(
         database.messages().clear(characterId)
         database.memories().clear(characterId)
         database.structuredMemories().clear(characterId)
+        database.memoryEmbeddings().clear(characterId)
         database.structuredMemorySupport().clearTombstones(characterId)
         database.structuredMemorySupport().clearAliases(characterId)
         database.structuredMemoryJobs().clear(characterId)
         database.structuredMemorySupport().clearCursor(characterId)
         database.memoryEvents().clear(characterId)
+        database.conversationSummaries().clear(characterId)
         database.sceneStates().clear(characterId)
         database.turnTraces().clear(characterId)
     }
@@ -231,6 +234,8 @@ internal class ConversationBranchStore(
                     numericIds(row.optString("sourceMessageIds"))
                 "memory_events", "scene_states" ->
                     numericIds(row.optString("sourceMessageIds"))
+                "conversation_summaries" ->
+                    numericIds(row.optString("sourceMessageIds"))
                 else -> emptySet()
             }
             if (sourceIds.isEmpty() || sourceIds.maxOrNull()!! <= sourceMessageId) {
@@ -266,6 +271,7 @@ internal class ConversationBranchStore(
             "structured_memory_tombstones",
             "structured_memory_aliases",
             "memory_events",
+            "conversation_summaries",
             "scene_states",
             "turn_traces",
         )

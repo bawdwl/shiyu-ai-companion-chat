@@ -1,225 +1,109 @@
 # 拾语 SHIYU
 
-拾语是一套面向中文虚拟角色陪伴场景的 PC 与 Android 双端聊天应用。它把云端大模型、角色卡、世界书、长期记忆、情绪关系状态、语音输入和角色语音组织成一条可运行的聊天链路。
+面向中文虚拟角色陪伴的本地优先聊天应用，提供 Android 原生客户端、Windows EXE 与
+可复现的 PC 网页完整环境。
 
-当前主线使用 **OpenCode Go `deepseek-v4.1-flash`**，同时支持 DeepSeek 官方
-`deepseek-chat`。API Key 由使用者在本机填写，不会写入源码、数据库快照或
-Git 仓库。
+拾语将角色档案、世界书、长期记忆、剧情摘要、事件、Prompt Inspector 和可选本地语义
+检索组织成一条连续链路。聊天记录、角色资料、API Key 和模型默认保存在用户设备上，
+不依赖项目方云数据库。
 
-当前 Android 发布版：`0.20.1`
+[![Latest Release](https://img.shields.io/github/v/release/bawdwl/shiyu-ai-companion-chat)](https://github.com/bawdwl/shiyu-ai-companion-chat/releases)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![Android](https://img.shields.io/badge/Android-8.0%2B-3ddc84)](docs/Android安装与演示.md)
 
-最新发布：[GitHub Release `v0.20.1`](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.20.1)
+当前 Android 版本：`0.21.0 / versionCode 65`
 
-当前 Android 构建：`0.20.1 / versionCode 63`；
-本地 APK 包含备份恢复、聊天分页、记忆控制、回复版本、分支检查点、Prompt
-Inspector 和增强世界书。
+> `0.21.0` 是 Android 完整版的最后一个功能版本。后续新增功能、修复和 Release
+> 只维护 Android 云端版；完整版源码和现有能力继续保留。
 
-## 项目展示
+## 功能概览
 
-<p align="center">
-  <img src="docs/images/shiyu-virtual-companion-method.png" alt="拾语：虚拟角色陪伴系统核心方法图" width="100%">
-</p>
+- 新建角色、结构化角色卡、实时流式聊天和停止生成。
+- 角色固定事实、世界书、知识边界、用户边界和可选示例对话。
+- 近期对话、滚动剧情摘要、结构化事实、计划、共同事件和证据链。
+- 用户可查看、修正、钉住、标为过时、忽略或删除长期记忆。
+- Android 可选下载 `Qwen3-Embedding-0.6B-ONNX`，与 FTS4 共同进行语义召回。
+- 保留式回复版本、聊天分支、Checkpoint、搜索、收藏和完整 ZIP 备份。
+- 只读 Prompt Inspector，显示分区预算、记忆选择、Lore 命中和生成耗时。
+- 云端图片输入、Android 千问生图与可选 Local Dream SD1.5/QNN 本地生图。
+- Android 本地语音识别与 VITS 角色语音，PC 可配置完整 Whisper/CosyVoice 链路。
 
-<p align="center">
-  <img src="docs/images/PC-0.18-home.png" alt="拾语 PC 工作台" width="900">
-</p>
+## 四种运行形态
 
-<p align="center">
-  <img src="docs/images/Android-0.18.22-chat.jpg" alt="拾语 Android 李白角色聊天界面" width="42%">
-  <img src="docs/images/Android-0.18.22-chat-xiao-chengyuan.jpg" alt="拾语 Android 萧承渊角色聊天界面" width="42%">
-</p>
+- **Windows EXE 基础版**：解压即可运行，提供 DeepSeek / OpenCode Go 云端角色生成和
+  聊天、四个内置角色、角色编辑与删除、世界书、长期记忆管理及云端图片输入。发布包
+  不附带本地大语言模型、生图模型或完整本地语音模型。
+- **PC 网页完整环境**：与 EXE 共用 React 和 FastAPI 核心，额外支持自行安装
+  MeinaMix V12、本地 Qwen/LoRA、BGE、CosyVoice 2、GPT-SoVITS、MeloTTS 和
+  Whisper 等完整实验链路。
+- **Android 完整版**：除云端 API 外，可导入 MNN 大语言模型和 Local Dream
+  SD1.5/QNN 生图模型；APK 内置 8 个可编辑、可删除的初始角色及对应头像和背景，
+  并包含本地语音识别与 VITS 角色语音运行库。模型权重按设置页要求由用户导入。
+- **Android 云端版**：独立包名，可与完整版共存，只保留云端聊天、角色生成、长期
+  记忆、场景、图片输入、千问云端生图和可选 Qwen3 语义记忆；不包含 MNN、QNN、
+  Local Dream、ASR 和 TTS 运行库。初始角色为 6 人，不再包含宋知意、裴既明。
 
-### 四种运行形态
+### 对应发布入口
 
-- **Windows EXE 基础版**：解压即可运行，提供 DeepSeek / OpenCode Go 云端角色生成和聊天、四个内置角色、角色编辑与删除、世界书、长期记忆管理及云端图片输入。发布包不附带本地大语言模型、生图模型或完整本地语音模型。
-- **PC 网页完整环境**：与 EXE 共用 React 和 FastAPI 核心，额外支持自行安装 MeinaMix V12、本地 Qwen/LoRA、BGE、CosyVoice 2、GPT-SoVITS、MeloTTS 和 Whisper 等完整实验链路。
-- **Android 完整版**：除云端 API 外，可导入 MNN 大语言模型和 Local Dream SD1.5/QNN 生图模型；APK 内置 8 个可编辑、可删除的初始角色及对应头像和背景，并包含本地语音识别与 VITS 角色语音运行库。模型权重按设置页要求由用户导入。
-- **Android 云端版**：独立包名，可与完整版共存，只保留云端聊天、角色生成、长期记忆、场景、图片输入和千问云端生图；不包含 MNN、QNN、Local Dream、ASR 和 TTS 运行库。
+- Windows EXE 基础版：
+  [Release v0.18.0](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.0)
+- PC 网页完整环境：
+  [安装与复现文档](docs/PC网页版安装与复现.md)
+- Android 完整版：
+  [Release v0.21.0](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.21.0)
+- Android 云端版：
+  [Release v0.21.0](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.21.0)
 
-Windows EXE 的“基础版”不是完整研究环境。需要本地大模型、本地生图、高质量角色音色或完整语音识别时，请按下方 PC 源码流程安装对应运行库和模型权重。
-
-## 当前版本
-
-Android `0.19.0` 新增约 21.9 MiB 的云端精简版，并把完整版与云端版的初始角色
-统一为 8 人：宋知意、裴既明、李白、萧承渊、姜拂衣、空条承太郎、凌清鸢和
-沈砚辞。角色档案、头像和聊天背景来自作者本地云端版角色库。
-本次还优化了角色管理页的头像解码、缩略图缓存和列表绘制，减少快速滑动时的卡顿。
-升级会同步这 8 个默认角色，并移除旧版中不属于当前初始角色库的默认角色；
-用户自建角色不在此清理范围内。详细版本记录见 [CHANGELOG](CHANGELOG.md)。
-
-## 文档
-
-完整的安装、配置、构建和功能说明见 [文档索引](docs/README.md)。
-
-项目从角色创建、Prompt 编排、长期记忆、事件到多端运行原理的完整说明见
-[项目技术架构与运行原理](docs/项目技术架构与运行原理.md)。
-
-内部状态、长期记忆问题的现状、论文依据和优化实验设计见
-[内部状态与长期记忆优化分析](docs/内部状态与长期记忆优化分析.md)。
-
-## 已实现功能
-
-### 聊天与角色
-
-- 自定义角色和角色卡生成草稿；新数据目录首次启动写入四个可删除的 PC 演示角色。
-- 身份、背景、性格、说话方式、关系、互动边界和示例对话。
-- 关键词触发世界书，固定事实优先于聊天中的即兴内容。
-- 时代、知识截止、世界范围、允许/禁止知识与禁止词边界。
-- 每个角色只有一个持续对话。
-- PC SSE 流式回答、停止生成、超时与 Provider 错误提示。
-- Android 原生流式读取、停止生成与本地历史。
-- 图片输入，可交给支持视觉的云端模型。
-- 删除、重置角色及其消息、记忆、图片和状态。
-- 角色上下文包含固定事实、示例对话、场景、动机、边界和稳定目标。
-- 轻量对话策略按倾听、庆祝、讨论、承接和结束等情境调整表达，不增加额外模型调用。
-
-### 长期记忆
-
-- 回复保存后自动创建持久后台任务，不阻塞当前聊天。
-- 从对话中提取用户事实、角色自述、共同事件、计划和边界。
-- 候选事实必须有来源消息 ID、说话人和逐字证据。
-- 自动执行新增、合并、更正、疑义和忽略。
-- 旧事实保留为历史版本；删除操作创建墓碑，旧原话不能自动复活。
-- 记忆页可修正、标错、恢复历史值、忘记整个主题和撤销主题禁止，并保留版本链与操作审计。
-- PC 使用 FTS5 + 可选本地 `BAAI/bge-small-zh-v1.5`。
-- Android 使用 FTS4 中文分词，并保留可选语义 Provider 接口。
-- 结构化事实、摘要和历史摘录使用统一上下文预算。
-- 每个角色每天有独立的后台记忆 Token 预算。
-- 候选事实经过确定性证据校验和一次批量语义审核。
-- 记忆卡片展示逐字证据，并支持纠正、钉住、标为过时、本轮忽略和删除。
-- 角色自述、计划、假设和观点保留各自权限，不能自动升级为确定事实。
-- 计划和共同事件可形成最小事件链与未完成事项，只在相关话题出现时承接。
-
-### 内部状态
-
-普通角色不再注入持久心情、熟悉度、信任度、温暖度或关系阶段。该选择来自同一
-角色、同一 Prompt、同一场景下的 OpenCode 真实多轮对比：轻量模式没有稳定收益，
-完整模式会增加过时关系判断，而关闭模式更稳定。用户明确边界独立于情绪状态并
-持续生效；当前轮的好消息、压力、冲突和修复仍会即时影响本轮语气。旧状态表不会
-删除，但不再参与产品聊天 Prompt。
-
-### 语音、图片与本地模型
-
-| 能力 | Windows EXE 基础版 | PC 网页完整环境 | Android 完整版 | Android 云端版 |
-|---|---|---|---|---|
-| 云端角色与记忆 | 支持 | 支持 | 支持 | 支持 |
-| 本地大语言模型 | 不附带、不支持 | 可自行配置 Qwen / LoRA | 可导入 MNN 模型 | 不支持 |
-| 语音识别 | 仅 WebView2 系统回退，不作为核心保证 | 安装 Whisper 后启用 | sherpa-onnx 本地 ASR | 不包含 |
-| 角色语音 | 仅 Windows 系统回退，不作为核心保证 | 配置 CosyVoice 2、GPT-SoVITS 或 MeloTTS | 内置 VITS zh-ll 本地 TTS | 不包含 |
-| 图片输入 | 支持，交给云端视觉模型 | 支持 | 支持；本地 MNN 模式不支持图片 | 支持，交给云端视觉模型 |
-| 图片生成 | 不附带 | 安装 MeinaMix V12 / Diffusers 后启用 | 千问图片 API，或导入 Local Dream SD1.5/QNN 模型 | 千问图片 API |
-| 模型权重 | 不含 | 用户自行下载 | MNN 与 Dream 权重由用户导入 | 不含 |
-
-语音目前不是实时电话式双向通话，也没有自动打断。
-
-## 快速使用 Windows EXE 基础版
-
-Windows 发布包为 `Shiyu-0.18.0-Windows-x64.zip`，解压后保持目录完整并运行
-`Shiyu-0.18.0-Windows-x64.exe`。Windows 10/11 需要 Microsoft Edge WebView2
-Runtime。首次启动后在设置中填写 DeepSeek 或 OpenCode Go API Key。
-
-EXE 不要求安装 Python、Conda、Node.js 或模型权重，适合直接体验云端角色聊天、角色生成、世界书和长期记忆。它不是完整的本地推理发行包。
-
-## 复现完整 PC 网页端
-
-### 环境
-
-- Windows 10/11
-- Python 3.11
-- Git
-- pnpm 或 Node.js 20+
-- 可选：NVIDIA GPU。当前主链路使用云端 API，显卡不是必需条件。
-
-### 安装完整网页环境
-
-```powershell
-git clone https://github.com/bawdwl/shiyu-ai-companion-chat.git
-cd shiyu-ai-companion-chat
-
-conda create -n shiyu-chat python=3.11 pip -y
-conda activate shiyu-chat
-python -m pip install -r requirements-lock-windows-py311.txt
-
-pnpm --dir frontend install --frozen-lockfile
-pnpm --dir frontend build
-```
-
-仓库同时包含已经构建好的 `web/react-dist/`；修改前端源码后需要重新运行构建。
-
-### 启动云端文字聊天
-
-```powershell
-python launch_app.py --provider opencode --speech-provider off --asr-provider off
-```
-
-打开 <http://127.0.0.1:8000/ui/>，在设置中选择 Provider 并填写自己的 API Key。API Key 通过本机服务保存到加密 Secret Store，不会发送回浏览器。
-
-也可以改用 DeepSeek：
-
-```powershell
-python launch_app.py --provider deepseek --speech-provider off --asr-provider off
-```
-
-### 启用完整 PC BGE 语义记忆
-
-```powershell
-python scripts/fetch_embedding_model.py
-```
-
-模型缺失或运行失败时，应用会自动回退到 FTS5 和词法检索。
-
-### 启用完整 PC 语音
-
-PC 语音优先调用本机 CosyVoice 2 FastAPI；服务或角色参考音频不可用时，再回退到 GPT-SoVITS 和 MeloTTS。CosyVoice2-0.5B 官方页面标称约 4.86 GB；本地同时保留 fp16/fp32 和训练缓存文件后实际约 5.62 GB。它不按调用次数收费。模型准备和启动方式见 [本地生图与 CosyVoice 语音](docs/本地生图与CosyVoice语音.md)。
-
-### 启用完整 PC 本地生图
-
-```powershell
-.\scripts\setup_local_image_runtime.ps1 `
-  -Python "D:\Others\Study\Anaconda3\envs\qwen3-im-chat\python.exe"
-```
-
-启动后在“设置 → 本地图片模型”确认 MeinaMix V12 路径，随后在角色右侧点击“本地生成立绘”。模型权重不进入 Git。
-
-## 安装 Android 端
+## 安装 Android
 
 从 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/latest)
-下载 `Shiyu-0.19.2-Android-arm64-v8a.apk`，或云端精简版
-`Shiyu-0.19.2-cloud-Android-arm64-v8a.apk`。
+下载：
 
-本机构建调试包：
+- 完整版：`Shiyu-0.21.0-Android-arm64-v8a.apk`
+- 云端版：`Shiyu-0.21.0-cloud-Android-arm64-v8a.apk`
 
-```text
-android/app/build/outputs/apk/full/debug/app-full-debug.apk
-```
+完整版和云端版使用不同包名，可以同时安装：
 
-- 当前源码：`0.20.1 / versionCode 63`
-- 当前公开 Release：`0.20.1 / versionCode 63`
-- Room schema：20
-- 完整版 APK：`299,410,624` 字节，约 285.54 MiB
-- 完整版 SHA-256：`B025DE63B897E0725B44091A73645C93026FD5C3508A0EF027C75D5E000AEB27`
-- 安装后请在设置中填写自己的 OpenCode Go 或 DeepSeek Key。
+- `com.shiyu.chat`
+- `com.shiyu.chat.cloud`
 
-APK 包含本地语音运行库、VITS 中文语音模型、Qwen MNN 运行库和 Dream SD1.5/QNN 后端。本地 Qwen 与 MeinaMix V12 等模型权重不随 APK 分发，需要用户按应用设置中的说明导入。
+首次启动后填写自己的 OpenCode Go 或 DeepSeek API Key。模型权重、聊天数据库和 API
+Key 不进入 Git 仓库。
 
-### 云端精简版
+完整安装、权限和真机演示步骤见
+[Android 安装与演示](docs/Android安装与演示.md)。
 
-发布包：`release/apk-0.20.1-cloud/Shiyu-0.20.1-cloud-Android-arm64-v8a.apk`
+## 可选 Qwen3 语义记忆
 
-- 包名：`com.shiyu.chat.cloud`，可与完整版同时安装，数据独立。
-- 版本：`0.20.1-cloud / versionCode 63`
-- 大小：`22,512,580` 字节，约 21.47 MiB。
-- SHA-256：`DBA21DEA4D049180988A64C9B4479D230A18868CF48711AFA64A547FE5C56017`
-- 保留云端角色生成、聊天、长期记忆、事件、场景、图片输入和千问云端生图。
-- 不包含 MNN、Local Dream/QNN、本地 ASR、角色朗读模型和相关原生运行库。
+Android 默认使用 Room、FTS4、中文词面、近义表达和确定性重排。需要更强语义召回时，
+可在“设置 → Android 语义记忆”中：
 
-### 从源码构建 Android
+1. 下载约 596 MiB 的 `Qwen3-Embedding-0.6B-ONNX` INT8 包。
+2. 或导入包含以下文件的 ZIP：
+   - `onnx/model_int8.onnx`
+   - `tokenizer.json`
+   - `tokenizer_config.json`
+   - `config.json`
 
-需要 JDK 17、Android SDK 35 和 Android Studio 或等价工具链。
+模型不会进入 APK。安装后会在后台为结构化记忆建立 1024 维向量索引，查询时与 FTS4
+共同参与召回。模型未安装、加载失败或索引为空时会自动回退，不阻塞聊天。
+
+## 数据与隐私
+
+- 不包含项目方账号系统和云数据库。
+- API Key 保存在 Android Keystore/EncryptedSharedPreferences 或本机加密 Secret Store。
+- 角色、消息、记忆、分支、Trace 和图片保存在当前设备。
+- Windows、PC 网页和 Android 不会自动同步数据。
+- 重置对话只清除该角色对话及派生数据，保留角色档案与图片。
+- 删除角色会删除该角色的聊天、记忆、事件、Trace 和角色图片。
+
+## 从源码构建
+
+### Android
+
+需要 JDK 17、Android SDK 35、Build Tools 35 和 Android NDK。
 
 ```powershell
-$env:JAVA_HOME = "C:\path\to\jdk-17"
-$env:ANDROID_HOME = "C:\Users\<you>\AppData\Local\Android\Sdk"
 .\scripts\build_android.ps1
 .\scripts\build_android_cloud.ps1
 ```
@@ -231,88 +115,77 @@ android/app/build/outputs/apk/full/debug/app-full-debug.apk
 android/app/build/outputs/apk/cloud/debug/app-cloud-debug.apk
 ```
 
-也可以直接在 Android Studio 中打开 `android/` 并运行 `app` 配置。
-
-不连接手机时，可启动电脑端 Android 模拟器测试云端界面、角色管理、聊天和长期
-记忆：
+### PC 网页完整环境
 
 ```powershell
-.\scripts\run_android_emulator.ps1
-```
-
-模拟器使用独立包名 `com.shiyu.chat.emulator`，不会影响手机数据。MNN、Local
-Dream/QNN、本地语音、NPU 和真实触控帧率仍须在 ARM64 真机验证。
-
-本地生图在“应用设置 → Dream 本地生图”中导入 SD1.5 QNN ZIP，并可调整正面/负面提示词、步数、CFG、采样器和种子。角色编辑页可填写单独的生图外貌提示词。云端头像需要另外填写千问图片 API Key。
-
-连接已授权 Android 设备后，可用 `scripts/deploy_android_dream.ps1` 覆盖安装 APK，并把本机 MeinaMix V12 ZIP 推到手机 `Download` 目录；随后在应用内导入。
-
-## 数据与密钥
-
-- 仓库不包含 API Key、聊天数据库、个人录音、角色生成图片、模型权重或 LoRA Adapter。
-- PC 的 Key、数据库和语音档案默认位于 Git 忽略的 `outputs/`。
-- Android 的 Key 使用 Android Keystore/EncryptedSharedPreferences。
-- 角色、消息、记忆和状态保存在各自设备的 Room 或 SQLite 中。
-- Windows EXE、PC 网页端和 Android 目前不会自动同步数据。
-- 重置对话会删除该角色的消息、长期记忆、内部状态和 Trace，保留角色档案、头像与背景。
-- 删除角色会同时删除该角色的档案、聊天、记忆、状态和角色图片。
-
-如果发现任何泄露的凭证，请立即在 Provider 控制台撤销并更换。不要通过 Issue 或 Pull Request 上传 API Key。
-
-## 测试
-
-```powershell
-python -B scripts/check_project.py
-node --test tests/frontend_state.test.cjs
+conda create -n shiyu-chat python=3.11 pip -y
+conda activate shiyu-chat
+python -m pip install -r requirements-lock-windows-py311.txt
+pnpm --dir frontend install --frozen-lockfile
 pnpm --dir frontend build
+python launch_app.py --provider opencode --speech-provider off --asr-provider off
 ```
 
-Android：
+打开 <http://127.0.0.1:8000/ui/>。完整部署见
+[PC 网页版安装与复现](docs/PC网页版安装与复现.md)。
+
+## 验证
 
 ```powershell
-cd android
-.\gradlew.bat testFullDebugUnitTest assembleFullDebug lintFullDebug --no-daemon
-.\gradlew.bat testCloudDebugUnitTest assembleCloudDebug lintCloudDebug --no-daemon
-.\gradlew.bat testEmulatorDebugUnitTest assembleEmulatorDebug --no-daemon
+$env:PYTHONDONTWRITEBYTECODE='1'
+D:\Others\Study\Anaconda3\envs\qwen3-im-chat\python.exe -B scripts\check_project.py
+
+$toolchain=(Resolve-Path '..\..\outputs\android-toolchain').Path
+$env:JAVA_HOME=(Resolve-Path (Join-Path $toolchain 'jdk17\jdk-17.0.20.1+1')).Path
+$env:ANDROID_HOME=(Resolve-Path (Join-Path $toolchain 'sdk')).Path
+$env:ANDROID_SDK_ROOT=$env:ANDROID_HOME
+$env:GRADLE_USER_HOME=(Resolve-Path (Join-Path $toolchain 'gradle-home-current')).Path
+.\android\gradlew.bat -p .\android :app:testEmulatorDebugUnitTest :app:lintFullDebug
 ```
 
-当前发布前验证结果：
-
-- PC 全量 Python 回归：313 项通过。
-- PC 前端状态测试：40 项通过。
-- React 生产构建通过。
-- Android JVM：完整版、云端版和模拟器版各 118 项通过。
-- Android APK 构建和 Lint 通过；完整版与云端版均会执行真机覆盖安装验证。本地 Dream 生图仍取决于设备 NPU 与导入模型。
-
-这些结果证明主要工程流程可运行，不等同于大规模真实聊天质量评估。
-
-## 当前限制
-
-- Android 没有内置 BGE，语义召回弱于 PC。
-- PC 与 Android 的摘要管理尚未完全对等。
-- 反思记忆、人物成长、长期目标和剧情 World Clock 未完成。
-- 认知边界尚未实现完整 K1–K5 与多角色隐藏事实隔离。
-- 没有账号、多用户、跨设备同步、内容审核和生产级并发。
-- 还没有完整浏览器 E2E、Android UI instrumentation 和长时间运行测试。
-- 当前主机干净环境验收不能替代另一台全新电脑的从零安装验收。
-- Windows EXE 不包含本地大语言模型、生图模型和完整本地语音权重。
+当前 Android JVM 测试为 `137` 项。测试通过不等同于大规模真实聊天质量评估。
 
 ## 目录
 
 ```text
 launch_app.py                 PC 启动入口
-src/                          FastAPI、Provider、记忆、提示词、存储与语音
+src/                          FastAPI、Provider、记忆、提示词和存储
 frontend/                     React + TypeScript 源码
 web/react-dist/               已构建 PC 前端
 desktop/                      Windows WebView2 桌面启动器
 android/                      Kotlin + Compose + Room Android 项目
-tests/                        当前生产链路回归测试
-scripts/                      构建、模型下载和检查脚本
-docs/                         架构、验收、语音与复现文档
-evaluation/                   当前测试仍使用的固定评测夹具
+tests/                        生产链路回归测试
+scripts/                      构建、模型下载、发布和检查脚本
+docs/                         架构、安装、功能与复现文档
+evaluation/                   固定评测夹具
 release/                      发布说明与本地发布物索引
 ```
 
+更多说明见 [文档索引](docs/README.md)。
+
+## 当前限制
+
+- 不做账号系统、跨设备同步和多人协作。
+- Qwen3 embedding 在手机上的首次加载、内存峰值和耗电仍取决于设备配置。
+- 摘要尚无逐条事实级 grounding，时间语义仍是后续重点。
+- Android 完整版不再继续迭代，后续只维护云端版。
+
 ## 许可证
 
-项目原创代码采用 [AGPL-3.0](LICENSE)。模型、模型转换产物、角色图片、语音模型和其他第三方组件分别遵循各自上游许可，详见 [LICENSE-NOTICE.md](LICENSE-NOTICE.md)。
+项目原创代码采用 [AGPL-3.0](LICENSE)。模型、转换产物、角色图片、语音模型和其他
+第三方组件分别遵循上游许可，详见 [LICENSE-NOTICE.md](LICENSE-NOTICE.md)。
+
+## 项目演示
+
+### PC 工作台
+
+<p align="center">
+  <img src="docs/images/PC-0.18-home.png" alt="拾语 PC 工作台" width="100%">
+</p>
+
+### Android 对话
+
+<p align="center">
+  <img src="docs/images/Android-0.18.22-chat.jpg" alt="拾语 Android 聊天界面" width="42%">
+  <img src="docs/images/Android-0.18.22-chat-xiao-chengyuan.jpg" alt="拾语 Android 角色对话" width="42%">
+</p>
