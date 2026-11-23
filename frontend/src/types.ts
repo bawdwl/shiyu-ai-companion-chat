@@ -173,8 +173,19 @@ export interface MemoryItem {
   quote: string;
 }
 
+export interface MemoryClaim {
+  claim_key: string;
+  text: string;
+  source_message_ids: number[];
+  evidence_quotes: string[];
+  claim_type: "fact" | "plan" | "hypothesis" | "shared_event" | "character_statement";
+  certainty: "explicit" | "uncertain" | "inferred";
+}
+
 export interface SessionMemory {
   items: MemoryItem[];
+  claims?: MemoryClaim[];
+  summary?: string;
   covered_message_id: number;
   notes: string;
   auto_enabled: boolean;
@@ -323,6 +334,7 @@ export interface CharacterCard {
   name: string;
   tagline: string;
   description: string;
+  public_intro?: string;
   appearance?: string;
   appearance_prompt?: string;
   background: string;

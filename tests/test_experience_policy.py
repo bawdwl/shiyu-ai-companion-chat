@@ -1,9 +1,11 @@
 import unittest
 import tempfile
+import sqlite3
 from pathlib import Path
 
 from experience_policy import (
     affect_prompt,
+    contains_positive_cue,
     current_turn_affect,
     derive_event_update,
     dialogue_policy,
@@ -98,6 +100,35 @@ class ExperiencePolicyTests(unittest.TestCase):
             'content': '用户取消了周五的面试',
         }
         self.assertEqual('cancelled', derive_event_update(cancelled)['status'])
+
+    def test_negated_good_news_is_not_celebrated(self):
+        self.assertFalse(contains_positive_cue('我没考上研究生', ('考上',)))
+        self.assertFalse(contains_positive_cue('这次没有通过', ('通过',)))
+        self.assertEqual('NONE', dialogue_policy('我没考上研究生', [])['strategy'])
+        self.assertIsNone(current_turn_affect('这次没有通过'))
+        self.assertEqual(
+            'CELEBRATE',
+            dialogue_policy('我终于考上了', [])['strategy'],
+        )
+
+    def test_event_instances_are_separated_by_date(self):
+        plan = {
+            'subject': 'user',
+            'kind': 'plan',
+            'fact_type': 'plan',
+            'fact_key': 'user.interview.plan',
+            'event_date': '2026-11-24',
+            'content': '用户计划周五参加面试',
+        }
+        first = derive_event_update(plan)
+        second = derive_event_update({
+            **plan,
+            'event_date': '2026-12-01',
+            'content': '用户计划下周五参加另一场面试',
+        })
+        self.assertEqual('interview@2026-11-24', first['event_instance_key'])
+        self.assertEqual('interview@2026-12-01', second['event_instance_key'])
+        self.assertNotEqual(first['event_instance_key'], second['event_instance_key'])
 
     def test_memory_store_keeps_event_chain_and_clears_it_with_scope(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -200,6 +231,121 @@ class ExperiencePolicyTests(unittest.TestCase):
             finally:
                 store.close()
 
+    def test_memory_store_keeps_dated_event_instances_under_one_topic(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            store = CandidateStore(root / 'memory.sqlite3', allowed_root=root)
+            try:
+                base = {
+                    'status': 'candidate',
+                    'kind': 'plan',
+                    'subject': 'user',
+                    'fact_key': 'user.interview.plan',
+                    'value': None,
+                    'content': '用户计划十一月参加面试',
+                    'fact_type': 'plan',
+                    'epistemic_status': 'explicit',
+                    'operation': 'add',
+                    'target_item_id': None,
+                    'evidence': [{
+                        'message_id': 1,
+                        'role': 'user',
+                        'quote': '我十一月要参加面试',
+                    }],
+                }
+                for date, message_id, fact_key, content, quote in (
+                    ('2026-11-24', 1, 'user.interview.plan', '用户计划十一月参加面试', '我十一月要参加面试'),
+                    ('2026-12-01', 3, 'user.interview.followup', '用户计划十二月参加面试', '我十二月要参加面试'),
+                ):
+                    item = {
+                        **base,
+                        'fact_key': fact_key,
+                        'event_date': date,
+                        'content': content,
+                        'evidence': [{
+                            'message_id': message_id,
+                            'role': 'user',
+                            'quote': quote,
+                        }],
+                    }
+                    outcome = store.auto_ingest('custom-dated-events', item)
+                    store.record_event_from_memory(
+                        'custom-dated-events',
+                        outcome['item'],
+                    )
+                rows = store.db.execute(
+                    '''SELECT topic_key,event_instance_key
+                       FROM memory_events
+                       WHERE character_id='custom-dated-events'
+                       ORDER BY event_instance_key'''
+                ).fetchall()
+                self.assertEqual(2, len(rows))
+                self.assertEqual(
+                    {'2026-11-24', '2026-12-01'},
+                    {
+                        str(row['event_instance_key']).split('@', 1)[1]
+                        for row in rows
+                    },
+                )
+                self.assertEqual(
+                    {'interview'},
+                    {row['topic_key'] for row in rows},
+                )
+            finally:
+                store.close()
+
+    def test_old_topic_unique_event_table_migrates_without_losing_rows(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            path = root / 'memory.sqlite3'
+            db = sqlite3.connect(path)
+            try:
+                db.execute('''
+                    CREATE TABLE memory_events (
+                        id INTEGER PRIMARY KEY,
+                        character_id TEXT NOT NULL,
+                        topic_key TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        summary TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        reality_mode TEXT NOT NULL DEFAULT 'daily',
+                        participants_json TEXT NOT NULL DEFAULT '[]',
+                        source_message_ids TEXT NOT NULL DEFAULT '[]',
+                        timeline_json TEXT NOT NULL DEFAULT '[]',
+                        last_mentioned_at TEXT,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        UNIQUE(character_id,topic_key))
+                ''')
+                db.execute('''
+                    INSERT INTO memory_events(
+                        character_id,topic_key,title,summary,status,
+                        created_at,updated_at)
+                    VALUES('custom-old','interview','旧面试','旧记录','open',
+                           '2026-01-01','2026-01-01')
+                ''')
+                db.commit()
+            finally:
+                db.close()
+            store = CandidateStore(path, allowed_root=root)
+            try:
+                columns = {
+                    row[1] for row in store.db.execute(
+                        'PRAGMA table_info(memory_events)'
+                    )
+                }
+                self.assertIn('event_instance_key', columns)
+                row = store.db.execute(
+                    '''SELECT topic_key,event_instance_key,title
+                       FROM memory_events
+                       WHERE character_id='custom-old' '''
+                ).fetchone()
+                self.assertEqual('interview', row['topic_key'])
+                self.assertEqual('interview@undated', row['event_instance_key'])
+                self.assertEqual('旧面试', row['title'])
+            finally:
+                store.close()
+
     def test_prompt_pipeline_adds_scene_and_turn_hint_without_touching_fixed(self):
         card = normalize_card({
             'name': '林音',
@@ -247,7 +393,6 @@ class ExperiencePolicyTests(unittest.TestCase):
               "fixedFacts":[{"key":"职业","value":"书店店员"}],
               "exampleDialogue":[{"user":"你好","character":"我刚整理完书架。"}],
               "useExamples":true,
-              "interactionMode":"immersive",
               "goals":["完成插画集"]
             }
             ''',
@@ -256,7 +401,6 @@ class ExperiencePolicyTests(unittest.TestCase):
         self.assertEqual('书店店员', card['fixed_facts'][0]['value'])
         self.assertEqual('proposal', card['fixed_facts'][0]['status'])
         self.assertTrue(card['use_examples'])
-        self.assertEqual('immersive', card['interaction_mode'])
         self.assertEqual(['完成插画集'], card['goals'])
 
 

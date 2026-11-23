@@ -166,9 +166,7 @@ import com.shiyu.chat.data.TTS_SELECTABLE_SPEAKER_IDS
 import com.shiyu.chat.data.normalizeTtsSpeakerId
 import com.shiyu.chat.data.naturalMessageText
 import com.shiyu.chat.data.parsePromptInspectorSnapshot
-import com.shiyu.chat.data.parseWorldbookEntries
 import com.shiyu.chat.data.restartAfterRestore
-import com.shiyu.chat.data.selectWorldbookEntries
 import com.shiyu.chat.data.speechOnlyText
 import com.shiyu.chat.R
 import kotlinx.coroutines.Dispatchers
@@ -654,6 +652,7 @@ fun ShiyuApp(repository: ChatRepository) {
                                 onDeleteEmbeddingModel = vm::deleteEmbeddingModel,
                                 onTestEmbeddingModel = vm::testEmbeddingModel,
                                 onDownloadEmbeddingModel = vm::downloadEmbeddingModel,
+                                onEmbeddingSemanticChange = vm::setEmbeddingSemanticEnabled,
                                 onDownloadDreamModel = vm::downloadDreamModel,
                                 onCreateBackup = vm::createBackup,
                                 onRestoreBackup = vm::restoreBackup,
@@ -2008,7 +2007,6 @@ private fun ChatScreen(
         mutableIntStateOf(normalizeTtsSpeakerId(voicePrefs.getInt(character.id, 0)))
     }
     var showVoicePicker by remember(character.id) { mutableStateOf(false) }
-    var confirmDelete by remember(character.id) { mutableStateOf(false) }
     var confirmReset by remember(character.id) { mutableStateOf(false) }
     var showRollback by remember(character.id) { mutableStateOf(false) }
     var pendingRollback by remember(character.id) { mutableStateOf<MessageEntity?>(null) }
@@ -2364,12 +2362,6 @@ private fun ChatScreen(
                                 },
                             )
                         }
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("删除角色") },
-                            leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
-                            enabled = !state.busy && !state.avatarBusy,
-                            onClick = { menu = false; confirmDelete = true },
-                        )
                     }
                 }
             }
@@ -2931,19 +2923,6 @@ private fun ChatScreen(
                     Text("取消")
                 }
             },
-        )
-    }
-    if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            shape = RoundedCornerShape(22.dp),
-            containerColor = Color(0xFFFDFBFF),
-            title = { Text("删除${character.name}？") },
-            text = { Text("角色档案、聊天记录、记忆及应用生成的头像会被删除，无法恢复。你从手机相册选择的原始图片不会删除。") },
-            confirmButton = {
-                TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("删除角色", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } },
         )
     }
 }
@@ -3590,13 +3569,17 @@ private fun MessageBubble(
                 }
             }
             if (message.id > 0) {
+                val actionColor = Color.Black.copy(alpha = 0.82f)
                 Row(
                     modifier = Modifier.padding(top = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     if (fullFeatures && !user && message.content.isNotBlank() && onPlay != null) {
-                        TextButton(onClick = onPlay) {
+                        TextButton(
+                            onClick = onPlay,
+                            colors = ButtonDefaults.textButtonColors(contentColor = actionColor),
+                        ) {
                             Icon(
                                 if (playing()) Icons.Default.Stop else Icons.AutoMirrored.Filled.VolumeUp,
                                 contentDescription = null,
@@ -3607,7 +3590,10 @@ private fun MessageBubble(
                         }
                     }
                     if (!user && message.id > 0 && onRegenerate != null) {
-                        TextButton(onClick = onRegenerate) {
+                        TextButton(
+                            onClick = onRegenerate,
+                            colors = ButtonDefaults.textButtonColors(contentColor = actionColor),
+                        ) {
                             Icon(
                                 Icons.Default.RestartAlt,
                                 contentDescription = null,
@@ -3618,29 +3604,41 @@ private fun MessageBubble(
                         }
                     }
                     if (!user && message.id > 0 && onShowVariants != null) {
-                        TextButton(onClick = onShowVariants) {
+                        TextButton(
+                            onClick = onShowVariants,
+                            colors = ButtonDefaults.textButtonColors(contentColor = actionColor),
+                        ) {
                             Text("版本", fontSize = 10.sp)
                         }
                     }
                     if (message.id > 0 && onCreateBranch != null) {
-                        TextButton(onClick = onCreateBranch) {
+                        TextButton(
+                            onClick = onCreateBranch,
+                            colors = ButtonDefaults.textButtonColors(contentColor = actionColor),
+                        ) {
                             Text("分支", fontSize = 10.sp)
                         }
                     }
                     if (user && message.id > 0 && onEdit != null) {
-                        TextButton(onClick = onEdit) {
+                        TextButton(
+                            onClick = onEdit,
+                            colors = ButtonDefaults.textButtonColors(contentColor = actionColor),
+                        ) {
                             Text("编辑", fontSize = 10.sp)
                         }
                     }
                     if (message.id > 0 && onToggleBookmark != null) {
-                        TextButton(onClick = onToggleBookmark) {
+                        TextButton(
+                            onClick = onToggleBookmark,
+                            colors = ButtonDefaults.textButtonColors(contentColor = actionColor),
+                        ) {
                             Text(if (bookmarked) "已收藏" else "收藏", fontSize = 10.sp)
                         }
                     }
                     Text(
                         SimpleDateFormat("M月d日 HH:mm", Locale.CHINA).format(Date(message.createdAt)),
                         fontSize = 8.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = Color.Black.copy(alpha = 0.72f),
                     )
                 }
             }
@@ -3842,6 +3840,7 @@ private fun SettingsDialog(
     onDeleteEmbeddingModel: () -> Unit,
     onTestEmbeddingModel: () -> Unit,
     onDownloadEmbeddingModel: () -> Unit,
+    onEmbeddingSemanticChange: (Boolean) -> Unit,
     onDownloadDreamModel: () -> Unit,
     onCreateBackup: (Uri) -> Unit,
     onRestoreBackup: (Uri) -> Unit,
@@ -3877,6 +3876,7 @@ private fun SettingsDialog(
     var requestLimit by remember(state.limits) { mutableStateOf(state.limits.requestTokens.toString()) }
     var dailyLimit by remember(state.limits) { mutableStateOf(state.limits.dailyTokens.toString()) }
     var settingsPage by remember { mutableIntStateOf(0) }
+    var showEmbeddingDiagnostics by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     val localAvatarPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
@@ -3931,19 +3931,21 @@ private fun SettingsDialog(
                     Button(
                         onClick = { settingsPage = 0 },
                         modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (settingsPage == 0) DeepForest else Color.Transparent,
                             contentColor = if (settingsPage == 0) Color.White else DeepForest,
                         ),
-                    ) { Text("对话与模型") }
+                    ) { Text("对话", fontSize = 12.sp, maxLines = 1, softWrap = false) }
                     Button(
                         onClick = { settingsPage = 1 },
                         modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (settingsPage == 1) DeepForest else Color.Transparent,
                             contentColor = if (settingsPage == 1) Color.White else DeepForest,
                         ),
-                    ) { Text("图片生成") }
+                    ) { Text("图片", fontSize = 12.sp, maxLines = 1, softWrap = false) }
                     Button(
                         onClick = { settingsPage = 2 },
                         modifier = Modifier.weight(1f),
@@ -3952,7 +3954,16 @@ private fun SettingsDialog(
                             containerColor = if (settingsPage == 2) DeepForest else Color.Transparent,
                             contentColor = if (settingsPage == 2) Color.White else DeepForest,
                         ),
-                    ) { Text("数据与安全") }
+                    ) { Text("数据", fontSize = 12.sp, maxLines = 1, softWrap = false) }
+                    Button(
+                        onClick = { settingsPage = 3 },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 2.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (settingsPage == 3) DeepForest else Color.Transparent,
+                            contentColor = if (settingsPage == 3) Color.White else DeepForest,
+                        ),
+                    ) { Text("语义", fontSize = 12.sp, maxLines = 1, softWrap = false) }
                 }
                 if (settingsPage == 0) {
                 Text("当前聊天 Provider", fontWeight = FontWeight.SemiBold)
@@ -4094,37 +4105,62 @@ private fun SettingsDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 }
+                }
+                if (settingsPage == 3) {
                 HorizontalDivider()
-                Text("Android 语义记忆 · ${state.embeddingModelName}", fontWeight = FontWeight.SemiBold)
+                Text("Qwen3-Embedding 语义记忆", fontWeight = FontWeight.SemiBold)
+                Surface(
+                    color = Sage.copy(alpha = 0.65f),
+                    shape = RoundedCornerShape(14.dp),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("启用语义检索", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                if (state.embeddingSemanticEnabled) {
+                                    "已启用：Qwen 语义分数会与 FTS4 词法检索共同排序。"
+                                } else {
+                                    "已关闭：长期记忆只使用 FTS4 词法检索。"
+                                },
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = state.embeddingSemanticEnabled,
+                            onCheckedChange = onEmbeddingSemanticChange,
+                            enabled = state.embeddingModelReady &&
+                                !state.embeddingModelBusy &&
+                                !state.modelDownloadBusy,
+                        )
+                    }
+                }
                 Text(
                     if (state.embeddingModelReady) {
-                        "Qwen3-Embedding 0.6B ONNX INT8 已安装，约 ${
+                        "已安装 ${state.embeddingModelName}，约 ${
                             String.format(
                                 Locale.CHINA,
                                 "%.2f",
                                 state.embeddingModelBytes / 1024.0 / 1024.0 / 1024.0,
                             )
-                        } GiB；已建立 ${state.embeddingIndexedCount} 条记忆向量。" +
-                            "语义召回会与 FTS4 融合，模型删除后自动回退。"
+                        } GiB；已建立 ${state.embeddingIndexedCount} 条记忆向量。"
                     } else {
-                        "默认不包含模型。可下载约 596 MiB 的 ONNX INT8 包，或导入包含 " +
-                            "config.json、tokenizer.json、tokenizer_config.json 和 " +
-                            "onnx/model_int8.onnx 的 ZIP。未安装时继续使用 FTS4。"
+                        "模型不随 APK 安装。下载约 596 MiB 的 ONNX INT8 包，或导入对应 ZIP；" +
+                            "未安装时继续使用 FTS4。"
                     },
                     fontSize = 10.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (state.embeddingModelDiagnostics.isNotBlank()) {
-                    Text(
-                        state.embeddingModelDiagnostics,
-                        fontSize = 8.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         onClick = { embeddingModelPicker.launch("*/*") },
-                        enabled = !state.embeddingModelBusy && !state.modelDownloadBusy,
+                        enabled = !state.embeddingModelBusy &&
+                            !state.modelDownloadBusy &&
+                            !state.embeddingDownloadBusy,
                     ) {
                         if (state.embeddingModelBusy) {
                             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -4141,6 +4177,7 @@ private fun SettingsDialog(
                     OutlinedButton(
                         onClick = onDownloadEmbeddingModel,
                         enabled = !state.embeddingModelBusy && !state.modelDownloadBusy &&
+                            !state.embeddingDownloadBusy &&
                             !state.localModelBusy && !state.avatarBusy,
                     ) {
                         Text(if (state.embeddingModelReady) "重新下载 embedding" else "下载 Qwen embedding")
@@ -4151,7 +4188,9 @@ private fun SettingsDialog(
                         OutlinedButton(
                             onClick = onTestEmbeddingModel,
                             enabled = !state.embeddingSelfTestBusy &&
-                                !state.embeddingModelBusy && !state.modelDownloadBusy,
+                                !state.embeddingModelBusy &&
+                                !state.modelDownloadBusy &&
+                                !state.embeddingDownloadBusy,
                         ) {
                             if (state.embeddingSelfTestBusy) {
                                 CircularProgressIndicator(
@@ -4160,12 +4199,14 @@ private fun SettingsDialog(
                                 )
                                 Spacer(Modifier.width(8.dp))
                             }
-                            Text(if (state.embeddingSelfTestBusy) "正在自检…" else "测试语义模型")
+                            Text(if (state.embeddingSelfTestBusy) "正在检测…" else "检测语义检索")
                         }
                         TextButton(
                             onClick = onDeleteEmbeddingModel,
                             enabled = !state.embeddingSelfTestBusy &&
-                                !state.embeddingModelBusy && !state.modelDownloadBusy,
+                                !state.embeddingModelBusy &&
+                                !state.modelDownloadBusy &&
+                                !state.embeddingDownloadBusy,
                         ) {
                             Text(
                                 "删除模型和向量索引",
@@ -4186,8 +4227,7 @@ private fun SettingsDialog(
                     }
                 }
                 if (
-                    state.modelDownloadBusy &&
-                    state.modelDownloadLabel.orEmpty().contains("Qwen3-Embedding")
+                    state.embeddingDownloadBusy
                 ) {
                     Text(state.modelDownloadLabel.orEmpty(), fontSize = 9.sp)
                     androidx.compose.material3.LinearProgressIndicator(
@@ -4195,6 +4235,22 @@ private fun SettingsDialog(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
+                if (state.embeddingModelDiagnostics.isNotBlank()) {
+                    TextButton(
+                        onClick = { showEmbeddingDiagnostics = !showEmbeddingDiagnostics },
+                    ) {
+                        Text(if (showEmbeddingDiagnostics) "隐藏诊断信息" else "查看诊断信息")
+                    }
+                    if (showEmbeddingDiagnostics) {
+                        Text(
+                            state.embeddingModelDiagnostics,
+                            fontSize = 8.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                }
+                if (settingsPage == 0) {
                 HorizontalDivider()
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
@@ -4776,10 +4832,6 @@ private fun EditCharacterDialog(
     var forbidden by remember(character.id) { mutableStateOf(character.forbiddenKnowledge) }
     var forbiddenTerms by remember(character.id) { mutableStateOf(character.forbiddenTerms) }
     var worldbookJson by remember(character.id) { mutableStateOf(character.worldbookJson) }
-    var worldbookProbe by remember(character.id) { mutableStateOf("") }
-    var worldbookProbeResults by remember(character.id) {
-        mutableStateOf<List<String>>(emptyList())
-    }
     var roleContextJson by remember(character.id) {
         mutableStateOf(character.roleContextJson)
     }
@@ -5181,60 +5233,16 @@ private fun EditCharacterDialog(
                 )
             }
             item {
-                WorldbookOverview(
-                    raw = worldbookJson,
-                    onRawChange = { worldbookJson = it },
-                )
+                WorldbookOverview(raw = worldbookJson)
             }
             item {
                 OutlinedTextField(
                     worldbookJson,
                     { worldbookJson = it },
-                    label = { Text("世界设定 Lore JSON（与聊天记忆分开）") },
+                    label = { Text("世界书 JSON（高级编辑）") },
                     minLines = 5,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text(
-                    "世界书保存地点、规则、组织、历史和秘密；聊天事实与共同经历由长期记忆单独管理。" +
-                        "这里不是角色已经知道一切的授权，仍需遵守知识边界。",
-                    fontSize = 9.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                OutlinedTextField(
-                    worldbookProbe,
-                    onValueChange = { worldbookProbe = it.take(200) },
-                    label = { Text("测试一句话会命中哪些世界书条目") },
-                    placeholder = { Text("例如：我们去看海，还记得那个约定吗") },
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                    trailingIcon = {
-                        TextButton(
-                            onClick = {
-                                worldbookProbeResults = selectWorldbookEntries(
-                                    parseWorldbookEntries(worldbookJson),
-                                    worldbookProbe,
-                                    maxEntries = 12,
-                                ).map { it.title }
-                            },
-                            enabled = worldbookProbe.isNotBlank(),
-                        ) { Text("测试") }
-                    },
-                )
-                if (worldbookProbeResults.isNotEmpty()) {
-                    Text(
-                        "命中：" + worldbookProbeResults.joinToString("、"),
-                        fontSize = 9.sp,
-                        color = Forest,
-                        modifier = Modifier.padding(top = 3.dp),
-                    )
-                } else if (worldbookProbe.isNotBlank()) {
-                    Text(
-                        "这条测试没有命中任何已启用的世界书条目。",
-                        fontSize = 9.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 3.dp),
-                    )
-                }
             }
             item {
                 val roleContext = remember(roleContextJson) {
@@ -5684,87 +5692,58 @@ private fun decodeArtworkPreview(
 }.getOrNull()
 
 @Composable
-private fun WorldbookOverview(
-    raw: String,
-    onRawChange: (String) -> Unit,
-) {
+private fun WorldbookOverview(raw: String) {
     val entries = remember(raw) {
         runCatching { JSONArray(raw) }.getOrNull()
     }
     Surface(
-        color = Sage.copy(alpha = 0.72f),
-        shape = RoundedCornerShape(16.dp),
+        color = Sage.copy(alpha = 0.65f),
+        shape = RoundedCornerShape(14.dp),
     ) {
         Column(
             Modifier.fillMaxWidth().padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("世界设定 Lore", fontWeight = FontWeight.SemiBold)
-            Text(
-                "常驻条目每轮作为世界背景参与 Prompt；普通条目只在关键词命中时进入。" +
-                    "世界 Lore 与聊天长期记忆分开保存。",
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (entries == null) {
-                Text(
+            Text("世界书", fontWeight = FontWeight.SemiBold)
+            when {
+                entries == null -> Text(
                     "世界书 JSON 无法解析。",
                     fontSize = 10.sp,
                     color = MaterialTheme.colorScheme.error,
                 )
-            } else if (entries.length() == 0) {
-                Text(
-                    "还没有世界设定条目。",
+                entries.length() == 0 -> Text(
+                    "暂无世界书条目。",
                     fontSize = 10.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-            entries?.let { array ->
-                fun updateEntry(index: Int, update: (JSONObject) -> Unit) {
-                    val current = runCatching { JSONArray(raw) }.getOrNull() ?: return
-                    val entry = current.optJSONObject(index) ?: return
-                    update(entry)
-                    current.put(index, entry)
-                    onRawChange(current.toString())
-                }
-                for (index in 0 until array.length()) {
-                    val entry = array.optJSONObject(index) ?: continue
-                    if (index > 0) {
-                        HorizontalDivider(color = Hairline)
-                    }
-                    val title = entry.optString("title").ifBlank { "条目 #$index" }
-                    val category = entry.optString("category").trim()
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                category.ifBlank { "未分类世界设定" },
-                                fontSize = 9.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                else -> for (index in 0 until entries.length()) {
+                    val entry = entries.optJSONObject(index) ?: continue
+                    if (index > 0) HorizontalDivider(color = Hairline)
+                    val keywords = entry.optJSONArray("keywords")
+                        ?.let { array ->
+                            (0 until array.length())
+                                .mapNotNull { item ->
+                                    array.optString(item).trim().takeIf(String::isNotBlank)
+                                }
+                                .joinToString("、")
                         }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("常驻", fontSize = 8.sp)
-                            Switch(
-                                checked = entry.optBoolean("constant", false),
-                                onCheckedChange = { checked ->
-                                    updateEntry(index) { it.put("constant", checked) }
-                                },
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("启用", fontSize = 8.sp)
-                            Switch(
-                                checked = entry.optBoolean("enabled", true),
-                                onCheckedChange = { checked ->
-                                    updateEntry(index) { it.put("enabled", checked) }
-                                },
-                            )
-                        }
+                        .orEmpty()
+                    Text(
+                        entry.optString("title").ifBlank { "世界书条目 ${index + 1}" },
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        entry.optString("content"),
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (keywords.isNotBlank()) {
+                        Text(
+                            "关键词：$keywords",
+                            fontSize = 9.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }
@@ -5786,12 +5765,6 @@ private fun FixedFactsConfirmation(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("正式固定事实", fontWeight = FontWeight.SemiBold)
-            Text(
-                "只有“已生效”的条目会进入 Prompt。提案保留在编辑器中，便于先检查模型生成的身份、经历和关系。" +
-                    "需要修改文字时使用下方高级 JSON。",
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             if (facts.isEmpty()) {
                 Text(
                     "没有固定事实。模型生成的提议会显示在这里。",

@@ -172,6 +172,11 @@ class ProductAppTests(unittest.TestCase):
                 'speech_style':'语气自然，不急着追问。','relationship':'从听众与主持人的友好关系开始。',
                 'greeting':'今晚的海风挺舒服，你想点一首什么歌？','boundaries':'不声称认识现实中的用户。',
                 'model_settings':{'source':'local','local_mode':'base'},
+                'knowledge_boundary':{
+                    'character_kind':'原创角色',
+                    'allowed_knowledge':['海边城市','电台节目','普通日常交流'],
+                    'forbidden_knowledge':None,
+                },
                 'fixed_facts':[{'key':'节目','value':'海边电台午夜档','status':'confirmed'}],
                 'worldbook':[{'title':'午夜节目','keywords':['电台','节目'],'content':'节目每晚午夜播出。','enabled':True}],
                 'example_dialogue':[{'user':'今天睡不着。','character':'那我陪你听一会儿，今晚的歌慢一些。'}],

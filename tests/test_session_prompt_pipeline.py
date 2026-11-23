@@ -8,9 +8,7 @@ from fastapi.testclient import TestClient
 from backend import create_app
 from character_cards import normalize_card, card_to_runtime
 from characters import CHARACTERS
-from fixed_character_prompts import FIXED_CHARACTER_PROMPTS
 from prompt_pipeline import assemble_prompt, reduce_repeated_history
-from product_characters import DEFAULT_PRODUCT_CARDS
 from session_memory import refresh_memory, select_memory, retrieve_covered_history
 from storage import ChatStore
 from stream_job import GenerationStopped
@@ -24,31 +22,6 @@ class SummaryEngine:
 
 
 class SessionMemoryTests(unittest.TestCase):
-    def test_fixed_lora_characters_use_exact_training_prompt_for_every_provider(self):
-        for character_id, expected in FIXED_CHARACTER_PROMPTS.items():
-            card = next(
-                item for item in DEFAULT_PRODUCT_CARDS
-                if item["id"] == character_id
-            )
-            runtime = card_to_runtime(normalize_card(card))
-            history = [
-                dict(id=1, role="user", content="你好"),
-                dict(id=2, role="assistant", content="你好。"),
-            ]
-            messages, trace = assemble_prompt(
-                dict(character_id=character_id, messages=history),
-                "继续聊",
-                {**CHARACTERS, character_id: runtime},
-            )
-            self.assertEqual(messages[0], {"role": "system", "content": expected})
-            self.assertEqual(messages[1:], [
-                {"role": "user", "content": "你好"},
-                {"role": "assistant", "content": "你好。"},
-                {"role": "user", "content": "继续聊"},
-            ])
-            self.assertEqual(trace["prompt_mode"], "fixed_training")
-            self.assertEqual(trace["worldbook_ids"], [])
-
     def test_excluded_history_does_not_consume_retrieval_limit(self):
         rows = []
         for i in range(5):
@@ -224,6 +197,111 @@ class SessionMemoryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '过长'):
             refresh_memory(self.store,self.store.get(self.sid),SummaryEngine(),force=True)
         self.assertEqual(self.store.get_memory(self.sid)['revision'],0)
+
+    def test_grounded_claim_summary_advances_watermark_and_renders_whole_lines(self):
+        self.populate()
+
+        class ClaimEngine:
+            def reply_stream(self, messages, mode, stop, emit, **kwargs):
+                rows = json.loads(messages[-1]['content'])
+                user = next(row for row in rows if row['role'] == 'user')
+                return json.dumps({
+                    "claims": [{
+                        "claim_key": "schedule.sunday",
+                        "text": "用户把约定改到周日下午。",
+                        "source_message_ids": [user['id']],
+                        "evidence_quotes": ["我把时间改为周日0点。"],
+                        "claim_type": "plan",
+                        "certainty": "explicit",
+                    }]
+                }, ensure_ascii=False), {}
+
+        state = refresh_memory(
+            self.store,
+            self.store.get(self.sid),
+            ClaimEngine(),
+            force=True,
+        )
+        self.assertEqual(state['covered_message_id'], 12)
+        self.assertEqual(state['claims'][0]['claim_key'], 'schedule.sunday')
+        self.assertIn('周日下午', state['summary'])
+        self.assertTrue(state['summary'].startswith('- [计划]'))
+        current = self.store.get(self.sid)
+        messages, trace = assemble_prompt(
+            current,
+            '我们约的是哪天？',
+            CHARACTERS,
+            state,
+        )
+        self.assertNotIn('滚动剧情摘要', messages[0]['content'])
+        self.assertNotIn('session_summary_claims', trace)
+
+    def test_empty_claim_batch_is_a_successful_no_op_but_advances(self):
+        self.populate()
+        previous = self.store.save_memory(
+            self.sid,
+            dict(
+                summary='- [事实] 用户喜欢蓝色陶杯。',
+                claims=[{
+                    'claim_key': 'cup.blue',
+                    'text': '用户喜欢蓝色陶杯。',
+                    'source_message_ids': [1],
+                    'evidence_quotes': ['蓝色'],
+                    'claim_type': 'fact',
+                    'certainty': 'explicit',
+                }],
+            ),
+            0,
+        )
+
+        class EmptyClaimsEngine:
+            def reply_stream(self, *args, **kwargs):
+                return '{"claims":[]}', {}
+
+        state = refresh_memory(
+            self.store,
+            self.store.get(self.sid),
+            EmptyClaimsEngine(),
+            force=True,
+        )
+        self.assertEqual(state['covered_message_id'], 12)
+        self.assertEqual(state['claims'], previous['claims'])
+        self.assertEqual(state['summary'], previous['summary'])
+        self.assertEqual(state['method'], 'grounded_claims_empty')
+
+    def test_changed_claim_does_not_inherit_old_evidence(self):
+        chunk = [
+            dict(id=3, role='user', content='时间改成周日了。'),
+            dict(id=4, role='assistant', content='好，我记住周日。'),
+        ]
+        previous = {
+            'claims': [{
+                'claim_key': 'schedule.day',
+                'text': '用户约在周六。',
+                'source_message_ids': [1],
+                'evidence_quotes': ['周六见'],
+                'claim_type': 'plan',
+                'certainty': 'explicit',
+            }],
+            'items': [],
+        }
+
+        class ChangedClaimEngine:
+            def reply_stream(self, *args, **kwargs):
+                return json.dumps({
+                    "claims": [{
+                        "claim_key": "schedule.day",
+                        "text": "用户约在周日。",
+                        "source_message_ids": [3],
+                        "evidence_quotes": ["时间改成周日了。"],
+                        "claim_type": "plan",
+                        "certainty": "explicit",
+                    }]
+                }, ensure_ascii=False), {}
+
+        result = select_memory(previous, chunk, ChangedClaimEngine())
+        self.assertEqual(result['claims'][0]['source_message_ids'], [3])
+        self.assertEqual(result['claims'][0]['evidence_quotes'], ['时间改成周日了。'])
 
     def test_disjoint_quotes_cannot_be_joined_into_a_fabricated_source(self):
         class BadEngine:

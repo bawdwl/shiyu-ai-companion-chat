@@ -199,7 +199,7 @@ class DeepSeekProviderTests(unittest.TestCase):
         self.assertEqual(seen["url"], "https://opencode.ai/zen/go/v1/chat/completions")
         self.assertEqual(seen["authorization"], "Bearer oc_sk_test")
         self.assertEqual(seen["session"], "session-test")
-        self.assertEqual(seen["user_agent"], "shiyu-chat/0.18.0")
+        self.assertEqual(seen["user_agent"], "shiyu-chat/0.22.6")
         self.assertEqual(seen["payload"]["model"], "deepseek-v4.1-flash")
         self.assertEqual(seen["payload"]["thinking"], {"type": "disabled"})
         self.assertEqual(seen["payload"]["seed"], 20261030)

@@ -589,7 +589,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
                 )
         app.state.structured_memory=None
 
-    app=FastAPI(title='Qwen3 IM Chat API',version='0.18.0',lifespan=lifespan)
+    app=FastAPI(title='Qwen3 IM Chat API',version='0.22.6',lifespan=lifespan)
 
     def is_loopback_client(request):
         host=request.client.host if request.client else ''
@@ -2253,7 +2253,7 @@ def create_app(db_path='outputs/chat.sqlite3',adapter_run=None,adapter_runs=None
         limits=token_limits()
         return JSONResponse(status_code=200 if ready else 503,content=dict(
             status='ready' if ready else 'model_unavailable',
-            app_version='0.18.0',
+            app_version='0.22.6',
             default_provider=default_provider,
             providers={
                 'deepseek':{'available':True,'configured':deepseek_ready,

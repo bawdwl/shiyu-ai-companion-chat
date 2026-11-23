@@ -19,7 +19,7 @@ from pathlib import Path
 
 
 APP_NAME = "Shiyu"
-APP_VERSION = "0.18.0"
+APP_VERSION = "0.22.6"
 
 
 def application_root() -> Path:
@@ -177,7 +177,7 @@ def main() -> int:
             width=1460,
             height=940,
             min_size=(900, 640),
-            background_color="#F4F1E8",
+            background_color="#F7F5F3",
             text_select=True,
         )
         window.events.closed += service.stop

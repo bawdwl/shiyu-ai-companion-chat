@@ -58,8 +58,6 @@ import type {
 
 const PORTRAITS: Record<string, string> = {
   "custom-li-bai-v1": "/ui/media/portraits/li-bai.webp",
-  "custom-lora-song-zhiyi-v1": "/ui/media/portraits/song-zhiyi.jpg",
-  "custom-pei-jiming-v1": "/ui/media/portraits/pei-jiming.jpg",
   "custom-xiao-chengyuan-v1": "/ui/media/portraits/xiao-chengyuan.webp",
 };
 
@@ -183,6 +181,7 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
   const paths: Record<string, string> = {
     spark: "M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8Z",
     chat: "M4 4h16v13H9l-5 4Z",
+    arrow: "M5 12h14m-6-6 6 6-6 6",
     settings: "M4 7h16M4 17h16M8 4v6m8 4v6",
     plus: "M12 5v14M5 12h14",
     image: "M4 5h16v14H4Zm2 11 4-4 3 3 2-2 3 3M8 9h.01",
@@ -193,6 +192,7 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
     memory: "M8 4h8v4h4v8h-4v4H8v-4H4V8h4Zm2 6h4v4h-4Z",
     panel: "M4 4h16v16H4Zm11 0v16M14 8h3M14 12h3M14 16h3",
     close: "m6 6 12 12M6 18 18 6",
+    menu: "M4 6h16M4 12h16M4 18h16",
     trash: "M5 7h14M9 7V4h6v3m-8 0 1 13h8l1-13",
     mask: "M4 8c4-3 12-3 16 0v5c0 4-4 7-8 7s-8-3-8-7Zm4 3h.01M16 11h.01M9 16c2 1 4 1 6 0",
   };
@@ -225,6 +225,7 @@ function blankCharacterCard(): CharacterCard {
     name: "新角色",
     tagline: "等待你补完的人物",
     description: "",
+    public_intro: "",
     appearance: "",
     appearance_prompt: "",
     background: "",
@@ -707,6 +708,10 @@ export default function App() {
   const [status, setStatus] = useState("");
   const [draft, setDraft] = useState("");
   const [streamText, setStreamText] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showChatMenu, setShowChatMenu] = useState(false);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [showMobileNav, setShowMobileNav] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
   const [showInspector, setShowInspector] = useState(
@@ -714,6 +719,7 @@ export default function App() {
   );
   const [showSettings, setShowSettings] = useState(false);
   const [showMemory, setShowMemory] = useState(false);
+  const [showChatSettings, setShowChatSettings] = useState(false);
   const [showVoiceProfile, setShowVoiceProfile] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -732,6 +738,8 @@ export default function App() {
   const fileRef = useRef<HTMLInputElement>(null);
   const avatarFileRef = useRef<HTMLInputElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const followLatestRef = useRef(true);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const browserRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -758,13 +766,25 @@ export default function App() {
   useEffect(() => {
     const container = messagesRef.current;
     if (!container) return;
-    // Scroll only the message viewport. scrollIntoView can move the page and
-    // push the fixed chat header off-screen when a short opening is inserted.
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: busy || streamText ? "auto" : "smooth",
-    });
+    if (followLatestRef.current) {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [session?.messages.length, streamText, busy]);
+
+  useEffect(() => {
+    const container = messagesRef.current;
+    if (!container) return;
+    followLatestRef.current = true;
+    setShowJumpToLatest(false);
+    container.scrollTop = container.scrollHeight;
+  }, [session?.id]);
+
+  useEffect(() => {
+    const textarea = composerRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(180, Math.max(52, textarea.scrollHeight))}px`;
+  }, [draft]);
 
   useEffect(() => {
     return () => {
@@ -784,6 +804,38 @@ export default function App() {
     const limit = settings?.token_limits.daily_token_limit ?? 1;
     return Math.min(100, Math.round((used / limit) * 100));
   }, [activeTargetProvider, settings]);
+
+  const filteredCharacters = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    if (!query) return characters;
+    return characters.filter((character) => {
+      const searchable = [
+        character.name,
+        character.tag,
+        character.description,
+        character.profile?.line,
+        character.profile?.scene,
+        character.profile?.tags?.join(" "),
+      ].filter(Boolean).join(" ").toLocaleLowerCase();
+      return searchable.includes(query);
+    });
+  }, [characters, searchQuery]);
+
+  function handleMessageScroll() {
+    const container = messagesRef.current;
+    if (!container) return;
+    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= 110;
+    if (nearBottom) followLatestRef.current = true;
+    setShowJumpToLatest(!nearBottom && (container.scrollHeight > container.clientHeight + 80));
+  }
+
+  function jumpToLatest() {
+    const container = messagesRef.current;
+    if (!container) return;
+    followLatestRef.current = true;
+    setShowJumpToLatest(false);
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+  }
 
   async function chooseProvider(provider: ProviderName) {
     if (busy) return;
@@ -828,6 +880,8 @@ export default function App() {
       return;
     }
     setStatus("正在打开这段故事…");
+    followLatestRef.current = true;
+    setShowJumpToLatest(false);
     try {
       const nextSession = await getRoleConversation(character.id, targetProvider);
       setActiveCharacter(character);
@@ -869,10 +923,13 @@ export default function App() {
     if (!session || !activeCharacter || busy) return;
     const text = (textOverride ?? draft).trim();
     if (!text) return;
+    const submittedDraft = draft;
     setBusy(true);
     setStatus("");
     setStreamText("");
     setDraft("");
+    followLatestRef.current = true;
+    setShowJumpToLatest(false);
     const controller = new AbortController();
     abortRef.current = controller;
     let imageId: string | undefined;
@@ -919,7 +976,10 @@ export default function App() {
       await reloadBase();
     } catch (error) {
       if (controller.signal.aborted) setStatus("已停止生成，本轮未保存。");
-      else setStatus(errorText(error));
+      else {
+        setStatus(errorText(error));
+        setDraft((current) => current.trim() ? current : submittedDraft);
+      }
       await refreshSession().catch(() => undefined);
       setStreamText("");
     } finally {
@@ -1324,8 +1384,11 @@ export default function App() {
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-workspace">跳到主要内容</a>
-      <aside className="sidebar">
-        <button className="brand" onClick={() => setView("discover")}>
+      <aside className={`sidebar ${showMobileNav ? "mobile-open" : ""}`}>
+        <button className="brand" onClick={() => {
+          setView("discover");
+          setShowMobileNav(false);
+        }}>
           <span className="brand-mark">
             <img src="/ui/icon.png" alt="" width={44} height={44} />
           </span>
@@ -1336,27 +1399,37 @@ export default function App() {
           <button
             className={view === "discover" ? "active" : ""}
             aria-current={view === "discover" ? "page" : undefined}
-            onClick={() => setView("discover")}
+            onClick={() => {
+              setView("discover");
+              setShowMobileNav(false);
+            }}
           >
             <Icon name="spark" /> 发现角色
           </button>
           <button onClick={() => {
             setEditingCard(null);
             setShowCreate(true);
+            setShowMobileNav(false);
           }}>
             <Icon name="plus" /> 创建角色
           </button>
-          <button onClick={() => setShowSettings(true)}>
+          <button onClick={() => {
+            setShowSettings(true);
+            setShowMobileNav(false);
+          }}>
             <Icon name="settings" /> 应用设置
           </button>
         </nav>
         <div className="sidebar-characters">
           <span>角色</span>
-          {characters.slice(0, 6).map((character) => (
+          {characters.map((character) => (
             <button
               key={character.id}
               className={activeCharacter?.id === character.id ? "selected" : ""}
-              onClick={() => openCharacter(character)}
+              onClick={() => {
+                setShowMobileNav(false);
+                void openCharacter(character);
+              }}
             >
               <CharacterAvatar character={character} size="small" />
               <span><strong>{character.name}</strong><small>{character.tag}</small></span>
@@ -1374,16 +1447,30 @@ export default function App() {
           </div>
         </div>
       </aside>
+      {showMobileNav && (
+        <button
+          className="mobile-nav-backdrop"
+          aria-label="关闭导航"
+          onClick={() => setShowMobileNav(false)}
+        />
+      )}
 
       <main className="workspace" id="main-workspace" tabIndex={-1}>
         {view === "discover" ? (
           <section className="discover">
             <header className="page-top">
+              <button
+                className="mobile-nav-button"
+                aria-label="打开导航"
+                onClick={() => setShowMobileNav(true)}
+              >
+                <Icon name="menu" />
+              </button>
               <div className="discovery-heading">
-                <h1>发现角色</h1>
-                <p>认识一个人，走进另一段故事。</p>
+                <h1>角色</h1>
+                <p>继续一段故事，或者认识一个新的人。</p>
               </div>
-              <div>
+              <div className="discovery-header-actions">
                 <span className="usage-pill">
                   {isCloudProvider(activeTargetProvider)
                     ? `今日 ${activeProvider?.usage.total_tokens ?? 0} tokens`
@@ -1399,42 +1486,84 @@ export default function App() {
                 </button>
               </div>
             </header>
-            <div className="hero">
-              <div className="hero-copy">
-                <span className="eyebrow">让故事，从一句话开始</span>
-                <h2>不只回复一句话，<br /><em>而是记住这段故事。</em></h2>
-                <p>每一次回来，都从这里继续。与喜欢的角色聊天，让共同的经历慢慢积累。</p>
-                <div className="hero-proof" aria-label="产品能力">
-                  <span>角色卡</span>
-                  <span>长期记忆</span>
-                  <span>语音</span>
-                  <span>图片</span>
+            <div className="discovery-dashboard">
+              <section className="continue-band">
+                <div className="continue-portrait" aria-hidden="true">
+                  {featuredPortrait
+                    ? <img src={featuredPortrait} alt="" width={360} height={480} fetchPriority="high" />
+                    : <span>{featuredCharacter?.name.slice(0, 1) || "拾"}</span>}
                 </div>
-              </div>
-              <div className="hero-portrait" aria-hidden="true">
-                {featuredPortrait && (
-                  <img
-                    src={featuredPortrait}
-                    alt=""
-                    width={480}
-                    height={640}
-                    fetchPriority="high"
-                  />
-                )}
-              </div>
-              <div className="hero-actions">
-                  <button className="primary-button" onClick={() => {
-                    setEditingCard(null);
-                    setShowCreate(true);
-                  }}>
-                    <Icon name="plus" /> 创建一位角色
-                  </button>
-                  <span className="hero-note">一个角色，一段持续的对话</span>
-              </div>
+                <div className="continue-copy">
+                  <span className="continue-kicker">
+                    {activeCharacter ? "继续这段故事" : "开始你的第一段故事"}
+                  </span>
+                  <h2>{featuredCharacter ? `和${featuredCharacter.name}继续` : "认识一个新角色"}</h2>
+                  <p>{featuredCharacter?.profile?.line || featuredCharacter?.description || "角色会记住你说过的事，也会在之后继续这段关系。"}</p>
+                  <div className="continue-meta">
+                    <span><Icon name="memory" size={14} /> 长期记忆</span>
+                    <span>{activeCharacter ? `${completedTurns} 轮对话` : "准备好开始"}</span>
+                  </div>
+                  <div className="continue-actions">
+                    <button
+                      className="primary-button"
+                      disabled={!featuredCharacter}
+                      onClick={() => featuredCharacter && void openCharacter(featuredCharacter)}
+                    >
+                      <Icon name="chat" /> 进入对话
+                    </button>
+                    <button
+                      className="secondary-button"
+                      onClick={() => {
+                        setEditingCard(null);
+                        setShowCreate(true);
+                      }}
+                    >
+                      <Icon name="plus" /> 创建角色
+                    </button>
+                  </div>
+                </div>
+              </section>
+              <aside className="library-card">
+                <div className="library-card-heading">
+                  <span>你的角色</span>
+                  <strong>{characters.length}</strong>
+                </div>
+                <div className="library-card-list">
+                  {characters.slice(0, 3).map((character) => (
+                    <button key={character.id} onClick={() => void openCharacter(character)}>
+                      <CharacterAvatar character={character} size="small" />
+                      <span>
+                        <strong>{character.name}</strong>
+                        <small>{character.tag}</small>
+                      </span>
+                      <Icon name="arrow" size={15} />
+                    </button>
+                  ))}
+                  {characters.length === 0 && <p>还没有角色。先创建一个人。</p>}
+                </div>
+                <button className="library-card-create" onClick={() => {
+                  setEditingCard(null);
+                  setShowCreate(true);
+                }}>
+                  <Icon name="plus" size={16} /> 新建角色
+                </button>
+              </aside>
             </div>
-            <div className="section-heading">
-              <div><h2>此刻，想和谁聊聊？</h2><p>熟悉的相遇，未完的故事。</p></div>
-              <span>{characters.length} 位角色</span>
+            <div className="section-heading character-section-heading">
+              <div><h2>角色库</h2><p>熟悉的相遇，未完的故事。</p></div>
+              <div className="section-tools">
+                <label className="character-search compact">
+                  <Icon name="spark" size={16} />
+                  <span className="sr-only">搜索角色</span>
+                  <input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="搜索角色…"
+                    type="search"
+                  />
+                </label>
+                <span>{filteredCharacters.length} / {characters.length}</span>
+              </div>
             </div>
             {characters.length === 0 ? (
               <section className="empty-character-state">
@@ -1455,7 +1584,7 @@ export default function App() {
               </section>
             ) : (
               <div className="character-grid">
-              {characters.map((character, index) => (
+              {filteredCharacters.map((character, index) => (
                 <div key={character.id} className="character-card-shell">
                   <button
                     className={`character-card card-${index % 4}`}
@@ -1502,6 +1631,15 @@ export default function App() {
                   )}
                 </div>
               ))}
+              {filteredCharacters.length === 0 && (
+                <section className="character-empty-state">
+                  <Icon name="spark" size={38} />
+                  <div>
+                    <h3>没有找到角色</h3>
+                    <p>试试姓名、身份标签或故事关键词。</p>
+                  </div>
+                </section>
+              )}
               </div>
             )}
             <footer className="page-footer">
@@ -1519,16 +1657,26 @@ export default function App() {
             )}
             <header className="chat-top">
               <button
+                className="mobile-nav-button"
+                aria-label="打开导航"
+                onClick={() => setShowMobileNav(true)}
+              >
+                <Icon name="menu" />
+              </button>
+              <button
                 className="back-button"
                 aria-label="返回角色列表"
-                onClick={() => setView("discover")}
+                onClick={() => {
+                  setView("discover");
+                  setShowMobileNav(false);
+                }}
               >
                 ←
               </button>
               <CharacterAvatar character={activeCharacter} size="small" />
               <div className="chat-title">
                 <h1>{activeCharacter.name}</h1>
-                <p>{activeCharacter.tag} · 唯一对话</p>
+                <p>{activeCharacter.tag} · {configured ? providerLabel(activeTargetProvider) : "等待配置模型"}</p>
               </div>
               <div className="chat-actions">
                 <input
@@ -1538,33 +1686,60 @@ export default function App() {
                   hidden
                   onChange={(event) => void chooseAvatar(event.target.files?.[0])}
                 />
-                <button onClick={() => avatarFileRef.current?.click()}>
-                  <Icon name="image" /> 头像
-                </button>
                 <button onClick={openMemory}><Icon name="memory" /> 记忆</button>
-                <button onClick={openTrace} disabled={traceBusy}>
-                  <Icon name="settings" /> {traceBusy ? "读取中…" : "Trace"}
-                </button>
-                <button onClick={openCharacterEditor}><Icon name="mask" /> 档案</button>
                 <button
                   className={showInspector ? "active" : ""}
                   aria-expanded={showInspector}
                   aria-controls="character-inspector"
                   onClick={() => setShowInspector((current) => !current)}
                 >
-                  <Icon name="panel" /> 详情
+                  <Icon name="panel" /> 人物
                 </button>
                 <button
-                  className="danger-text"
-                  aria-label={`重置与${activeCharacter.name}的对话`}
-                  title="重置对话"
-                  onClick={resetConversation}
+                  className="chat-more-trigger"
+                  aria-label="更多聊天操作"
+                  aria-expanded={showChatMenu}
+                  onClick={() => setShowChatMenu((current) => !current)}
                 >
-                  <Icon name="trash" />
+                  <Icon name="settings" /> 更多
                 </button>
+                {showChatMenu && (
+                  <div className="chat-more-menu" role="menu">
+                    <button role="menuitem" onClick={() => {
+                      setShowChatMenu(false);
+                      avatarFileRef.current?.click();
+                    }}>
+                      <Icon name="image" size={17} /> 导入头像
+                    </button>
+                    <button role="menuitem" onClick={() => {
+                      setShowChatMenu(false);
+                      openCharacterEditor();
+                    }}>
+                      <Icon name="mask" size={17} /> 编辑角色档案
+                    </button>
+                    <button role="menuitem" onClick={() => {
+                      setShowChatMenu(false);
+                      void openTrace();
+                    }} disabled={traceBusy}>
+                      <Icon name="settings" size={17} /> {traceBusy ? "读取 Trace…" : "查看 Trace"}
+                    </button>
+                    <button role="menuitem" onClick={() => {
+                      setShowChatMenu(false);
+                      setShowChatSettings(true);
+                    }}>
+                      <Icon name="settings" size={17} /> 对话设置
+                    </button>
+                    <button role="menuitem" className="danger-text" onClick={() => {
+                      setShowChatMenu(false);
+                      resetConversation();
+                    }}>
+                      <Icon name="trash" size={17} /> 重置对话
+                    </button>
+                  </div>
+                )}
               </div>
             </header>
-            <div className="messages" ref={messagesRef}>
+            <div className="messages" ref={messagesRef} onScroll={handleMessageScroll}>
               {messages.length === 0 && (
                 <EmptyConversation character={activeCharacter} onStarter={(text) => setDraft(text)} />
               )}
@@ -1573,9 +1748,7 @@ export default function App() {
                   {message.role === "assistant" && <CharacterAvatar character={activeCharacter} size="small" />}
                   <div className="message-body">
                     <div className="bubble">
-                      {messageText(message).split("\n").map((line, index) => (
-                        <span key={index}>{line}<br /></span>
-                      ))}
+                      <span className="message-text">{messageText(message)}</span>
                       {message.image && (
                         <img
                           className="message-image"
@@ -1608,6 +1781,11 @@ export default function App() {
                 </article>
               )}
             </div>
+            {showJumpToLatest && (
+              <button className="jump-latest" onClick={jumpToLatest}>
+                回到最新
+              </button>
+            )}
             <div className="composer-wrap">
               {imagePreview && (
                 <div className="image-preview">
@@ -1620,13 +1798,20 @@ export default function App() {
                       {status && <p className="status-line" role="status" aria-live="polite">{status}</p>}
               <div className="composer">
                 <textarea
+                  ref={composerRef}
                   value={draft}
                   maxLength={4096}
                   rows={2}
                   placeholder={`和${activeCharacter.name}说点什么…`}
                   onChange={(event) => setDraft(event.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.shiftKey) {
+                    const nativeEvent = event.nativeEvent as KeyboardEvent;
+                    if (
+                      event.key === "Enter" &&
+                      !event.shiftKey &&
+                      !nativeEvent.isComposing &&
+                      nativeEvent.keyCode !== 229
+                    ) {
                       event.preventDefault();
                       sendMessage();
                     }
@@ -1787,6 +1972,16 @@ export default function App() {
           usagePercent={usagePercent}
         />
       )}
+      {showChatSettings && activeCharacter && (
+        <ChatSettingsModal
+          character={activeCharacter}
+          onClose={() => setShowChatSettings(false)}
+          onVoice={() => {
+            setShowChatSettings(false);
+            setShowVoiceProfile(true);
+          }}
+        />
+      )}
       {showVoiceProfile && activeCharacter && (
         <VoiceProfileModal
           character={activeCharacter}
@@ -1801,9 +1996,12 @@ export default function App() {
           page
         >
           <div className="memory-summary">
-            <strong>{memory.items.length}</strong>
-            <span>条来自早期对话的原文记忆</span>
+            <strong>{memory.claims?.length || memory.items.length}</strong>
+            <span>{memory.claims?.length ? "条经过原文校验的滚动摘要" : "条来自早期对话的原文记忆"}</span>
           </div>
+          {memory.summary && (
+            <pre className="memory-summary-text">{memory.summary}</pre>
+          )}
           <label className="field">
             <span>用户修订</span>
             <textarea value={memoryNotes} onChange={(event) => setMemoryNotes(event.target.value)} rows={4} />
@@ -2129,6 +2327,40 @@ function VoiceProfileModal({
         <button className="primary-button" disabled={saving || !voiceStyle.trim()} onClick={save}>
           {saving ? "正在保存…" : "保存音色档案"}
         </button>
+      </div>
+    </Modal>
+  );
+}
+
+function ChatSettingsModal({
+  character,
+  onClose,
+  onVoice,
+}: {
+  character: Character;
+  onClose: () => void;
+  onVoice: () => void;
+}) {
+  return (
+    <Modal
+      title={`${character.name}的对话设置`}
+      eyebrow="CHAT SETTINGS"
+      onClose={onClose}
+    >
+      <p className="modal-lead">
+        这里放置和角色聊天相关的个人设置，不修改角色身份、经历或世界设定。
+      </p>
+      <section className="chat-settings-voice">
+        <div>
+          <strong>角色音色</strong>
+          <p>配置本地参考音频、声音描述或播放音色。</p>
+        </div>
+        <button className="secondary-button" onClick={onVoice}>
+          <Icon name="volume" /> 配置音色
+        </button>
+      </section>
+      <div className="modal-actions">
+        <button className="primary-button" onClick={onClose}>关闭</button>
       </div>
     </Modal>
   );
@@ -2622,6 +2854,15 @@ function CreateCharacterModal({
         <label className="field"><span>名字</span><input value={card.name} onChange={(e) => patch("name", e.target.value)} /></label>
         <label className="field"><span>一句话介绍</span><input value={card.tagline} onChange={(e) => patch("tagline", e.target.value)} /></label>
         <label className="field full"><span>简介</span><textarea rows={2} value={card.description} onChange={(e) => patch("description", e.target.value)} /></label>
+        <label className="field full">
+          <span>角色初识卡</span>
+          <textarea
+            rows={3}
+            value={card.public_intro ?? ""}
+            placeholder="第三人称介绍角色身份、性格、与用户的关系和当前情境"
+            onChange={(e) => patch("public_intro", e.target.value)}
+          />
+        </label>
         <label className="field full">
           <span>外貌描述（中文）</span>
           <textarea

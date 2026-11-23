@@ -8,10 +8,10 @@ Android Keystore 实现。云端模式直接调用所选大模型 API，不要�
 
 从
 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases)
-下载最新 APK。当前公开版为 `0.21.0`。
+下载最新公开 APK。当前公开版为 `0.22.6`。
 
-当前版本为 `0.21.0 / versionCode 65`，Room schema 22，包含备份恢复、聊天分页、
-记忆控制、回复版本、分支检查点、Prompt Inspector、增强世界书和可选 Qwen3 语义记忆。
+当前版本为 `0.22.6 / versionCode 72`，Room schema 22，包含备份恢复、聊天分页、
+记忆控制、回复版本、分支检查点、Prompt Inspector、世界书和可选 Qwen3 语义记忆。
 
 Android 现在有两个构建版本：
 
@@ -21,7 +21,7 @@ Android 现在有两个构建版本：
   ASR 与角色 TTS。
 
 两个包可以同时安装，数据彼此独立。完整版包含 8 个初始角色；云端版包含 6 个，
-不包含宋知意和裴既明。`0.21.0` 是完整版的最后一个功能版本，后续只更新云端版。
+不包含宋知意和裴既明。完整版和云端版在 `0.22.6` 同步更新。
 
 ![拾语 Android 角色聊天界面](images/Android-0.18.22-chat.jpg)
 
@@ -33,10 +33,12 @@ Android 现在有两个构建版本：
 
 ## Qwen3 语义记忆
 
-设置页“Android 语义记忆”支持下载或导入
+设置页“语义”支持下载或导入
 `Qwen3-Embedding-0.6B-ONNX` INT8 模型。模型不进入 APK，安装包约 596 MiB。
 安装后后台生成 1024 维记忆向量，并与 FTS4、词面和生命周期信号共同排序。
 模型缺失或加载失败时自动回退到 FTS4。
+
+下载完成后可以点击“检测语义检索”，检查模型、向量索引和现有长期记忆的抽样结果。
 
 模拟器不包含 ARM64 embedding 原生运行库；该能力需要在 ARM64 真机上验证。
 

@@ -61,7 +61,36 @@ BOUNDARY_CUES = (
     "不希望被",
     "不要追问",
     "别追问",
+    "别总问",
+    "别问了",
+    "不要再问",
+    "先别问",
+    "不想聊这个",
+    "不想聊了",
 )
+
+
+def _is_negated_prefix(prefix):
+    value = str(prefix or "")
+    return (
+        value.endswith("不")
+        or any(value.endswith(item) for item in ("并不", "不是", "并非", "尚未", "未能", "没能"))
+        or bool(re.search(r"(?:没|未)(?:有|能|被|会|曾|再|要|想)*$", value))
+    )
+
+
+def contains_positive_cue(text, cues):
+    """Return true only when a cue is not preceded by a negation."""
+    value = str(text or "").lower()
+    for cue in cues:
+        needle = str(cue).lower()
+        index = value.find(needle)
+        while index >= 0:
+            prefix = value[max(0, index - 4):index]
+            if not _is_negated_prefix(prefix):
+                return True
+            index = value.find(needle, index + len(needle))
+    return False
 
 
 def dialogue_policy(current_text, messages=None):
@@ -80,6 +109,12 @@ def dialogue_policy(current_text, messages=None):
             "先听我说",
             "别追问",
             "不要追问",
+            "别总问",
+            "别问了",
+            "不要再问",
+            "先别问",
+            "不想聊这个",
+            "不想聊了",
         )
     ):
         return {
@@ -105,7 +140,10 @@ def dialogue_policy(current_text, messages=None):
             "reply_length": "natural",
             "reason": "用户要求承接之前的话题或事件",
         }
-    if any(cue in text for cue in ("考上", "通过", "拿到offer", "拿到 offer", "录取", "升职", "中奖")):
+    if contains_positive_cue(
+        text,
+        ("考上", "通过", "拿到offer", "拿到 offer", "录取", "升职", "中奖"),
+    ):
         return {
             "strategy": "CELEBRATE",
             "secondary": None,
@@ -280,7 +318,10 @@ def current_turn_affect(text):
     value = str(text or "").strip()
     if not value:
         return None
-    if any(cue in value for cue in ("考上", "通过", "拿到offer", "拿到 offer", "录取", "升职", "中奖")):
+    if contains_positive_cue(
+        value,
+        ("考上", "通过", "拿到offer", "拿到 offer", "录取", "升职", "中奖"),
+    ):
         return {
             "label": "替用户感到高兴",
             "tone": "轻快自然",
@@ -312,7 +353,10 @@ def current_turn_affect(text):
             "initiative": "接住和解，不反复翻旧账",
             "reason": "current_turn_repair",
         }
-    if any(cue in value for cue in ("不要记", "别记", "不要追问", "别追问", "不想听建议")):
+    if any(cue in value for cue in (
+        "不要记", "别记", "不要追问", "别追问", "别总问", "别问了",
+        "不要再问", "先别问", "不想聊这个", "不想聊了", "不想听建议",
+    )):
         return {
             "label": "尊重用户刚明确的边界",
             "tone": "克制",
@@ -410,7 +454,21 @@ def scene_from_messages(messages, current_text):
     }
 
 
-def derive_event_update(memory_item):
+def _contains_positive_signal(text, signals):
+    value = str(text or "")
+    for signal in signals:
+        index = value.find(signal)
+        while index >= 0:
+            prefix = value[max(0, index - 6):index]
+            if not any(prefix.endswith(item) for item in (
+                "不", "没", "没有", "未", "尚未", "还没", "并未", "不是", "并非",
+            )):
+                return True
+            index = value.find(signal, index + len(signal))
+    return False
+
+
+def derive_event_update(memory_item, existing_status=None):
     if not memory_item:
         return None
     kind = str(memory_item.get("kind") or "")
@@ -424,27 +482,31 @@ def derive_event_update(memory_item):
     if len(parts) < 2:
         return None
     topic_key = ".".join(parts[:-1])
+    raw_date = str(memory_item.get("event_date") or "").strip()
+    normalized_date = re.sub(r"\s+", "", raw_date)[:32]
+    event_instance_key = f"{topic_key}@{normalized_date or 'undated'}"
     content = str(memory_item.get("content") or "")
     value = str(memory_item.get("value") or "")
     event_text = f"{fact_key} {value} {content}"
-    if any(
-        cue in event_text
-        for cue in ("取消", "不去了", "没去", "去不了", "放弃")
-    ):
+    if _contains_positive_signal(event_text, (
+        "恢复计划", "重新计划", "又决定去", "仍然按原计划",
+    )):
+        status = "open"
+    elif _contains_positive_signal(event_text, (
+        "取消", "不去了", "不参加了", "放弃", "去不了", "无法参加",
+    )):
         status = "cancelled"
-    elif (
-        kind == "shared_event"
-        or fact_type == "event"
-        or any(
-            cue in event_text
-            for cue in ("已经参加", "完成了", "结束了", "去过了", "回来了")
-        )
-    ):
+    elif _contains_positive_signal(event_text, (
+        "已经参加", "已参加", "参加了", "去过了", "已经去过",
+        "完成了", "已完成", "已经完成", "结束了", "已结束",
+        "已经结束", "回来了", "已经回来", "一起去了", "我们去过", "见过面",
+    )):
         status = "completed"
     else:
-        status = "open"
+        status = existing_status if existing_status in {"completed", "cancelled"} else "open"
     return {
         "topic_key": topic_key,
+        "event_instance_key": event_instance_key,
         "title": content[:80],
         "summary": content,
         "status": status,

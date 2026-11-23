@@ -61,6 +61,7 @@ data class ShiyuUiState(
     val localModelName: String = "Qwen3-1.7B MNN",
     val localModelBusy: Boolean = false,
     val embeddingModelReady: Boolean = false,
+    val embeddingSemanticEnabled: Boolean = false,
     val embeddingModelBytes: Long = 0L,
     val embeddingModelName: String = "Qwen3-Embedding 0.6B",
     val embeddingModelBusy: Boolean = false,
@@ -68,6 +69,7 @@ data class ShiyuUiState(
     val embeddingSelfTestResult: String = "",
     val embeddingIndexedCount: Int = 0,
     val embeddingModelDiagnostics: String = "",
+    val embeddingDownloadBusy: Boolean = false,
     val modelDownloadBusy: Boolean = false,
     val modelDownloadLabel: String? = null,
     val modelDownloadProgress: Float = 0f,
@@ -125,6 +127,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 localModelBytes = repository.localModelBytes(),
                 localModelName = repository.localModelName(),
                 embeddingModelReady = repository.embeddingModelReady(),
+                embeddingSemanticEnabled = repository.embeddingSemanticEnabled(),
                 embeddingModelBytes = repository.embeddingModelBytes(),
                 embeddingModelName = repository.embeddingModelName(),
                 embeddingIndexedCount = repository.embeddingIndexedCount(),
@@ -1178,6 +1181,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                     _state.value = _state.value.copy(
                         embeddingModelBusy = false,
                         embeddingModelReady = repository.embeddingModelReady(),
+                        embeddingSemanticEnabled = repository.embeddingSemanticEnabled(),
                         embeddingModelBytes = repository.embeddingModelBytes(),
                         embeddingModelName = repository.embeddingModelName(),
                         embeddingIndexedCount = repository.embeddingIndexedCount(),
@@ -1210,6 +1214,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                     _state.value = _state.value.copy(
                         embeddingModelBusy = false,
                         embeddingModelReady = false,
+                        embeddingSemanticEnabled = false,
                         embeddingModelBytes = 0L,
                         embeddingIndexedCount = 0,
                         status = "Qwen3-Embedding 模型已删除，长期记忆回退到 FTS4",
@@ -1235,7 +1240,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
         _state.value = _state.value.copy(
             embeddingSelfTestBusy = true,
             embeddingSelfTestResult = "",
-            status = "正在运行 Qwen embedding 自检…",
+            status = "正在检测语义检索链路…",
         )
         viewModelScope.launch {
             runCatching { repository.testQwenEmbedding() }
@@ -1243,17 +1248,29 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                     _state.value = _state.value.copy(
                         embeddingSelfTestBusy = false,
                         embeddingSelfTestResult = "通过：$result",
-                        status = "Qwen embedding 自检通过：$result",
+                        status = "语义检索检测通过：$result",
                     )
                 }
                 .onFailure { error ->
                     _state.value = _state.value.copy(
                         embeddingSelfTestBusy = false,
                         embeddingSelfTestResult = "失败：${error.message ?: "未知错误"}",
-                        status = error.message ?: "Qwen embedding 自检失败",
+                        status = error.message ?: "语义检索检测失败",
                     )
                 }
         }
+    }
+
+    fun setEmbeddingSemanticEnabled(enabled: Boolean) {
+        repository.setEmbeddingSemanticEnabled(enabled)
+        _state.value = _state.value.copy(
+            embeddingSemanticEnabled = enabled,
+            status = if (enabled) {
+                "语义记忆已启用"
+            } else {
+                "语义记忆已关闭，长期记忆回退到 FTS4"
+            },
+        )
     }
 
     fun downloadEmbeddingModel() {
@@ -1265,6 +1282,7 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
         ) return
         _state.value = _state.value.copy(
             modelDownloadBusy = true,
+            embeddingDownloadBusy = true,
             modelDownloadLabel = "准备下载 Qwen3-Embedding 0.6B ONNX INT8",
             modelDownloadProgress = 0f,
             status = null,
@@ -1281,9 +1299,11 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 .onSuccess {
                     _state.value = _state.value.copy(
                         modelDownloadBusy = false,
+                        embeddingDownloadBusy = false,
                         modelDownloadLabel = null,
                         modelDownloadProgress = 1f,
                         embeddingModelReady = repository.embeddingModelReady(),
+                        embeddingSemanticEnabled = repository.embeddingSemanticEnabled(),
                         embeddingModelBytes = repository.embeddingModelBytes(),
                         embeddingModelName = repository.embeddingModelName(),
                         embeddingIndexedCount = repository.embeddingIndexedCount(),
@@ -1294,8 +1314,10 @@ class ShiyuViewModel(private val repository: ChatRepository) : ViewModel() {
                 .onFailure { error ->
                     _state.value = _state.value.copy(
                         modelDownloadBusy = false,
+                        embeddingDownloadBusy = false,
                         modelDownloadLabel = null,
                         embeddingModelReady = repository.embeddingModelReady(),
+                        embeddingSemanticEnabled = repository.embeddingSemanticEnabled(),
                         embeddingModelBytes = repository.embeddingModelBytes(),
                         embeddingModelName = repository.embeddingModelName(),
                         embeddingModelDiagnostics = repository.embeddingModelDiagnostics(),

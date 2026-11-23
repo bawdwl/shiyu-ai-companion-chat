@@ -1,190 +1,158 @@
 # 拾语 SHIYU
 
-面向中文虚拟角色陪伴的本地优先聊天应用，提供 Android 原生客户端、Windows EXE 与
-可复现的 PC 网页完整环境。
+面向中文单角色长期陪伴的原生 Android、Windows 和 PC 网页应用。
 
-拾语将角色档案、世界书、长期记忆、剧情摘要、事件、Prompt Inspector 和可选本地语义
-检索组织成一条连续链路。聊天记录、角色资料、API Key 和模型默认保存在用户设备上，
+拾语围绕“角色档案、稳定对话、长期记忆和用户可控”构建：角色拥有独立的
+身份、说话方式、世界书和长期记忆；聊天记录和 API Key 默认只保存在本机，
 不依赖项目方云数据库。
 
 [![Latest Release](https://img.shields.io/github/v/release/bawdwl/shiyu-ai-companion-chat)](https://github.com/bawdwl/shiyu-ai-companion-chat/releases)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3ddc84)](docs/Android安装与演示.md)
 
-当前 Android 版本：`0.21.0 / versionCode 65`
+当前版本：`0.22.6`
 
-> `0.21.0` 是 Android 完整版的最后一个功能版本。后续新增功能、修复和 Release
-> 只维护 Android 云端版；完整版源码和现有能力继续保留。
+## 项目定位
 
-## 功能概览
+拾语不是通用 AI 助手，而是以单个角色为中心的长期聊天应用。当前版本以
+Android `0.19.2` 的成熟聊天行为为基线，保留 0.20/0.21 的备份、长期记忆、
+Prompt Inspector、聊天分支和 Qwen3 语义检索能力。
 
-- 新建角色、结构化角色卡、实时流式聊天和停止生成。
-- 角色固定事实、世界书、知识边界、用户边界和可选示例对话。
-- 近期对话、滚动剧情摘要、结构化事实、计划、共同事件和证据链。
-- 用户可查看、修正、钉住、标为过时、忽略或删除长期记忆。
-- Android 可选下载 `Qwen3-Embedding-0.6B-ONNX`，与 FTS4 共同进行语义召回。
-- 保留式回复版本、聊天分支、Checkpoint、搜索、收藏和完整 ZIP 备份。
-- 只读 Prompt Inspector，显示分区预算、记忆选择、Lore 命中和生成耗时。
-- 云端图片输入、Android 千问生图与可选 Local Dream SD1.5/QNN 本地生图。
-- Android 本地语音识别与 VITS 角色语音，PC 可配置完整 Whisper/CosyVoice 链路。
+核心目标：
+
+- 角色说话稳定、自然，不被过多规则干扰。
+- 角色档案、世界书和长期记忆分层管理。
+- 长对话仍能召回用户资料、共同经历和约定。
+- 用户能够查看、修正、忽略和删除记忆。
+- 数据保存在用户设备，核心功能不依赖项目方服务器。
+
+## 主要功能
+
+### 角色与聊天
+
+- 创建、编辑和删除角色，配置身份、性格、说话方式和当前关系。
+- 角色固定事实、知识边界、示例对话和备用开场白。
+- 世界书保存世界规则、地点、组织、历史和秘密，并按关键词进入上下文。
+- 云端 API 流式聊天、停止生成、重答和回复版本保留。
+- 中文输入法、多行输入、图片输入和可选角色语音。
+- 聊天分支、Checkpoint、消息搜索、编辑和收藏。
+
+### 长期记忆
+
+- 结构化事实、偏好、计划、共同经历和角色自述分开存储。
+- 每条记忆绑定来源消息和逐字证据，可修正、钉住、标为过时或删除。
+- FTS4 中文词法检索作为基础能力。
+- Android 可选导入或下载 `Qwen3-Embedding-0.6B-ONNX INT8`，用于语义召回。
+- 语义模型不进入 APK；未安装或关闭开关时自动使用 FTS4。
+- 设置页提供语义检索检测，检查模型、向量索引和抽样语义分数。
+
+### 数据与调试
+
+- ZIP 备份和恢复，包含聊天、角色、记忆和角色图片。
+- 备份默认排除 API Key、模型权重和缓存。
+- 数据库迁移、损坏校验和恢复回滚保护。
+- Prompt Inspector 显示 Prompt 分区、记忆选择、Token 估算和耗时。
+- 不保存完整 Prompt 或 API Key 到 Trace。
 
 ## 四种运行形态
 
-- **Windows EXE 基础版**：解压即可运行，提供 DeepSeek / OpenCode Go 云端角色生成和
-  聊天、四个内置角色、角色编辑与删除、世界书、长期记忆管理及云端图片输入。发布包
-  不附带本地大语言模型、生图模型或完整本地语音模型。
-- **PC 网页完整环境**：与 EXE 共用 React 和 FastAPI 核心，额外支持自行安装
-  MeinaMix V12、本地 Qwen/LoRA、BGE、CosyVoice 2、GPT-SoVITS、MeloTTS 和
-  Whisper 等完整实验链路。
-- **Android 完整版**：除云端 API 外，可导入 MNN 大语言模型和 Local Dream
-  SD1.5/QNN 生图模型；APK 内置 8 个可编辑、可删除的初始角色及对应头像和背景，
-  并包含本地语音识别与 VITS 角色语音运行库。模型权重按设置页要求由用户导入。
-- **Android 云端版**：独立包名，可与完整版共存，只保留云端聊天、角色生成、长期
-  记忆、场景、图片输入、千问云端生图和可选 Qwen3 语义记忆
+| 形态 | 说明 |
+| --- | --- |
+| Android 完整版 | `com.shiyu.chat`。包含 MNN、Local Dream/QNN、ASR 和本地角色语音运行库；模型权重由用户导入。 |
+| Android 云端版 | `com.shiyu.chat.cloud`。包含云端聊天、角色、记忆、世界书、图片输入、千问生图和可选 Qwen embedding。 |
+| Windows EXE | 解压即用，复用 React + FastAPI 核心。不附带本地大模型、生图模型或完整语音模型。 |
+| PC 网页完整环境 | 从源码运行，可自行接入 MeinaMix、本地 Qwen/LoRA、BGE、CosyVoice、Whisper 等实验链路。 |
 
-### 对应发布入口
+Android 完整版和云端版使用不同包名，可以同时安装，数据彼此独立。
 
-- Windows EXE 基础版：
-  [Release v0.18.0](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.18.0)
-- PC 网页完整环境：
-  [安装与复现文档](docs/PC网页版安装与复现.md)
-- Android 完整版：
-  [Release v0.21.0](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.21.0)
-- Android 云端版：
-  [Release v0.21.0](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.21.0)
+## 当前发布文件
 
-## 安装 Android
+GitHub Release 统一提供：
 
-从 [GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/latest)
-下载：
+- `Shiyu-0.22.6-Android-arm64-v8a.apk`
+- `Shiyu-0.22.6-cloud-Android-arm64-v8a.apk`
+- `Shiyu-0.22.6-Windows-x64.zip`
+- `pc-web-0.22.6.zip`
+- `shiyu-core-0.22.6.zip`：项目核心源码，不含模型、构建缓存和用户数据
 
-- 完整版：`Shiyu-0.21.0-Android-arm64-v8a.apk`
-- 云端版：`Shiyu-0.21.0-cloud-Android-arm64-v8a.apk`
+发布入口：
 
-完整版和云端版使用不同包名，可以同时安装：
+[GitHub Releases](https://github.com/bawdwl/shiyu-ai-companion-chat/releases/tag/v0.22.6)
 
-- `com.shiyu.chat`
-- `com.shiyu.chat.cloud`
+## Android 安装
 
-首次启动后填写自己的 OpenCode Go 或 DeepSeek API Key。模型权重、聊天数据库和 API
-Key 不进入 Git 仓库。
+首次启动后进入设置，选择 DeepSeek 官方 API 或 OpenCode Go 并填写对应 Key。
 
-完整安装、权限和真机演示步骤见
-[Android 安装与演示](docs/Android安装与演示.md)。
+可选 Qwen 语义记忆：
 
-## 可选 Qwen3 语义记忆
+1. 打开“设置 → 语义”。
+2. 下载约 596 MiB 的 Qwen3-Embedding ONNX INT8 模型，或导入模型 ZIP。
+3. 等待后台建立记忆向量索引。
+4. 点击“检测语义检索”，确认模型、索引和抽样分数正常。
 
-Android 默认使用 Room、FTS4、中文词面、近义表达和确定性重排。需要更强语义召回时，
-可在“设置 → Android 语义记忆”中：
+模型保存于 App 专属目录，卸载应用时会一并删除。
 
-1. 下载约 596 MiB 的 `Qwen3-Embedding-0.6B-ONNX` INT8 包。
-2. 或导入包含以下文件的 ZIP：
-   - `onnx/model_int8.onnx`
-   - `tokenizer.json`
-   - `tokenizer_config.json`
-   - `config.json`
+详细步骤见 [Android 安装与演示](docs/Android安装与演示.md)。
 
-模型不会进入 APK。安装后会在后台为结构化记忆建立 1024 维向量索引，查询时与 FTS4
-共同参与召回。模型未安装、加载失败或索引为空时会自动回退，不阻塞聊天。
+## PC 与 Windows
+
+- [PC 网页版安装与复现](docs/PC网页版安装与复现.md)
+- [Windows 桌面版安装与使用](docs/Windows桌面版安装与使用.md)
+
+Windows 发布包必须完整解压后运行，不要只移动单个 EXE。
+
+## 项目文档
+
+- [文档索引](docs/README.md)
+- [项目详细介绍](docs/拾语项目详细介绍.md)
+- [项目技术架构与运行原理](docs/项目技术架构与运行原理.md)
+- [功能与实现](docs/功能与实现.md)
+- [角色卡与世界书](docs/拾语角色卡与世界书功能说明.md)
+- [本地生图与 CosyVoice 语音](docs/本地生图与CosyVoice语音.md)
+
+## 本地开发
+
+PC 后端：
+
+```powershell
+python launch_app.py
+```
+
+运行 Python 测试：
+
+```powershell
+python scripts/check_project.py
+```
+
+前端：
+
+```powershell
+pnpm --dir frontend build
+node tests/frontend_state.test.cjs
+```
+
+Android：
+
+```powershell
+scripts/build_android.ps1 -Edition cloud
+scripts/build_android.ps1 -Edition full
+```
+
+Windows：
+
+```powershell
+python desktop/build_desktop.py
+```
 
 ## 数据与隐私
 
-- 不包含项目方账号系统和云数据库。
-- API Key 保存在 Android Keystore/EncryptedSharedPreferences 或本机加密 Secret Store。
-- 角色、消息、记忆、分支、Trace 和图片保存在当前设备。
-- Windows、PC 网页和 Android 不会自动同步数据。
-- 重置对话只清除该角色对话及派生数据，保留角色档案与图片。
+- 仓库不包含用户聊天数据库、API Key、个人图片、录音或模型权重。
+- Android 数据保存在 `com.shiyu.chat` 或 `com.shiyu.chat.cloud` 的 App 私有目录。
+- Windows/PC 数据保存在本机项目数据目录。
+- Android、Windows 和 PC 不自动同步聊天数据。
 - 删除角色会删除该角色的聊天、记忆、事件、Trace 和角色图片。
-
-## 从源码构建
-
-### Android
-
-需要 JDK 17、Android SDK 35、Build Tools 35 和 Android NDK。
-
-```powershell
-.\scripts\build_android.ps1
-.\scripts\build_android_cloud.ps1
-```
-
-输出：
-
-```text
-android/app/build/outputs/apk/full/debug/app-full-debug.apk
-android/app/build/outputs/apk/cloud/debug/app-cloud-debug.apk
-```
-
-### PC 网页完整环境
-
-```powershell
-conda create -n shiyu-chat python=3.11 pip -y
-conda activate shiyu-chat
-python -m pip install -r requirements-lock-windows-py311.txt
-pnpm --dir frontend install --frozen-lockfile
-pnpm --dir frontend build
-python launch_app.py --provider opencode --speech-provider off --asr-provider off
-```
-
-打开 <http://127.0.0.1:8000/ui/>。完整部署见
-[PC 网页版安装与复现](docs/PC网页版安装与复现.md)。
-
-## 验证
-
-```powershell
-$env:PYTHONDONTWRITEBYTECODE='1'
-D:\Others\Study\Anaconda3\envs\qwen3-im-chat\python.exe -B scripts\check_project.py
-
-$toolchain=(Resolve-Path '..\..\outputs\android-toolchain').Path
-$env:JAVA_HOME=(Resolve-Path (Join-Path $toolchain 'jdk17\jdk-17.0.20.1+1')).Path
-$env:ANDROID_HOME=(Resolve-Path (Join-Path $toolchain 'sdk')).Path
-$env:ANDROID_SDK_ROOT=$env:ANDROID_HOME
-$env:GRADLE_USER_HOME=(Resolve-Path (Join-Path $toolchain 'gradle-home-current')).Path
-.\android\gradlew.bat -p .\android :app:testEmulatorDebugUnitTest :app:lintFullDebug
-```
-
-当前 Android JVM 测试为 `137` 项。测试通过不等同于大规模真实聊天质量评估。
-
-## 目录
-
-```text
-launch_app.py                 PC 启动入口
-src/                          FastAPI、Provider、记忆、提示词和存储
-frontend/                     React + TypeScript 源码
-web/react-dist/               已构建 PC 前端
-desktop/                      Windows WebView2 桌面启动器
-android/                      Kotlin + Compose + Room Android 项目
-tests/                        生产链路回归测试
-scripts/                      构建、模型下载、发布和检查脚本
-docs/                         架构、安装、功能与复现文档
-evaluation/                   固定评测夹具
-release/                      发布说明与本地发布物索引
-```
-
-更多说明见 [文档索引](docs/README.md)。
-
-## 当前限制
-
-- 不做账号系统、跨设备同步和多人协作。
-- Qwen3 embedding 在手机上的首次加载、内存峰值和耗电仍取决于设备配置。
-- 摘要尚无逐条事实级 grounding，时间语义仍是后续重点。
-- Android 完整版不再继续迭代，后续只维护云端版。
 
 ## 许可证
 
-项目原创代码采用 [AGPL-3.0](LICENSE)。模型、转换产物、角色图片、语音模型和其他
-第三方组件分别遵循上游许可，详见 [LICENSE-NOTICE.md](LICENSE-NOTICE.md)。
-
-## 项目演示
-
-### PC 工作台
-
-<p align="center">
-  <img src="docs/images/PC-0.18-home.png" alt="拾语 PC 工作台" width="100%">
-</p>
-
-### Android 对话
-
-<p align="center">
-  <img src="docs/images/Android-0.18.22-chat.jpg" alt="拾语 Android 聊天界面" width="42%">
-  <img src="docs/images/Android-0.18.22-chat-xiao-chengyuan.jpg" alt="拾语 Android 角色对话" width="42%">
-</p>
+项目代码使用 AGPL-3.0。第三方模型、运行库、角色图片和实验资源遵循各自许可证，
+详见 [LICENSE-NOTICE.md](LICENSE-NOTICE.md)。

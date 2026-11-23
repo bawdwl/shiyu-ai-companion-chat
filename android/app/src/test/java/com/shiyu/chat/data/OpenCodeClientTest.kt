@@ -9,7 +9,7 @@ class OpenCodeClientTest {
     fun usesOpenCodeGoChatCompletionsContract() {
         assertEquals("deepseek-v4.1-flash", OpenCodeClient.MODEL)
         assertEquals("https://opencode.ai/zen/go/v1", OpenCodeClient.BASE_URL)
-        assertEquals("shiyu-chat/0.21.0", OpenCodeClient.USER_AGENT)
+        assertEquals("shiyu-chat/0.22.6", OpenCodeClient.USER_AGENT)
     }
 
     @Test

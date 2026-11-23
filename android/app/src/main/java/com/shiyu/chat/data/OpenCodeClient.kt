@@ -138,7 +138,7 @@ class OpenCodeClient {
     companion object {
         const val MODEL = "deepseek-v4.1-flash"
         const val BASE_URL = "https://opencode.ai/zen/go/v1"
-        const val USER_AGENT = "shiyu-chat/0.21.0"
+        const val USER_AGENT = "shiyu-chat/0.22.6"
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }
 }

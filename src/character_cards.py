@@ -11,14 +11,41 @@ _CJK_TEXT = re.compile(r'[\u3400-\u9fff]')
 
 
 def _text(value, limit, field, *, required=False):
-    if not isinstance(value, str):
-        raise ValueError(field + '必须是文本')
+    if value is None:
+        value = ''
+    elif isinstance(value, list):
+        value = '\n'.join(
+            str(item).strip()
+            for item in value
+            if item is not None and str(item).strip()
+        )
+    elif isinstance(value, dict):
+        value = json.dumps(value, ensure_ascii=False)
+    elif not isinstance(value, str):
+        value = str(value)
     value = value.strip()
     if required and not value:
         raise ValueError(field + '不能为空')
     if len(value) > limit:
         raise ValueError(field + f'不能超过{limit}个字符')
     return value
+
+
+def _boundary_text(value):
+    """Coerce common model JSON shapes into one human-readable text block."""
+    if value is None:
+        return ''
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return '\n'.join(
+            str(item).strip()
+            for item in value
+            if item is not None and str(item).strip()
+        )
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value)
 
 
 def normalize_card(data, *, generating=False):
@@ -28,6 +55,11 @@ def normalize_card(data, *, generating=False):
     name = _text(data.get('name', ''), 40, '角色名称', required=True)
     tagline = _text(data.get('tagline', ''), 100, '一句话介绍')
     description = _text(data.get('description', ''), 500, '角色简介')
+    public_intro = _text(
+        data.get('public_intro', data.get('publicIntro', '')),
+        500,
+        '角色初识卡',
+    ) or description
     background = _text(data.get('background', ''), 1200, '背景草稿')
     personality = _text(data.get('personality', ''), 500, '性格')
     speech_style = _text(data.get('speech_style', ''), 500, '说话方式')
@@ -42,7 +74,7 @@ def normalize_card(data, *, generating=False):
     boundaries = _text(data.get('boundaries', ''), 800, '互动边界')
     scenario = _text(data.get('scenario', ''), 600, '当前情境')
     motivation = _text(data.get('motivation', ''), 400, '人物动机')
-    raw_model_settings = data.get('model_settings', {})
+    raw_model_settings = data.get('model_settings') or {}
     if not isinstance(raw_model_settings, dict):
         raise ValueError('模型设置必须是对象')
     model_source = _text(
@@ -67,22 +99,30 @@ def normalize_card(data, *, generating=False):
         'source': model_source,
         'local_mode': local_mode,
     }
-    preset = data.get('generation_preset', {})
+    preset = data.get('generation_preset') or {}
     if not isinstance(preset, dict):
         raise ValueError('生成预设必须是对象')
     from generation_options import for_request
     checked = for_request({}, overrides=preset)
     preset = {key: checked[key] for key in preset}
     source_notes = _text(data.get('source_notes', ''), 1800, '作者提供的创作前提')
-    raw_boundary=data.get('knowledge_boundary',{})
+    raw_boundary=data.get('knowledge_boundary') or {}
     if not isinstance(raw_boundary,dict):
         raise ValueError('知识边界必须是对象')
     character_kind=_text(raw_boundary.get('character_kind','original'),20,'角色类型') or 'original'
     if character_kind not in ('original','historical','fictional_canon'):
         raise ValueError('角色类型只能是 original、historical 或 fictional_canon')
-    allowed=_text(raw_boundary.get('allowed_knowledge',''),1200,'允许使用的知识')
-    forbidden=_text(raw_boundary.get('forbidden_knowledge',''),1200,'禁止使用的知识')
-    raw_forbidden_terms=raw_boundary.get('forbidden_terms',[])
+    allowed=_text(
+        _boundary_text(raw_boundary.get('allowed_knowledge','')),
+        1200,
+        '允许使用的知识',
+    )
+    forbidden=_text(
+        _boundary_text(raw_boundary.get('forbidden_knowledge','')),
+        1200,
+        '禁止使用的知识',
+    )
+    raw_forbidden_terms=raw_boundary.get('forbidden_terms') or []
     if not isinstance(raw_forbidden_terms,list) or len(raw_forbidden_terms)>40:
         raise ValueError('禁止知识关键词必须是最多40项的列表')
     forbidden_terms=list(dict.fromkeys(
@@ -91,9 +131,17 @@ def normalize_card(data, *, generating=False):
     ))
     knowledge_boundary={
         'character_kind':character_kind,
-        'era':_text(raw_boundary.get('era',''),120,'所处时代/世界'),
-        'knowledge_cutoff':_text(raw_boundary.get('knowledge_cutoff',''),120,'知识截止时间或剧情阶段'),
-        'universe':_text(raw_boundary.get('universe',''),300,'作品与世界范围'),
+        'era':_text(_boundary_text(raw_boundary.get('era','')),120,'所处时代/世界'),
+        'knowledge_cutoff':_text(
+            _boundary_text(raw_boundary.get('knowledge_cutoff','')),
+            120,
+            '知识截止时间或剧情阶段',
+        ),
+        'universe':_text(
+            _boundary_text(raw_boundary.get('universe','')),
+            300,
+            '作品与世界范围',
+        ),
         'allowed_knowledge':allowed,
         'forbidden_knowledge':forbidden,
         'forbidden_terms':forbidden_terms,
@@ -103,7 +151,7 @@ def normalize_card(data, *, generating=False):
     for key in ('can_learn_from_user','allow_everyday_invention'):
         if not isinstance(knowledge_boundary[key],bool):
             raise ValueError(key+' 必须是布尔值')
-    raw_facts = data.get('fixed_facts', [])
+    raw_facts = data.get('fixed_facts') or []
     if not isinstance(raw_facts, list) or len(raw_facts) > 30:
         raise ValueError('固定设定必须是最多30项的列表')
     facts = []
@@ -116,7 +164,7 @@ def normalize_card(data, *, generating=False):
         if status not in ('confirmed', 'proposal'):
             raise ValueError('设定状态只能是 confirmed 或 proposal')
         facts.append({'key': key, 'value': value, 'status': status})
-    raw_world = data.get('worldbook', [])
+    raw_world = data.get('worldbook') or []
     if not isinstance(raw_world, list) or len(raw_world) > MAX_WORLD_ENTRIES:
         raise ValueError(f'世界书必须是最多{MAX_WORLD_ENTRIES}项的列表')
     worldbook = []
@@ -125,7 +173,7 @@ def normalize_card(data, *, generating=False):
             raise ValueError('每条世界书条目必须是对象')
         title = _text(item.get('title', ''), 80, '世界书标题', required=True)
         content = _text(item.get('content', ''), 1200, '世界书内容', required=True)
-        keywords = item.get('keywords', [])
+        keywords = item.get('keywords') or []
         if not isinstance(keywords, list) or len(keywords) > 20:
             raise ValueError('世界书关键词必须是最多20项的列表')
         clean_keywords = list(dict.fromkeys(
@@ -133,15 +181,22 @@ def normalize_card(data, *, generating=False):
         ))
         if not clean_keywords:
             raise ValueError('每条世界书至少需要一个触发关键词')
-        enabled = item.get('enabled', True)
-        if not isinstance(enabled, bool):
-            raise ValueError('世界书 enabled 必须是布尔值')
+        category = _text(item.get('category', ''), 40, '世界书分类')
         priority = item.get('priority', 0)
         if type(priority) is not int or not -100 <= priority <= 100:
             raise ValueError('世界书优先级必须在-100至100之间')
-        worldbook.append({'id': str(item.get('id') or f'entry-{i + 1}'), 'title': title, 'priority': priority,
-                          'keywords': clean_keywords, 'content': content, 'enabled': enabled})
-    raw_examples = data.get('example_dialogue', [])
+        worldbook.append({
+            'id': str(item.get('id') or f'entry-{i + 1}'),
+            'title': title,
+            'category': category,
+            'priority': priority,
+            'keywords': clean_keywords,
+            'content': content,
+            # Worldbook entries are always enabled and keyword-triggered.
+            'enabled': True,
+            'constant': False,
+        })
+    raw_examples = data.get('example_dialogue') or []
     use_examples = data.get('use_examples', False)
     if not isinstance(use_examples, bool):
         raise ValueError('示例开关必须为布尔值')
@@ -156,7 +211,7 @@ def normalize_card(data, *, generating=False):
         # Name-only placeholders are not useful demonstrations and teach a broken response pattern.
         if user and len(reply) >= 6 and reply.casefold() != name.casefold():
             examples.append({'user': user, 'character': reply})
-    raw_goals = data.get('goals', [])
+    raw_goals = data.get('goals') or []
     if not isinstance(raw_goals, list) or len(raw_goals) > 8:
         raise ValueError('角色目标必须是最多8项的列表')
     goals = list(dict.fromkeys(
@@ -180,6 +235,7 @@ def normalize_card(data, *, generating=False):
         'id': character_id,
         'name': name, 'tagline': tagline or '一位等待与你相遇的原创角色',
         'description': description or tagline or '由你创建的原创角色。',
+        'public_intro': public_intro,
         'background': background, 'personality': personality, 'speech_style': speech_style,
         'relationship': relationship, 'greeting': greeting or f'你好，我是{name}。',
         'appearance': appearance, 'appearance_prompt': appearance_prompt,
@@ -256,7 +312,12 @@ def card_to_runtime(card):
         'model_settings': card['model_settings'],
         'prompt': '\n\n'.join(prompt_parts), 'identity': None, 'custom_card': card,
         'profile_policy': 'on_request',
-        'profile': {'line': card['tagline'], 'tags': [], 'scene': '', 'about': card['description']},
+        'profile': {
+            'line': card.get('public_intro') or card['tagline'],
+            'tags': [],
+            'scene': '',
+            'about': card['description'],
+        },
         # The opening scene is applied only on the first turn in conversation_messages.
         'example_dialogue': [],
     }
@@ -271,8 +332,8 @@ def retrieve_worldbook(card, query, limit=4):
             continue
         hits = [word for word in entry.get('keywords', [])
                 if unicodedata.normalize('NFKC', word).casefold() in normalized]
-        if hits:
-            rows.append((len(hits), entry))
+        if hits or entry.get('constant'):
+            rows.append((len(hits) + (1 if entry.get('constant') else 0), entry))
     rows.sort(key=lambda pair: (-pair[1].get('priority', 0), -pair[0], pair[1]['id']))
     selected, used = [], 0
     for _, entry in rows:
@@ -302,15 +363,16 @@ def parse_generated_card(text, inspiration):
         raise ValueError('模型返回内容不是角色卡对象。')
     aliases = {
         'tagline': ('tagline', 'tag'),
+        'public_intro': ('public_intro', 'publicIntro'),
         'speech_style': ('speech_style', 'speechStyle'),
         'appearance_prompt': ('appearance_prompt', 'appearancePrompt'),
         'fixed_facts': ('fixed_facts', 'fixedFacts'),
         'example_dialogue': ('example_dialogue', 'exampleDialogue'),
         'use_examples': ('use_examples', 'useExamples'),
-        'interaction_mode': ('interaction_mode', 'interactionMode'),
         'scenario': ('scenario',),
         'motivation': ('motivation',),
         'goals': ('goals',),
+        'interaction_mode': ('interaction_mode', 'interactionMode'),
         'worldbook': ('worldbook',),
     }
     for target, candidates in aliases.items():
@@ -407,6 +469,8 @@ example_dialogue, goals, use_examples, interaction_mode。
 knowledge_boundary 包含 character_kind, era, knowledge_cutoff, universe,
 allowed_knowledge, forbidden_knowledge, forbidden_terms, can_learn_from_user,
 allow_everyday_invention。
+knowledge_boundary 中 era、knowledge_cutoff、universe、allowed_knowledge、
+forbidden_knowledge 必须是字符串；forbidden_terms 必须是字符串数组。
 固定身份必须尊重用户输入。历史人物要写清时代截止和时代外知识。
 角色可以创造普通日常细节，不能改变核心身份，也不能编造用户身份或经历。
 description 用100至200个中文字符完整说明角色身份和当前处境；
@@ -463,6 +527,7 @@ def apply_enrichment(card, text):
             'scenario',
             'motivation',
             'description',
+            'public_intro',
             'personality',
             'speech_style',
             'relationship',

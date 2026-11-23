@@ -47,6 +47,9 @@ voice-profiles/
 *.sqlite
 release/apk-*/*.apk
 release/apk-*/*.idsig
+release/pc-web-*/
+release/pc-web-*.zip
+release/*.zip
 release/seed-export/
 release/inspected-device/
 release/windows/

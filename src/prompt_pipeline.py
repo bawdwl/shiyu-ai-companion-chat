@@ -188,7 +188,10 @@ def assemble_prompt(
     )
     affect = current_turn_affect(question) if experience_policy_enabled else None
     scene = (
-        scene_from_messages(current['messages'], question)
+        scene_from_messages(
+            current['messages'],
+            question,
+        )
         if experience_policy_enabled
         else {'mode': 'daily'}
     )

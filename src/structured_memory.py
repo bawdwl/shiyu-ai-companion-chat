@@ -337,6 +337,7 @@ class CandidateStore:
                 id INTEGER PRIMARY KEY,
                 character_id TEXT NOT NULL,
                 topic_key TEXT NOT NULL,
+                event_instance_key TEXT NOT NULL DEFAULT '',
                 title TEXT NOT NULL,
                 summary TEXT NOT NULL,
                 status TEXT NOT NULL,
@@ -347,7 +348,7 @@ class CandidateStore:
                 last_mentioned_at TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
-                UNIQUE(character_id,topic_key));
+                UNIQUE(character_id,event_instance_key));
             CREATE INDEX IF NOT EXISTS memory_events_character
                 ON memory_events(character_id,status,updated_at);
         ''')
@@ -364,6 +365,7 @@ class CandidateStore:
         ''')
 
     def _migrate_legacy_schema(self):
+        self._migrate_memory_event_instances()
         columns = {row[1] for row in self.db.execute('PRAGMA table_info(candidates)')}
         tombstone_columns = {
             row[1] for row in self.db.execute('PRAGMA table_info(memory_tombstones)')
@@ -484,6 +486,73 @@ class CandidateStore:
                    WHERE kind IN (
                        'shared_event','plan','belief','character_detail'
                    )'''
+            )
+
+    def _migrate_memory_event_instances(self):
+        """Remove the old topic-only unique key without dropping event history."""
+        columns = {
+            row[1] for row in self.db.execute('PRAGMA table_info(memory_events)')
+        }
+        table_sql = self.db.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='memory_events'"
+        ).fetchone()
+        old_unique = bool(
+            table_sql
+            and 'UNIQUE(character_id,topic_key)' in str(table_sql[0] or '').replace(' ', '')
+        )
+        if 'event_instance_key' in columns and not old_unique:
+            return
+        rows = [dict(row) for row in self.db.execute(
+            'SELECT * FROM memory_events ORDER BY id'
+        ).fetchall()]
+        with self.db:
+            self.db.execute('DROP INDEX IF EXISTS memory_events_character')
+            self.db.execute('DROP TABLE IF EXISTS memory_events_migrated')
+            self.db.execute('''
+                CREATE TABLE memory_events_migrated (
+                    id INTEGER PRIMARY KEY,
+                    character_id TEXT NOT NULL,
+                    topic_key TEXT NOT NULL,
+                    event_instance_key TEXT NOT NULL DEFAULT '',
+                    title TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    reality_mode TEXT NOT NULL DEFAULT 'daily',
+                    participants_json TEXT NOT NULL DEFAULT '[]',
+                    source_message_ids TEXT NOT NULL DEFAULT '[]',
+                    timeline_json TEXT NOT NULL DEFAULT '[]',
+                    last_mentioned_at TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(character_id,event_instance_key))
+            ''')
+            for row in rows:
+                topic = str(row.get('topic_key') or 'event')
+                instance = str(row.get('event_instance_key') or f'{topic}@undated')
+                self.db.execute(
+                    '''INSERT INTO memory_events_migrated(
+                           id,character_id,topic_key,event_instance_key,title,summary,
+                           status,reality_mode,participants_json,source_message_ids,
+                           timeline_json,last_mentioned_at,created_at,updated_at)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                    (
+                        row.get('id'), row.get('character_id'), topic, instance,
+                        row.get('title'), row.get('summary'), row.get('status'),
+                        row.get('reality_mode', 'daily'),
+                        row.get('participants_json', '[]'),
+                        row.get('source_message_ids', '[]'),
+                        row.get('timeline_json', '[]'),
+                        row.get('last_mentioned_at'), row.get('created_at'),
+                        row.get('updated_at'),
+                    ),
+                )
+            self.db.execute('DROP TABLE memory_events')
+            self.db.execute(
+                'ALTER TABLE memory_events_migrated RENAME TO memory_events'
+            )
+            self.db.execute(
+                '''CREATE INDEX IF NOT EXISTS memory_events_character
+                   ON memory_events(character_id,status,updated_at)'''
             )
 
     def _ensure_search_schema(self):
@@ -2680,8 +2749,8 @@ class CandidateStore:
         *,
         reality_mode='daily',
     ):
-        update = derive_event_update(item)
-        if not update:
+        preview = derive_event_update(item)
+        if not preview:
             return None
         now = datetime.now(timezone.utc).isoformat()
         source_ids = sorted({
@@ -2692,9 +2761,15 @@ class CandidateStore:
         with self._lock, self.db:
             existing = self.db.execute(
                 '''SELECT * FROM memory_events
-                   WHERE character_id=? AND topic_key=?''',
-                (character_id, update['topic_key']),
+                   WHERE character_id=? AND event_instance_key=?''',
+                (character_id, preview['event_instance_key']),
             ).fetchone()
+            update = derive_event_update(
+                item,
+                existing['status'] if existing else None,
+            )
+            if not update:
+                return None
             previous_sources = []
             timeline = []
             title = update['title']
@@ -2717,11 +2792,11 @@ class CandidateStore:
                 })
             self.db.execute(
                 '''INSERT INTO memory_events(
-                       character_id,topic_key,title,summary,status,
+                       character_id,topic_key,event_instance_key,title,summary,status,
                        reality_mode,participants_json,source_message_ids,
                        timeline_json,created_at,updated_at)
-                   VALUES(?,?,?,?,?,?,?,?,?,?,?)
-                   ON CONFLICT(character_id,topic_key) DO UPDATE SET
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(character_id,event_instance_key) DO UPDATE SET
                        title=excluded.title,
                        summary=excluded.summary,
                        status=excluded.status,
@@ -2733,6 +2808,7 @@ class CandidateStore:
                 (
                     character_id,
                     update['topic_key'],
+                    update['event_instance_key'],
                     title[:120],
                     update['summary'][:600],
                     update['status'],

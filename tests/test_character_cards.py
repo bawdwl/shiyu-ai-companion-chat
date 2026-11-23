@@ -113,6 +113,25 @@ class CharacterCardTests(unittest.TestCase):
         self.assertEqual(retrieve_worldbook(card, '咖啡店')[0]['title'], '未命中')
         self.assertEqual(retrieve_worldbook(card, '没有相关内容'), [])
 
+    def test_worldbook_uses_enabled_keyword_defaults(self):
+        card = normalize_card({
+            'name': '海音',
+            'worldbook': [{
+                'title': '旧规则',
+                'keywords': ['电台'],
+                'content': '只在电台话题出现。',
+                'enabled': False,
+                'constant': True,
+            }],
+        })
+        entry = card['worldbook'][0]
+        self.assertTrue(entry['enabled'])
+        self.assertFalse(entry['constant'])
+        self.assertEqual(
+            retrieve_worldbook(card, '电台'),
+            [entry],
+        )
+
     def test_generated_details_are_proposals_and_product_name_collision_is_repaired(self):
         model_output = json.dumps({
             'name': '拾语', 'tagline': '海边的声音', 'description': '夜班主持人',
@@ -163,6 +182,35 @@ class CharacterCardTests(unittest.TestCase):
             card['knowledge_boundary']['forbidden_terms'],
             ['系统', '好感度', 'NPC'],
         )
+
+    def test_generated_boundary_lists_are_normalized_to_text(self):
+        card = parse_generated_card(
+            json.dumps({
+                'name': '夜神月',
+                'personality': ['冷静', '控制欲强', '善于伪装'],
+                'knowledge_boundary': {
+                    'allowed_knowledge': [
+                        '死亡笔记规则',
+                        '日本警察与刑事调查常识',
+                    ],
+                    'forbidden_knowledge': None,
+                },
+                'fixed_facts': None,
+                'worldbook': None,
+                'example_dialogue': None,
+                'goals': None,
+            }, ensure_ascii=False),
+            '夜神月，死亡笔记里的主角',
+        )
+        self.assertIn('死亡笔记规则', card['knowledge_boundary']['allowed_knowledge'])
+        self.assertIn(
+            '日本警察与刑事调查常识',
+            card['knowledge_boundary']['allowed_knowledge'],
+        )
+        self.assertEqual(card['knowledge_boundary']['forbidden_knowledge'], '')
+        self.assertIn('控制欲强', card['personality'])
+        self.assertEqual(card['fixed_facts'], [])
+        self.assertEqual(card['worldbook'], [])
 
     def test_card_limits_reject_unbounded_worldbook(self):
         with self.assertRaisesRegex(ValueError, '最多30项'):
