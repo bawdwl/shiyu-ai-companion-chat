@@ -1,4 +1,3 @@
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,7 +7,18 @@ from fastapi.testclient import TestClient
 from backend import create_app
 
 
-ROOT = Path(__file__).resolve().parents[1]
+def character_card():
+    return {
+        "id": "custom-memory-admin-test",
+        "name": "林晚",
+        "tagline": "用于记忆管理接口测试的虚构角色。",
+        "description": "林晚是一名夜班电台主持人。",
+        "personality": "安静、耐心。",
+        "speech_style": "自然简洁。",
+        "relationship": "刚认识的朋友。",
+        "scenario": "深夜直播结束后，林晚仍在整理节目单。",
+        "knowledge_boundary": {},
+    }
 
 
 def memory_candidate(value="苏州", message_id=1):
@@ -46,14 +56,7 @@ class MemoryAdminApiTests(unittest.TestCase):
         )
         self.client = TestClient(app)
         self.client.__enter__()
-        card = json.loads(
-            (
-                ROOT
-                / "evaluation"
-                / "characters"
-                / "full_character_fixture.json"
-            ).read_text(encoding="utf-8")
-        )
+        card = character_card()
         self.character_id = card["id"]
         response = self.client.post("/characters", json={"card": card})
         self.assertEqual(response.status_code, 201, response.text)
